@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <style>
   :root{
     --bg:#F7F1E9;
@@ -352,6 +354,57 @@ async function removerCurriculoStorage(candidatoId){
 
 async function baixarCurriculo(candidatoId, nomeCandidato){
   showToast('Este currículo não tem um link direto salvo. Abra a ficha do candidato para reenviar, se necessário.', true);
+}
+
+/* ---- Leitura automática do currículo (extração de texto + reconhecimento de padrões) ---- */
+if(window.pdfjsLib){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+async function extrairTextoArquivo(file){
+  const nome = (file.name||'').toLowerCase();
+  if(file.type === 'application/pdf' || nome.endsWith('.pdf')){
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: buffer}).promise;
+    let texto = '';
+    const maxPaginas = Math.min(pdf.numPages, 6);
+    for(let i=1; i<=maxPaginas; i++){
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      texto += content.items.map(it=>it.str).join(' ') + '\n';
+    }
+    return texto;
+  }
+  if(nome.endsWith('.docx')){
+    const buffer = await file.arrayBuffer();
+    const resultado = await mammoth.extractRawText({arrayBuffer: buffer});
+    return resultado.value;
+  }
+  throw new Error('Não consigo ler automaticamente arquivos .doc antigos — funciona com PDF ou .docx.');
+}
+
+function extrairContatosDoTexto(texto){
+  const linhas = texto.split('\n').map(l=>l.trim()).filter(Boolean);
+
+  const emailMatch = texto.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+  const email = emailMatch ? emailMatch[0] : '';
+
+  const telefoneMatch = texto.match(/(\(?\d{2}\)?\s?)?9?\d{4}[-.\s]?\d{4}/);
+  const telefone = telefoneMatch ? telefoneMatch[0].replace(/\s+/g,' ').trim() : '';
+
+  const palavrasIgnoradas = /curr[íi]culo|resume|cv\b|endere[çc]o|objetivo|perfil|linkedin|github|@|http|www\./i;
+  let nome = '';
+  for(const linha of linhas.slice(0, 8)){
+    if(linha.length < 4 || linha.length > 60) continue;
+    if(/\d/.test(linha)) continue;
+    if(palavrasIgnoradas.test(linha)) continue;
+    const palavras = linha.split(/\s+/);
+    if(palavras.length < 2 || palavras.length > 5) continue;
+    nome = linha;
+    break;
+  }
+
+  return { nome, email, telefone };
 }
 
 /* ---- Logo do cliente ---- */
@@ -1727,6 +1780,7 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       <div class="field full"><label>Anexar currículo (PDF ou Word, opcional)</label><input type="file" id="input-curriculo" accept=".pdf,.doc,.docx"></div>
       `}
       <p class="hint">Tamanho máximo: 4MB.</p>
+      <div id="area-leitura-curriculo" style="margin-top:8px;"></div>
 
       <div class="section-title">Banco de currículos</div>
       <div class="checkbox-row"><input type="checkbox" id="chk-banco" name="bancoDeCurriculos" ${candidato.bancoDeCurriculos?'checked':''}><label for="chk-banco">Adicionar ao banco de currículos (fica disponível para futuras vagas, mesmo sem processo em andamento)</label></div>
@@ -1795,6 +1849,7 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
   });
 
   const inputCurriculo = document.getElementById('input-curriculo');
+  const areaLeitura = document.getElementById('area-leitura-curriculo');
   if(inputCurriculo){
     inputCurriculo.addEventListener('change', e=>{
       const file = e.target.files[0];
@@ -1802,9 +1857,32 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
         showToast('Arquivo muito grande (máximo de 4MB).', true);
         e.target.value = '';
         arquivoCurriculoSelecionado = null;
+        if(areaLeitura) areaLeitura.innerHTML = '';
         return;
       }
       arquivoCurriculoSelecionado = file || null;
+      if(file && areaLeitura){
+        areaLeitura.innerHTML = '<span class="btn btn-secondary btn-sm" id="btn-ler-curriculo" type="button">🔎 Ler currículo e preencher nome/e-mail/telefone</span>';
+        document.getElementById('btn-ler-curriculo').addEventListener('click', async ()=>{
+          const btn = document.getElementById('btn-ler-curriculo');
+          btn.textContent = 'Lendo currículo…';
+          try{
+            const texto = await extrairTextoArquivo(arquivoCurriculoSelecionado);
+            const dados = extrairContatosDoTexto(texto);
+            let preenchidos = [];
+            if(dados.nome){ const campo = document.querySelector('#form-candidato [name="nome"]'); if(campo && !campo.value){ campo.value = dados.nome; preenchidos.push('nome'); } }
+            if(dados.email){ const campo = document.querySelector('#form-candidato [name="email"]'); if(campo && !campo.value){ campo.value = dados.email; preenchidos.push('e-mail'); } }
+            if(dados.telefone){ const campo = document.querySelector('#form-candidato [name="telefone"]'); if(campo && !campo.value){ campo.value = dados.telefone; preenchidos.push('telefone'); } }
+            showToast(preenchidos.length ? 'Preenchido automaticamente: '+preenchidos.join(', ')+'. Confira antes de salvar.' : 'Não consegui identificar os dados automaticamente. Preencha manualmente.', preenchidos.length===0);
+            btn.textContent = '🔎 Ler currículo e preencher nome/e-mail/telefone';
+          }catch(err){
+            showToast(err.message || 'Não foi possível ler este arquivo automaticamente.', true);
+            btn.textContent = '🔎 Ler currículo e preencher nome/e-mail/telefone';
+          }
+        });
+      } else if(areaLeitura){
+        areaLeitura.innerHTML = '';
+      }
     });
   }
 
