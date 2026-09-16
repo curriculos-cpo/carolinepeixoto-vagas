@@ -246,28 +246,39 @@ async function lerStorageAntigo(){
   return null;
 }
 
+let dbCarregadoComSucesso = false;
+
 async function loadDB(){
   if(!appsScriptConfigurado()) return { clientes: [], cargos: [], candidatos: [] };
   try{
     const resp = await chamarAppsScriptGet('action=getAll');
-    if(resp.db && Array.isArray(resp.db.clientes)) return resp.db;
-  }catch(e){ /* erro de conexão — tratado pelo teste de conectividade */ }
+    if(resp.db && Array.isArray(resp.db.clientes) && Array.isArray(resp.db.cargos) && Array.isArray(resp.db.candidatos)){
+      dbCarregadoComSucesso = true;
+      return resp.db;
+    }
+  }catch(e){ /* erro de conexão — tratado abaixo */ }
+  dbCarregadoComSucesso = false;
   return { clientes: [], cargos: [], candidatos: [] };
 }
 
-async function saveDB(){
+async function saveDB(forcar){
   if(!appsScriptConfigurado()){
     mostrarAvisoConfiguracao();
     return false;
   }
+  if(!dbCarregadoComSucesso){
+    mostrarAvisoConfiguracao('🛑 <strong>Salvamento bloqueado por segurança:</strong> os dados salvos não foram carregados corretamente ao abrir a página. Para não haver risco de apagar informações existentes, nada será salvo até você recarregar a página (F5) e confirmar que os cadastros aparecem certinho.');
+    showToast('Salvamento bloqueado: os dados não foram carregados corretamente. Recarregue a página.', true);
+    return false;
+  }
   try{
-    await chamarAppsScriptPost('saveAll', {db: db});
+    await chamarAppsScriptPost('saveAll', {db: db, forcar: !!forcar});
     lastSaved = new Date();
     renderSaveState();
     esconderAvisoConfiguracao();
     return true;
   }catch(e){
-    showToast('Não foi possível salvar agora. Verifique sua conexão com a internet e tente novamente.', true);
+    showToast(e.message || 'Não foi possível salvar agora. Verifique sua conexão com a internet e tente novamente.', true);
     mostrarAvisoConfiguracao('⚠️ Não foi possível salvar agora. O que você digitar pode não ser gravado. Verifique sua conexão e clique em "Testar novamente".');
     return false;
   }
@@ -299,6 +310,10 @@ function esconderAvisoConfiguracao(){
 }
 async function verificarPersistenciaInicial(){
   if(!appsScriptConfigurado()){ mostrarAvisoConfiguracao(); return false; }
+  if(!dbCarregadoComSucesso){
+    mostrarAvisoConfiguracao('🛑 <strong>Não foi possível carregar seus dados salvos.</strong> Por segurança, o salvamento foi bloqueado. NÃO cadastre nada agora — clique em "Testar novamente" ou recarregue a página (F5).');
+    return false;
+  }
   const ok = await testarConectividade();
   if(!ok){ mostrarAvisoConfiguracao('⚠️ Não foi possível conectar à integração com o Google agora. Verifique sua internet e tente novamente.'); }
   else { esconderAvisoConfiguracao(); }
@@ -2043,9 +2058,17 @@ function onGlobalClick(e){
   }
 
   if(action === 'testar-armazenamento-novamente'){
-    showToast('Testando armazenamento…');
-    verificarPersistenciaInicial().then(ok=>{
-      showToast(ok ? 'Tudo certo! O armazenamento está funcionando.' : 'Ainda sem sucesso. Continue exportando backups por segurança.', !ok);
+    showToast('Testando conexão e recarregando dados…');
+    loadDB().then(dadosCarregados=>{
+      if(dbCarregadoComSucesso){
+        db = dadosCarregados;
+        renderView();
+        esconderAvisoConfiguracao();
+        showToast('Tudo certo! Dados recarregados e o armazenamento está funcionando.');
+      } else {
+        mostrarAvisoConfiguracao('🛑 <strong>Ainda não foi possível carregar seus dados salvos.</strong> Não cadastre nada agora. Verifique sua internet e tente de novo.');
+        showToast('Ainda sem sucesso. Não cadastre nada até resolver isso.', true);
+      }
     });
     return;
   }
@@ -2059,7 +2082,7 @@ function onGlobalClick(e){
       const resumo = dadosAntigos.clientes.length+' cliente(s), '+dadosAntigos.cargos.length+' vaga(s) e '+dadosAntigos.candidatos.length+' candidato(s)';
       if(confirm('Encontrei dados antigos: '+resumo+'. Deseja importar isso para o banco de dados atual (Google)? Isso vai SUBSTITUIR os dados atuais do painel.')){
         db = dadosAntigos;
-        saveDB().then(ok=>{ if(ok){ renderView(); showToast('Dados antigos recuperados e salvos no Google com sucesso!'); } });
+        saveDB(true).then(ok=>{ if(ok){ renderView(); showToast('Dados antigos recuperados e salvos no Google com sucesso!'); } });
       }
     });
     return;
@@ -2097,7 +2120,7 @@ function onGlobalChange(e){
         const parsed = JSON.parse(ev.target.result);
         if(!parsed || !Array.isArray(parsed.clientes)) throw new Error('formato inválido');
         if(confirm('Importar este backup vai substituir todos os dados atuais. Deseja continuar?')){
-          db = parsed; saveDB(); renderView(); showToast('Backup importado com sucesso.');
+          db = parsed; dbCarregadoComSucesso = true; saveDB(true); renderView(); showToast('Backup importado com sucesso.');
         }
       }catch(err){ showToast('Arquivo inválido. Verifique se é um backup exportado por este painel.', true); }
     };
