@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <style>
@@ -55,6 +54,18 @@
   .nav-item.active{background:var(--spine-soft);color:#fff;border-left:3px solid var(--accent);}
   .nav-dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.55;flex:none;}
   .sidebar-foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--spine-soft);font-size:11.5px;color:var(--spine-text-soft);}
+  .global-search-wrap{position:relative;margin:14px 0 10px 0;}
+  #busca-global{width:100%;padding:9px 10px;border-radius:5px;border:1px solid var(--spine-soft);background:var(--spine-soft);color:#fff;font-size:13px;font-family:var(--sans);}
+  #busca-global::placeholder{color:var(--spine-text-soft);}
+  #busca-global:focus{outline:2px solid var(--accent);background:#2c3b39;}
+  #busca-global-resultados{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.25);max-height:340px;overflow-y:auto;z-index:150;display:none;}
+  #busca-global-resultados.aberto{display:block;}
+  .busca-item{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;color:var(--ink);}
+  .busca-item:last-child{border-bottom:none;}
+  .busca-item:hover{background:var(--accent-soft);}
+  .busca-item .tipo{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--accent);display:block;margin-bottom:1px;}
+  .busca-item .sub{font-size:11.5px;color:var(--ink-soft);}
+  .busca-vazio{padding:12px;font-size:12.5px;color:var(--ink-soft);text-align:center;}
   .save-state{display:flex;align-items:center;gap:6px;margin-bottom:10px;}
   .save-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none;}
   .sidebar-foot button{width:100%;margin-top:6px;}
@@ -196,7 +207,7 @@ const STORAGE_KEY = 'rs_database';
    Cole aqui a URL do seu App da Web (termina em /exec) depois de implantar o script.
    A partir de agora, TODOS os dados do painel (clientes, vagas, candidatos)
    são salvos nessa integração — não mais no armazenamento da Claude. */
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxN7MMjBzACxV9KI9q1trkszcaNUw7OJHH47rOb06Qok9lRqGcjHXTq_SLqb8hQaGb8/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxfczXyXRcTtCHlSNMhYAWJCDq41op2Us_1AP0Ha4JtHFwNkopiLRQ4qd99Q-CI81I3/exec';
 
 function appsScriptConfigurado(){ return !!APPS_SCRIPT_URL; }
 
@@ -504,6 +515,28 @@ const STATUS_META = {
   declinou:    {label:'Declinou',    color:'red'}
 };
 
+const MENSAGEM_APROVADO_PADRAO = 'Olá {nome}! Temos uma ótima notícia: você foi aprovado(a) no processo seletivo para a vaga de {vaga}! 🎉 Em breve entraremos em contato com os próximos passos.';
+const MENSAGEM_REPROVADO_PADRAO = 'Olá {nome}, obrigado(a) por participar do nosso processo seletivo para a vaga de {vaga}. Neste momento optamos por seguir com outro(a) candidato(a), mas vamos manter seu currículo em nosso banco de talentos para futuras oportunidades. Agradecemos muito sua participação!';
+const MENSAGEM_AVALIACAO_PADRAO = 'Olá {nome}! Tudo bem? Você segue no nosso processo seletivo para a vaga de {vaga}. A próxima etapa é uma avaliação comportamental rápida (leva uns 8 a 10 minutinhos). Por favor, responda por este link: {link}';
+
+function garantirConfiguracoes(){
+  if(!db.configuracoes){
+    db.configuracoes = { mensagemAprovado: MENSAGEM_APROVADO_PADRAO, mensagemReprovado: MENSAGEM_REPROVADO_PADRAO, mensagemAvaliacao: MENSAGEM_AVALIACAO_PADRAO };
+  } else {
+    if(!db.configuracoes.mensagemAprovado) db.configuracoes.mensagemAprovado = MENSAGEM_APROVADO_PADRAO;
+    if(!db.configuracoes.mensagemReprovado) db.configuracoes.mensagemReprovado = MENSAGEM_REPROVADO_PADRAO;
+    if(!db.configuracoes.mensagemAvaliacao) db.configuracoes.mensagemAvaliacao = MENSAGEM_AVALIACAO_PADRAO;
+  }
+}
+
+function montarMensagem(template, candidato, cargo, link){
+  const primeiroNome = (candidato.nome||'').split(' ')[0] || candidato.nome || '';
+  return (template||'')
+    .replace(/\{nome\}/g, primeiroNome)
+    .replace(/\{vaga\}/g, cargo ? cargo.titulo : 'nossa vaga')
+    .replace(/\{link\}/g, link || '');
+}
+
 function statusCandidato(c){
   if(c.statusManual){ return c.statusManual; }
   if(c.declinou) return 'declinou';
@@ -520,6 +553,15 @@ function etapaAtualLabel(c){
   const suf = ult.resultado === 'avancou' ? ' — avançou' : ult.resultado === 'nao_avancou' ? ' — não avançou' : ' — aguardando';
   return ult.nome + suf;
 }
+
+function ultimaAtividadeCandidato(c){
+  const preenchidas = c.etapas.filter(e => e.data).map(e => e.data).sort();
+  if(preenchidas.length) return preenchidas[preenchidas.length-1];
+  return c.dataRecebimento || todayISO();
+}
+
+const LIMITE_DIAS_VAGA_PARADA = 20;
+const LIMITE_DIAS_CANDIDATO_PARADO = 10;
 
 function badgeHtml(statusKey){
   const meta = STATUS_META[statusKey] || {label:statusKey, color:'gray'};
@@ -600,12 +642,13 @@ let state = {
   candStatus: '',
   candBusca: '',
   bancoBusca: '',
+  bancoArea: '',
+  candidatosSelecionados: new Set(),
   fatClienteId: '',
   fatStatus: '',
   viewClienteId: ''
 };
 
-let chartFunil = null, chartStatus = null, chartFaturamento = null;
 
 /* ============================= SHELL ============================= */
 function renderShell(){
@@ -620,6 +663,10 @@ function renderShell(){
         <div class="nav-item" data-action="nav" data-tab="faturamento"><span class="nav-dot"></span>Faturamento</div>
         <div class="nav-item" data-action="nav" data-tab="relatorio"><span class="nav-dot"></span>Relatório para o cliente</div>
       </div>
+      <div class="global-search-wrap">
+        <input type="search" id="busca-global" placeholder="🔍 Buscar (Ctrl+K)" autocomplete="off">
+        <div id="busca-global-resultados"></div>
+      </div>
       <div class="sidebar-foot">
         <div class="save-state" id="save-state"><span class="save-dot"></span><span>Dados salvos automaticamente</span></div>
         <button class="btn btn-secondary btn-sm" data-action="exportar-backup" style="width:100%;">Exportar backup (.json)</button>
@@ -628,6 +675,7 @@ function renderShell(){
           <input type="file" accept="application/json" id="import-file" style="display:none;">
         </label>
         <span class="btn btn-secondary btn-sm" data-action="recuperar-dados-antigos" style="width:100%;margin-top:6px;">Tentar recuperar dados antigos</span>
+        <span class="btn btn-secondary btn-sm" data-action="configurar-mensagens" style="width:100%;margin-top:6px;">💬 Mensagens automáticas</span>
       </div>
     </div>
     <main id="main"><div id="view"></div></main>
@@ -635,8 +683,44 @@ function renderShell(){
   document.addEventListener('click', onGlobalClick);
   document.addEventListener('change', onGlobalChange);
   document.addEventListener('input', onGlobalInput);
+  document.addEventListener('keydown', e=>{
+    if((e.ctrlKey||e.metaKey) && e.key==='k'){
+      e.preventDefault();
+      const campo = document.getElementById('busca-global');
+      if(campo){ campo.focus(); campo.select(); }
+    }
+    if(e.key==='Escape'){
+      const resultados = document.getElementById('busca-global-resultados');
+      if(resultados) resultados.classList.remove('aberto');
+    }
+  });
   renderNavActive();
   renderView();
+}
+
+function executarBuscaGlobal(termo){
+  const resultados = document.getElementById('busca-global-resultados');
+  if(!resultados) return;
+  if(!termo || termo.trim().length < 2){ resultados.classList.remove('aberto'); resultados.innerHTML=''; return; }
+  const t = termo.toLowerCase();
+  const itens = [];
+  db.clientes.forEach(cl=>{ if(cl.nome.toLowerCase().includes(t)) itens.push({tipo:'cliente', id:cl.id, label:cl.nome, sub:'Cliente'}); });
+  db.cargos.forEach(v=>{ if(v.titulo.toLowerCase().includes(t)){ const cl=getCliente(v.clienteId); itens.push({tipo:'vaga', id:v.id, label:v.titulo, sub:'Vaga · '+(cl?cl.nome:'')}); } });
+  db.candidatos.forEach(c=>{ if(c.nome.toLowerCase().includes(t)){ const v=getCargo(c.cargoId); itens.push({tipo:'candidato', id:c.id, label:c.nome, sub:'Candidato'+(v?' · '+v.titulo:'')}); } });
+
+  if(itens.length===0){ resultados.innerHTML = '<div class="busca-vazio">Nada encontrado.</div>'; resultados.classList.add('aberto'); return; }
+  resultados.innerHTML = itens.slice(0,10).map(it=>`<div class="busca-item" data-action="ir-busca" data-tipo="${it.tipo}" data-id="${it.id}"><span class="tipo">${esc(it.tipo)}</span>${esc(it.label)}<div class="sub">${esc(it.sub)}</div></div>`).join('');
+  resultados.classList.add('aberto');
+}
+
+function irParaResultadoBusca(tipo, id){
+  const resultados = document.getElementById('busca-global-resultados');
+  if(resultados){ resultados.classList.remove('aberto'); resultados.innerHTML=''; }
+  const campo = document.getElementById('busca-global');
+  if(campo) campo.value = '';
+  if(tipo==='cliente'){ state.tab='clientes'; state.viewClienteId=id; renderView(); }
+  else if(tipo==='vaga'){ const v=getCargo(id); if(v){ state.tab='clientes'; state.viewClienteId=v.clienteId; renderView(); } }
+  else if(tipo==='candidato'){ const c=db.candidatos.find(x=>x.id===id); if(c) modalCandidato(c); }
 }
 
 function renderSaveState(){
@@ -665,8 +749,6 @@ function renderView(){
 }
 
 function afterRenderView(){
-  if(state.tab === 'dashboard') drawDashboardCharts();
-  if(state.tab === 'faturamento') drawFaturamentoChart();
 }
 
 /* ============================= DASHBOARD ============================= */
@@ -697,6 +779,25 @@ function viewDashboard(){
   const tempoMedio = temposFechamento.length ? Math.round(temposFechamento.reduce((a,b)=>a+b,0)/temposFechamento.length) : null;
   const recebidosTotal = somaCurriculosRecebidos(vagasFiltradas);
   const taxaContratacao = recebidosTotal ? Math.round((m.contratados/recebidosTotal)*100) : 0;
+
+  const vagasParadas = vagasFiltradas.filter(v=> v.status==='aberta' && daysBetween(v.dataAbertura, todayISO()) > LIMITE_DIAS_VAGA_PARADA && candidatosDoCargo(v.id).length===0);
+  const candidatosParados = cands.filter(c=> c.cargoId && statusCandidato(c)==='em_processo' && daysBetween(ultimaAtividadeCandidato(c), todayISO()) > LIMITE_DIAS_CANDIDATO_PARADO);
+  const totalAtencao = vagasParadas.length + candidatosParados.length;
+
+  const painelAtencao = totalAtencao === 0 ? '' : `
+    <div class="card" style="margin-bottom:22px;border-left:3px solid var(--amber);">
+      <h3 style="font-size:15px;margin-bottom:12px;">⚠️ Atenção necessária (${totalAtencao})</h3>
+      ${vagasParadas.length ? `
+      <div style="margin-bottom:${candidatosParados.length?'14px':'0'};">
+        <div class="hint" style="margin-bottom:6px;font-weight:600;">Vagas abertas há mais de ${LIMITE_DIAS_VAGA_PARADA} dias sem nenhum candidato (${vagasParadas.length})</div>
+        ${vagasParadas.map(v=>`<div class="busca-item" data-action="ir-busca" data-tipo="vaga" data-id="${v.id}" style="border:1px solid var(--border);border-radius:4px;margin-bottom:4px;">${esc(v.titulo)}<div class="sub">${esc(getCliente(v.clienteId)?.nome||'')} · aberta há ${daysBetween(v.dataAbertura, todayISO())} dias</div></div>`).join('')}
+      </div>` : ''}
+      ${candidatosParados.length ? `
+      <div>
+        <div class="hint" style="margin-bottom:6px;font-weight:600;">Candidatos em processo sem atualização há mais de ${LIMITE_DIAS_CANDIDATO_PARADO} dias (${candidatosParados.length})</div>
+        ${candidatosParados.map(c=>{ const v=getCargo(c.cargoId); return `<div class="busca-item" data-action="ir-busca" data-tipo="candidato" data-id="${c.id}" style="border:1px solid var(--border);border-radius:4px;margin-bottom:4px;">${esc(c.nome)}<div class="sub">${esc(v?v.titulo:'')} · sem atualização há ${daysBetween(ultimaAtividadeCandidato(c), todayISO())} dias</div></div>`; }).join('')}
+      </div>` : ''}
+    </div>`;
 
   const tabelaVagas = !state.dashCargoId ? `
     <div class="card" style="margin-top:22px;">
@@ -731,6 +832,7 @@ function viewDashboard(){
       <select data-role="dash-cargo" ${!state.dashClienteId ? 'disabled' : ''}><option value="">Todas as vagas</option>${cargosOpts}</select>
     </div>
 
+    ${painelAtencao}
     <div class="kpi-grid">
       <div class="kpi"><div class="label">Vagas abertas</div><div class="value">${vagasAbertas}</div><div class="sub">de ${vagasFiltradas.length} no escopo</div></div>
       <div class="kpi c-amber"><div class="label">Currículos recebidos</div><div class="value">${recebidosTotal}</div><div class="sub">${m.recebidos} cadastrado(s) como candidato</div></div>
@@ -742,64 +844,8 @@ function viewDashboard(){
       <div class="kpi"><div class="label">Tempo médio de fechamento</div><div class="value">${tempoMedio!==null ? tempoMedio+'d' : '—'}</div><div class="sub">${vagasFechadas.length} vaga(s) fechada(s)</div></div>
     </div>
 
-    <div class="charts-row">
-      <div class="card chart-card"><h3>Funil do processo seletivo</h3><div class="chart-wrap"><canvas id="chart-funil"></canvas></div></div>
-      <div class="card chart-card"><h3>Situação dos candidatos</h3><div class="chart-wrap"><canvas id="chart-status"></canvas></div></div>
-    </div>
-
     ${tabelaVagas}
   `;
-}
-
-function drawDashboardCharts(){
-  if(!window.Chart) return;
-  let cands;
-  if(state.dashCargoId) cands = candidatosDoCargo(state.dashCargoId);
-  else if(state.dashClienteId) cands = candidatosDoCliente(state.dashClienteId);
-  else cands = db.candidatos;
-  const m = metricsForCandidatos(cands);
-  const vagasBase = state.dashClienteId ? cargosDoCliente(state.dashClienteId) : db.cargos;
-  const vagasFiltradas = state.dashCargoId ? vagasBase.filter(v=>v.id===state.dashCargoId) : vagasBase;
-  const recebidosTotal = somaCurriculosRecebidos(vagasFiltradas);
-
-  const ctxF = document.getElementById('chart-funil');
-  if(chartFunil) chartFunil.destroy();
-  if(ctxF){
-    chartFunil = new Chart(ctxF, {
-      type:'bar',
-      data:{
-        labels:['Currículos recebidos','Chamados p/ entrevista','Avaliação comportamental','Entrevista c/ gestor','Proposta','Contratados'],
-        datasets:[{
-          data:[recebidosTotal, m.chamados, m.avaliacao, m.gestor, m.propostas, m.contratados],
-          backgroundColor:'#B2573D',
-          borderRadius:3,
-          maxBarThickness:26
-        }]
-      },
-      options:{
-        indexAxis:'y',
-        responsive:true, maintainAspectRatio:false,
-        plugins:{legend:{display:false}},
-        scales:{ x:{ beginAtZero:true, ticks:{precision:0} } }
-      }
-    });
-  }
-
-  const ctxS = document.getElementById('chart-status');
-  if(chartStatus) chartStatus.destroy();
-  if(ctxS){
-    chartStatus = new Chart(ctxS, {
-      type:'doughnut',
-      data:{
-        labels:['Em processo','Contratados','Não avançaram','Declinaram'],
-        datasets:[{
-          data:[m.emProcesso, m.contratados, m.naoAvancaram, m.declinaram],
-          backgroundColor:['#B8792B','#4C7A5A','#963A2C','#9C8C7C']
-        }]
-      },
-      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:12,font:{size:11.5}}}} }
-    });
-  }
 }
 
 /* ============================= CLIENTES & VAGAS ============================= */
@@ -899,6 +945,7 @@ function viewCandidatos(){
     const cg = getCargo(c.cargoId);
     const cl = getCliente(c.clienteId);
     return `<tr>
+      <td class="no-print"><input type="checkbox" class="chk-candidato" data-id="${c.id}" ${state.candidatosSelecionados.has(c.id)?'checked':''}></td>
       <td><strong>${esc(c.nome)}</strong><div class="hint">${esc(c.telefone||'')}${c.telefone&&c.email?' · ':''}${esc(c.email||'')}${(c.temCurriculo||c.curriculoUrl)?' · 📎 currículo':''}${c.bancoDeCurriculos?' · 🗂 banco':''}</div></td>
       <td>${esc(cl?.nome||'—')}</td>
       <td>${esc(cg?.titulo||'—')}</td>
@@ -907,12 +954,27 @@ function viewCandidatos(){
       <td>${badgeHtml(statusCandidato(c))}</td>
       <td class="no-print" style="white-space:nowrap;">
         <span class="btn btn-ghost btn-sm" data-action="editar-candidato" data-id="${c.id}">Ver / editar</span>
+        ${(statusCandidato(c)==='em_processo' && c.etapas.some(e=>e.resultado==='')) ? '<span class="btn btn-ghost btn-sm" data-action="avancar-etapa" data-id="'+c.id+'" title="Marcar próxima etapa como avançada">▶ Avançar</span>' : ''}
+        ${appsScriptConfigurado() ? '<span class="btn btn-ghost btn-sm" data-action="avaliacao-comportamental" data-id="'+c.id+'" title="Enviar/ver avaliação comportamental">🧭'+(c.avaliacaoComportamental&&c.avaliacaoComportamental.data?' '+esc(c.avaliacaoComportamental.perfil):'')+'</span>' : ''}
         ${btnWhatsApp(c.telefone, c.nome)}
         ${c.curriculoUrl ? '<a class="btn btn-ghost btn-sm" href="'+esc(c.curriculoUrl)+'" target="_blank">Ver CV</a>' : (c.temCurriculo ? '<span class="btn btn-ghost btn-sm" data-action="baixar-curriculo" data-id="'+c.id+'">Baixar CV</span>' : '')}
         <span class="btn btn-ghost btn-sm" data-action="excluir-candidato" data-id="${c.id}">Excluir</span>
       </td>
     </tr>`;
   }).join('');
+
+  const totalSelecionados = lista.filter(c=>state.candidatosSelecionados.has(c.id)).length;
+  const todosSelecionados = lista.length>0 && totalSelecionados===lista.length;
+
+  const barraLote = totalSelecionados>0 ? `
+    <div class="card" style="margin-bottom:14px;background:var(--accent-soft);border-color:var(--accent);display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;">
+      <strong>${totalSelecionados} selecionado(s)</strong>
+      <span class="btn btn-secondary btn-sm" data-action="lote-avancar">▶ Avançar etapa</span>
+      <span class="btn btn-secondary btn-sm" data-action="lote-nao-avancou">✕ Marcar não avançou</span>
+      <span class="btn btn-secondary btn-sm" data-action="lote-banco">🗂 Adicionar ao banco</span>
+      <span class="btn btn-danger btn-sm" data-action="lote-excluir">Excluir selecionados</span>
+      <span class="btn btn-ghost btn-sm" data-action="lote-limpar" style="margin-left:auto;">Limpar seleção</span>
+    </div>` : '';
 
   return `
     <div class="topbar">
@@ -934,9 +996,10 @@ function viewCandidatos(){
       </select>
       <input type="search" placeholder="Buscar por nome…" data-role="cand-busca" value="${esc(state.candBusca)}">
     </div>
+    ${barraLote}
     ${db.clientes.length===0 ? `<div class="card empty-state"><h3>Cadastre um cliente e uma vaga primeiro</h3><p>Vá em "Clientes e vagas" para começar.</p></div>` :
       lista.length===0 ? `<div class="card empty-state"><h3>Nenhum candidato encontrado</h3><p>Ajuste os filtros ou cadastre um novo candidato.</p></div>` :
-      `<div class="card table-wrap"><table><thead><tr><th>Candidato</th><th>Cliente</th><th>Cargo</th><th>CV recebido</th><th>Etapa atual</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
+      `<div class="card table-wrap"><table><thead><tr><th class="no-print"><input type="checkbox" id="chk-todos-candidatos" ${todosSelecionados?'checked':''}></th><th>Candidato</th><th>Cliente</th><th>Cargo</th><th>CV recebido</th><th>Etapa atual</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
   `;
 }
 
@@ -945,9 +1008,14 @@ function viewBancoCurriculos(){
   let lista = db.candidatos.filter(c=>c.bancoDeCurriculos);
   if(state.bancoBusca){
     const termo = state.bancoBusca.toLowerCase();
-    lista = lista.filter(c=> c.nome.toLowerCase().includes(termo) || (c.bancoAnotacoes||'').toLowerCase().includes(termo));
+    lista = lista.filter(c=> c.nome.toLowerCase().includes(termo) || (c.bancoAnotacoes||'').toLowerCase().includes(termo) || (c.areaInteresse||'').toLowerCase().includes(termo));
+  }
+  if(state.bancoArea){
+    lista = lista.filter(c=> (c.areaInteresse||'') === state.bancoArea);
   }
   lista = lista.slice().sort((a,b)=> (b.dataRecebimento||'').localeCompare(a.dataRecebimento||''));
+
+  const areasDisponiveis = Array.from(new Set(db.candidatos.filter(c=>c.bancoDeCurriculos && c.areaInteresse).map(c=>c.areaInteresse))).sort();
 
   const rows = lista.map(c=>{
     const cg = getCargo(c.cargoId);
@@ -957,8 +1025,9 @@ function viewBancoCurriculos(){
       : (c.temCurriculo ? '<span class="btn btn-ghost btn-sm" data-action="baixar-curriculo" data-id="'+c.id+'">Baixar CV</span>' : '');
     return `<tr>
       <td><strong>${esc(c.nome)}</strong><div class="hint">${esc(c.telefone||'')}${c.telefone&&c.email?' · ':''}${esc(c.email||'')}</div></td>
+      <td>${esc(c.areaInteresse||'—')}</td>
       <td>${vinculo}</td>
-      <td style="max-width:280px;white-space:pre-line;">${esc(c.bancoAnotacoes||'—')}</td>
+      <td style="max-width:240px;white-space:pre-line;">${esc(c.bancoAnotacoes||'—')}</td>
       <td>${formatDate(c.dataRecebimento)}</td>
       <td class="no-print" style="white-space:nowrap;">
         <span class="btn btn-ghost btn-sm" data-action="editar-candidato" data-id="${c.id}">Ver / editar</span>
@@ -974,10 +1043,11 @@ function viewBancoCurriculos(){
       <button class="btn btn-primary" data-action="novo-candidato-banco">+ Novo candidato no banco</button>
     </div>
     <div class="filters-row">
-      <input type="search" placeholder="Buscar por nome ou anotação…" data-role="banco-busca" value="${esc(state.bancoBusca)}" style="min-width:280px;">
+      <input type="search" placeholder="Buscar por nome, área ou anotação…" data-role="banco-busca" value="${esc(state.bancoBusca)}" style="min-width:280px;">
+      ${areasDisponiveis.length ? `<select data-role="banco-area"><option value="">Todas as áreas</option>${areasDisponiveis.map(a=>'<option value="'+esc(a)+'" '+(state.bancoArea===a?'selected':'')+'>'+esc(a)+'</option>').join('')}</select>` : ''}
     </div>
     ${lista.length===0 ? `<div class="card empty-state"><h3>Nenhum currículo no banco ainda</h3><p>Marque "Adicionar ao banco de currículos" ao cadastrar ou editar um candidato, ou clique em "+ Novo candidato no banco".</p></div>` :
-      `<div class="card table-wrap"><table><thead><tr><th>Candidato</th><th>Vaga vinculada</th><th>Anotações</th><th>Recebido em</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
+      `<div class="card table-wrap"><table><thead><tr><th>Candidato</th><th>Área de interesse</th><th>Vaga vinculada</th><th>Anotações</th><th>Recebido em</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
   `;
 }
 
@@ -1033,11 +1103,6 @@ function viewFaturamento(){
       <div class="kpi"><div class="label">Vagas sem valor definido</div><div class="value">${vagasSemValor}</div></div>
     </div>
 
-    <div class="card chart-card" style="margin-bottom:22px;">
-      <h3 style="font-size:15px;margin-bottom:14px;">Contratado x recebido por cliente</h3>
-      <div class="chart-wrap"><canvas id="chart-faturamento"></canvas></div>
-    </div>
-
     <div class="card">
       <h3 style="font-size:15px;margin-bottom:12px;">Detalhamento por vaga</h3>
       ${cargos.length===0 ? '<p class="hint">Nenhuma vaga encontrada para este filtro.</p>' : `
@@ -1048,41 +1113,6 @@ function viewFaturamento(){
     </div>
   `;
 }
-
-function drawFaturamentoChart(){
-  if(!window.Chart) return;
-  let cargos = state.fatClienteId ? cargosDoCliente(state.fatClienteId) : db.cargos;
-  if(state.fatStatus) cargos = cargos.filter(v=>v.statusPagamento===state.fatStatus);
-
-  const porCliente = {};
-  cargos.forEach(v=>{
-    const nome = getCliente(v.clienteId)?.nome || 'Sem cliente';
-    if(!porCliente[nome]) porCliente[nome] = {contratado:0, recebido:0};
-    porCliente[nome].contratado += valorContratadoCargo(v);
-    porCliente[nome].recebido += valorRecebidoCargo(v);
-  });
-  const nomes = Object.keys(porCliente).sort((a,b)=> porCliente[b].contratado - porCliente[a].contratado).slice(0,10);
-
-  const ctx = document.getElementById('chart-faturamento');
-  if(chartFaturamento) chartFaturamento.destroy();
-  if(!ctx) return;
-  chartFaturamento = new Chart(ctx, {
-    type:'bar',
-    data:{
-      labels: nomes,
-      datasets:[
-        {label:'Contratado', data: nomes.map(n=>porCliente[n].contratado), backgroundColor:'#B2573D', borderRadius:3, maxBarThickness:26},
-        {label:'Recebido', data: nomes.map(n=>porCliente[n].recebido), backgroundColor:'#4C7A5A', borderRadius:3, maxBarThickness:26}
-      ]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{position:'bottom', labels:{boxWidth:12,font:{size:11.5}}}},
-      scales:{ y:{ beginAtZero:true, ticks:{ callback:v=>formatMoeda(v) } } }
-    }
-  });
-}
-
 
 function viewRelatorio(){
   const clientesOpts = db.clientes.map(c=>'<option value="'+c.id+'" '+(state.dashClienteId===c.id?'selected':'')+'>'+esc(c.nome)+'</option>').join('');
@@ -1140,13 +1170,18 @@ function viewRelatorio(){
 
       <h3 style="font-size:15px;margin-bottom:2px;">Funil do processo</h3>
       <div class="funnel-list">
-        ${funilRows.map(([label,val])=>`
+        ${funilRows.map(([label,val], i, arr)=>{
+          const anterior = i>0 ? arr[i-1][1] : null;
+          const conv = (anterior && anterior>0) ? Math.round((val/anterior)*100) : null;
+          return `
           <div class="funnel-item">
             <div class="name">${esc(label)}</div>
             <div class="funnel-bar-bg"><div class="funnel-bar" style="width:${Math.round((val/max)*100)}%;"></div></div>
-            <div class="num">${val}</div>
-          </div>`).join('')}
+            <div class="num">${val}${conv!==null ? ' <span class="hint" style="font-size:11px;">('+conv+'%)</span>' : ''}</div>
+          </div>`;
+        }).join('')}
       </div>
+      ${(cargo.status==='fechada' && cargo.dataAbertura && cargo.dataFechamentoReal) ? `<p class="hint" style="margin-top:6px;">Tempo até o fechamento: <strong>${daysBetween(cargo.dataAbertura, cargo.dataFechamentoReal)} dias</strong> (abertura em ${formatDate(cargo.dataAbertura)}, fechamento em ${formatDate(cargo.dataFechamentoReal)}).</p>` : ''}
 
       <h3 style="font-size:15px;margin:20px 0 8px 0;">Finalistas / contratados (${contratados.length})</h3>
       ${contratados.length===0 ? '<p class="hint">Nenhum candidato contratado até o momento.</p>' : `
@@ -1176,6 +1211,12 @@ function getHashCargoId(){
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+function getHashAvaliacaoId(){
+  const h = window.location.hash || '';
+  const m = h.match(/^#avaliacao-(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 function paginaPublicaIndisponivel(mensagem){
   return `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
     <h2 style="margin-bottom:10px;">Vaga não disponível</h2>
@@ -1188,6 +1229,69 @@ function paginaPublicaObrigado(titulo){
     <h2 style="margin-bottom:10px;">Inscrição recebida 🎉</h2>
     <p class="hint">Obrigado por se candidatar para <strong>${esc(titulo)}</strong>. Seus dados e currículo foram recebidos e nossa equipe vai analisar seu perfil. Se avançar no processo, entraremos em contato.</p>
   </div>`;
+}
+
+const BLOCOS_AVALIACAO_COMPORTAMENTAL = [
+  {titulo:'Tende a agir de forma...', D:'Assertiva', I:'Persuasiva', S:'Paciente', C:'Contemplativa'},
+  {titulo:'Confortável com...', D:'Ser decisivo', I:'Amizade social', S:'Ser parte de um time', C:'Planejamento e ordem'},
+  {titulo:'Desejo de...', D:'Variedade', I:'Menos estrutura', S:'Harmonia', C:'Lógica'},
+  {titulo:'Sob estresse pode se tornar...', D:'Ditatorial', I:'Sarcástico', S:'Submisso', C:'Arredio'},
+  {titulo:'Característica principal...', D:'Franco', I:'Otimista', S:'Serviçal', C:'Ordeiro'},
+  {titulo:'Quando em conflito, esse estilo…', D:'Demanda ação', I:'Ataca', S:'Reclama', C:'Evita'},
+  {titulo:'Força aparente...', D:'Solucionador de problemas', I:'Encorajador', S:'Supporter', C:'Organizador'},
+  {titulo:'Com erros...', D:'Informa o erro diretamente', I:'Chama a pessoa e explica o erro', S:'Fica calado e aceita o erro', C:'Se incomoda e questiona'},
+  {titulo:'Sob estresse pode se tornar...', D:'Crítico', I:'Superficial', S:'Indeciso', C:'Cabeça dura'},
+  {titulo:'Pode ser considerado...', D:'Impaciente', I:'Inoportuno', S:'Indeciso', C:'Inseguro'},
+  {titulo:'Necessita de....', D:'Controle', I:'Aprovação', S:'Rotina', C:'Padrão'},
+  {titulo:'Limitação desse perfil...', D:'Direto', I:'Desorganizado', S:'Indireto', C:'Detalhista'},
+  {titulo:'Possui medo de...', D:'Perder', I:'Rejeição', S:'Mudanças bruscas', C:'Estar errado'},
+  {titulo:'Mensura desempenho com...', D:'Resultados', I:'Reconhecimento', S:'Compatibilidade', C:'Precisão'},
+  {titulo:'Com subalternos, costuma ser...', D:'Orgulhoso', I:'Permissivo', S:'Humilde', C:'Cauteloso'},
+  {titulo:'Abordagem primária...', D:'Independente', I:'Interativo', S:'Estável', C:'Corretivo'},
+  {titulo:'Outra limitação desse perfil...', D:'Intenso', I:'Não tradicional', S:'Indeciso', C:'Impessoal'},
+  {titulo:'Ponto cego...', D:'Ser responsabilizado', I:'Realizar compromissos', S:'Necessidade de mudança', C:'Tomada de decisão'},
+  {titulo:'Mensura desempenho com...', D:'Histórico', I:'Elogios', S:'Contribuição', C:'Qualidade dos resultados'},
+  {titulo:'Prefere tarefas....', D:'Desafiadoras', I:'Relacionada a pessoas', S:'Agendadas', C:'Estruturadas'},
+  {titulo:'Com atrasos...', D:'Se irrita e confronta', I:'Nem liga, está distraído', S:'Sabe do atraso, mas aceita', C:'Reclama e analisa a situação'},
+  {titulo:'Em situações extremas...', D:'Se preocupa demais com metas', I:'Fala sem pensar', S:'Procrastina ao invés de fazer', C:'Analisa demais'},
+  {titulo:'Precisa melhorar...', D:'Empatia e Paciência', I:'Contole emocional', S:'Ser assertivo sob pressão', C:'Se preocupar menos sobre tudo'},
+  {titulo:'Em uma discussão...', D:'Busca ter a razão', I:'Busca diminuir o conflito', S:'Busca concordância', C:'Busca comprovar sua opinião'},
+  {titulo:'Quando vai às compras...', D:'Sabe o que quer', I:'Se diverte', S:'Fica indeciso', C:'Busca ofertas'},
+];
+
+const PERFIS_COMPORTAMENTAIS = {
+  D: {
+    nome:'Dominante = Executor',
+    positivos:['Aventureiro','Direto','Determinado','Líder','Ousado','Foco nos resultados','Competitivo','Resolve problemas'],
+    equipe:['Coordenador','Inovador','Tem iniciativa'],
+    ambiente:['Trabalho com desafios e oportunidades','Livre de controle, supervisão e detalhes excessivos'],
+    atencao:['Impaciência','Falta de tato e diplomacia','Dificuldade em delegar','Nem sempre ouve bem o outro']
+  },
+  I: {
+    nome:'Influente = Comunicador',
+    positivos:['Atencioso','Caloroso','Confiante','Entusiasta','Otimista','Persuasivo','Sociável'],
+    equipe:['Motiva os demais a alcançar objetivos','Joga em equipe','Negocia conflitos'],
+    ambiente:['Contato constante com pessoas','Liberdade de movimento'],
+    atencao:['Pode ser desorganizado','Perde o foco com facilidade','Problemas com prazos','Fala antes de pensar']
+  },
+  S: {
+    nome:'eStável = Planejador',
+    positivos:['Amável','Calmo','Compreensivo','Confiável','Leal','Paciente','Bom ouvinte'],
+    equipe:['Joga em equipe','Orientado ao serviço','Constrói relações de trabalho duradouras'],
+    ambiente:['Ambiente estável e previsível','Pouco conflito entre pessoas'],
+    atencao:['Resistência a mudanças repentinas','Dificuldade em estabelecer prioridades','Pode guardar rancor','Ritmo mais lento para agir']
+  },
+  C: {
+    nome:'Cauteloso = Analista',
+    positivos:['Analítico','Cuidadoso','Exato','Preciso','Diplomático','Alto padrão de qualidade'],
+    equipe:['Mantém padrões altos','Busca dados antes de decidir','Resolve problemas com critério'],
+    ambiente:['Trabalho técnico ou especializado','Ambiente estruturado e organizado'],
+    atencao:['Perfeccionismo','Apego excessivo a detalhes','Pode parecer distante ou frio','Dificuldade em lidar com críticas']
+  }
+};
+
+function linkAvaliacao(candidatoId){
+  return window.location.origin + window.location.pathname + '#avaliacao-' + candidatoId;
 }
 
 async function renderPublicApplication(cargoId){
@@ -1302,6 +1406,198 @@ function openModal(html){
   document.getElementById('modal-slot').innerHTML = '<div class="modal-overlay" data-action="fechar-modal-overlay"><div class="modal" id="modal-box">'+html+'</div></div>';
 }
 function closeModal(){ document.getElementById('modal-slot').innerHTML=''; }
+
+function modalConfigurarMensagens(){
+  garantirConfiguracoes();
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Mensagens automáticas</h2>
+    <div class="modal-sub">Use <strong>{nome}</strong>, <strong>{vaga}</strong> e, na mensagem da avaliação, também <strong>{link}</strong> — são substituídos automaticamente.</div>
+    <form id="form-mensagens">
+      <div class="form-grid">
+        <div class="field full"><label>Mensagem quando aprovado / contratado</label><textarea name="mensagemAprovado" style="min-height:90px;">${esc(db.configuracoes.mensagemAprovado)}</textarea></div>
+        <div class="field full"><label>Mensagem quando não avança no processo</label><textarea name="mensagemReprovado" style="min-height:90px;">${esc(db.configuracoes.mensagemReprovado)}</textarea></div>
+        <div class="field full"><label>Mensagem ao enviar o link da avaliação comportamental</label><textarea name="mensagemAvaliacao" style="min-height:90px;">${esc(db.configuracoes.mensagemAvaliacao)}</textarea></div>
+      </div>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar mensagens</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-mensagens').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    db.configuracoes.mensagemAprovado = f.get('mensagemAprovado').trim() || MENSAGEM_APROVADO_PADRAO;
+    db.configuracoes.mensagemReprovado = f.get('mensagemReprovado').trim() || MENSAGEM_REPROVADO_PADRAO;
+    db.configuracoes.mensagemAvaliacao = f.get('mensagemAvaliacao').trim() || MENSAGEM_AVALIACAO_PADRAO;
+    closeModal(); saveDB(); showToast('Mensagens salvas.');
+  });
+}
+
+function avancarProximaEtapa(candidatoId){
+  const c = db.candidatos.find(x=>x.id===candidatoId);
+  if(!c) return;
+  const idx = c.etapas.findIndex(e=>e.resultado==='');
+  if(idx===-1){ showToast('Este candidato já passou por todas as etapas.', true); return; }
+  const statusAntes = statusCandidato(c);
+  c.etapas[idx].resultado = 'avancou';
+  if(!c.etapas[idx].data) c.etapas[idx].data = todayISO();
+  const statusDepois = statusCandidato(c);
+  saveDB(); renderView();
+  showToast('Avançou: '+c.etapas[idx].nome+' — '+c.nome+'.');
+  if(statusAntes !== statusDepois && (statusDepois==='contratado' || statusDepois==='nao_avancou')){
+    modalMensagemAutomatica(c, statusDepois);
+  }
+}
+
+function modalMensagemAutomatica(candidato, statusNovo){
+  garantirConfiguracoes();
+  const cargo = getCargo(candidato.cargoId);
+  const template = statusNovo === 'contratado' ? db.configuracoes.mensagemAprovado : db.configuracoes.mensagemReprovado;
+  const mensagem = montarMensagem(template, candidato, cargo);
+  const titulo = statusNovo === 'contratado' ? 'Candidato aprovado 🎉' : 'Candidato não avançou';
+
+  if(!candidato.telefone){
+    showToast('Status atualizado, mas este candidato não tem telefone cadastrado para enviar a mensagem.', true);
+    return;
+  }
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${titulo}</h2>
+    <div class="modal-sub">Deseja avisar ${esc(candidato.nome)} agora pelo WhatsApp?</div>
+    <div class="field full"><label>Mensagem (pode editar antes de enviar)</label><textarea id="texto-mensagem-automatica" style="min-height:120px;">${esc(mensagem)}</textarea></div>
+    <div class="modal-footer">
+      <span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Agora não</span>
+        <span class="btn btn-primary" id="btn-enviar-mensagem-automatica">💬 Enviar por WhatsApp</span>
+      </div>
+    </div>
+  `);
+  document.getElementById('btn-enviar-mensagem-automatica').addEventListener('click', ()=>{
+    const textoFinal = document.getElementById('texto-mensagem-automatica').value;
+    window.open(linkWhatsApp(candidato.telefone, textoFinal), '_blank');
+    closeModal();
+  });
+}
+
+async function renderAvaliacaoComportamental(candidatoId){
+  document.title = 'Avaliação Comportamental · Caroline Peixoto DHO';
+  document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando…</div></div><div id="toast-slot"></div>';
+  const root = document.getElementById('public-root');
+
+  if(!appsScriptConfigurado()){
+    root.innerHTML = paginaPublicaIndisponivel('A integração desta página ainda não foi concluída por quem administra o painel.');
+    return;
+  }
+
+  let info;
+  try{
+    info = await chamarAppsScriptGet('action=candidatoInfo&id=' + encodeURIComponent(candidatoId));
+  }catch(err){
+    root.innerHTML = paginaPublicaIndisponivel('Não foi possível carregar esta avaliação. Verifique se o link está correto.');
+    return;
+  }
+
+  if(!info || !info.nome){
+    root.innerHTML = paginaPublicaIndisponivel('Candidato não encontrado. Confira o link recebido.');
+    return;
+  }
+
+  if(info.jaRespondeu){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Avaliação já respondida</h2>
+      <p class="hint">Olá ${esc(info.nome.split(' ')[0])}, identificamos que você já respondeu esta avaliação anteriormente. Se precisar refazer, entre em contato com quem te enviou o link.</p>
+    </div>`;
+    return;
+  }
+
+  const primeiroNome = info.nome.split(' ')[0];
+
+  root.innerHTML = `
+    <div class="card" style="max-width:680px;margin:32px auto;padding:0;overflow:hidden;">
+      <div style="background:var(--spine);padding:26px 32px;text-align:center;">
+        <img src="data:image/png;base64,${LOGO_CLARO_B64}" alt="Caroline Peixoto DHO" style="max-width:260px;width:100%;height:auto;display:inline-block;">
+      </div>
+      <div style="padding:32px;">
+        <h1 style="font-size:22px;margin-bottom:6px;">Avaliação Comportamental</h1>
+        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 20px 0;">Olá ${esc(primeiroNome)}! Em cada grupo abaixo, há 4 palavras. Dê uma nota de <strong>1 a 4 para cada uma, sem repetir</strong>: <strong>4</strong> para a que MAIS combina com você e <strong>1</strong> para a que MENOS combina. Não existe resposta certa ou errada — responda de forma espontânea. Leva cerca de 8 a 10 minutos.</p>
+
+        <form id="form-avaliacao">
+          ${BLOCOS_AVALIACAO_COMPORTAMENTAL.map((bloco, i)=>{
+            const letras = ['D','I','S','C'];
+            const ordem = [...letras].sort(()=>Math.random()-0.5);
+            return `
+            <div style="border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:10px;">
+              <div class="hint" style="margin-bottom:8px;">Grupo ${i+1} de ${BLOCOS_AVALIACAO_COMPORTAMENTAL.length} — ${esc(bloco.titulo)}</div>
+              <div style="display:grid;grid-template-columns:1fr 96px;gap:8px 10px;align-items:center;">
+                ${ordem.map(letra=>`
+                  <div style="font-size:13.5px;">${esc(bloco[letra])}</div>
+                  <select class="disc-rank" data-bloco="${i}" data-letra="${letra}" required>
+                    <option value="">Nota…</option>
+                    <option value="4">4 · Mais</option>
+                    <option value="3">3</option>
+                    <option value="2">2</option>
+                    <option value="1">1 · Menos</option>
+                  </select>
+                `).join('')}
+              </div>
+            </div>`;
+          }).join('')}
+          <p class="hint" id="erro-avaliacao" style="color:var(--red);display:none;"></p>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;" id="btn-enviar-avaliacao">Enviar avaliação</button>
+        </form>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--ink-soft);font-size:12px;margin-top:16px;">Caroline Peixoto DHO · Desenvolvimento Humano e Organizacional</p>
+  `;
+
+  document.getElementById('form-avaliacao').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-avaliacao');
+    erroEl.style.display = 'none';
+    const scores = {D:0, I:0, S:0, C:0};
+    for(let i=0; i<BLOCOS_AVALIACAO_COMPORTAMENTAL.length; i++){
+      const selects = document.querySelectorAll('.disc-rank[data-bloco="'+i+'"]');
+      const valores = [];
+      selects.forEach(s=> valores.push(s.value));
+      if(valores.some(v=>!v)){
+        erroEl.textContent = 'Preencha uma nota de 1 a 4 em todas as palavras do grupo '+(i+1)+' antes de enviar.';
+        erroEl.style.display = 'block';
+        selects[0].closest('div[style*="border:1px solid"]')?.scrollIntoView({behavior:'smooth', block:'center'});
+        return;
+      }
+      const unicos = new Set(valores);
+      if(unicos.size !== 4){
+        erroEl.textContent = 'No grupo '+(i+1)+', cada nota de 1 a 4 só pode ser usada uma vez — não repita valores.';
+        erroEl.style.display = 'block';
+        return;
+      }
+      selects.forEach(s=>{ scores[s.dataset.letra] += parseInt(s.value, 10); });
+    }
+    let perfilLetra = 'D';
+    ['I','S','C'].forEach(l=>{ if(scores[l] > scores[perfilLetra]) perfilLetra = l; });
+
+    const btn = document.getElementById('btn-enviar-avaliacao');
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try{
+      await chamarAppsScriptPost('salvarAvaliacao', {candidatoId: candidatoId, perfil: perfilLetra, scores: scores});
+      root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+        <h2 style="margin-bottom:10px;">Avaliação enviada! 🎉</h2>
+        <p class="hint">Obrigado, ${esc(primeiroNome)}! Sua avaliação comportamental foi registrada com sucesso. Nossa equipe já tem acesso ao resultado e seguirá com os próximos passos do processo.</p>
+      </div>`;
+    }catch(err){
+      erroEl.textContent = 'Não foi possível enviar agora. Verifique sua conexão e tente novamente.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Enviar avaliação';
+    }
+  });
+}
 
 function modalCliente(cliente){
   const editando = !!cliente;
@@ -1711,15 +2007,48 @@ function modalLinkVaga(cargo){
   `);
 }
 
+function modalLinkAvaliacao(candidato){
+  garantirConfiguracoes();
+  const link = linkAvaliacao(candidato.id);
+  const cargo = getCargo(candidato.cargoId);
+  const mensagem = montarMensagem(db.configuracoes.mensagemAvaliacao, candidato, cargo, link);
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Avaliação comportamental</h2>
+    <div class="modal-sub">Envie este link para ${esc(candidato.nome)} responder.</div>
+    <div class="field full">
+      <label>Link público</label>
+      <input type="text" readonly value="${esc(link)}" id="link-avaliacao-input" onclick="this.select()">
+    </div>
+    ${candidato.avaliacaoComportamental && candidato.avaliacaoComportamental.data ? `<p class="hint">Este candidato já respondeu em ${formatDate(candidato.avaliacaoComportamental.data)} — perfil: <strong>${esc(PERFIS_COMPORTAMENTAIS[candidato.avaliacaoComportamental.perfil]?.nome||candidato.avaliacaoComportamental.perfil)}</strong>. Se enviar o link de novo, ele verá uma mensagem informando que já respondeu.</p>` : ''}
+    ${candidato.telefone ? `<div class="field full"><label>Mensagem (pode editar antes de enviar)</label><textarea id="texto-mensagem-avaliacao" style="min-height:100px;">${esc(mensagem)}</textarea></div>` : '<p class="hint">Este candidato não tem telefone cadastrado — copie o link e envie por onde preferir.</p>'}
+    <div class="modal-footer">
+      <span>${candidato.telefone ? '<span class="btn btn-secondary btn-sm" id="btn-enviar-avaliacao-whatsapp">💬 Enviar por WhatsApp</span>' : ''}</span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="copiar-link-avaliacao" data-id="${candidato.id}">Copiar link</span>
+      </div>
+    </div>
+  `);
+  const btnWpp = document.getElementById('btn-enviar-avaliacao-whatsapp');
+  if(btnWpp){
+    btnWpp.addEventListener('click', ()=>{
+      const textoFinal = document.getElementById('texto-mensagem-avaliacao').value;
+      window.open(linkWhatsApp(candidato.telefone, textoFinal), '_blank');
+    });
+  }
+}
+
 function modalCandidato(candidato, cargoPreSelecionado, preBanco){
   const editando = !!candidato;
   const base = {
     id:'', clienteId:'', cargoId: cargoPreSelecionado||'', nome:'', telefone:'', email:'', origem:'',
     dataRecebimento: todayISO(), etapas: defaultEtapas(), convidado:false, declinou:false, dataDeclinio:'', motivoDeclinio:'',
     statusManual:'', observacoes:'', temCurriculo:false, curriculoNome:'', curriculoUrl:'',
-    bancoDeCurriculos: !!preBanco, bancoAnotacoes:''
+    bancoDeCurriculos: !!preBanco, bancoAnotacoes:'', areaInteresse:'', avaliacaoComportamental:null
   };
   candidato = candidato ? JSON.parse(JSON.stringify(candidato)) : base;
+  const statusOriginal = editando ? statusCandidato(candidato) : null;
   let arquivoCurriculoSelecionado = null;
   if(cargoPreSelecionado && !editando){ const cg = getCargo(cargoPreSelecionado); if(cg) candidato.clienteId = cg.clienteId; }
 
@@ -1730,6 +2059,27 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
     <h2>${editando ? 'Editar candidato' : 'Novo candidato'}</h2>
     <div class="modal-sub">Registre os dados, etapas do processo e o desfecho. ${candidato.telefone ? '<a href="'+linkWhatsApp(candidato.telefone, 'Olá'+(candidato.nome?' '+candidato.nome.split(" ")[0]:'')+', tudo bem?')+'" target="_blank" style="margin-left:8px;">💬 Enviar WhatsApp</a>' : ''}</div>
     <form id="form-candidato">
+      <div class="section-title">Currículo</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Anexe primeiro o currículo — o botão de leitura automática ajuda a preencher nome, e-mail e telefone abaixo.</p>
+      ${candidato.curriculoUrl ? `
+      <div class="checkbox-row" style="justify-content:space-between;">
+        <span>📎 ${esc(candidato.curriculoNome||'currículo recebido pela página pública')}</span>
+        <a class="btn btn-ghost btn-sm" href="${esc(candidato.curriculoUrl)}" target="_blank">Ver currículo</a>
+      </div>
+      <p class="hint">Este currículo está salvo no Google Drive (via inscrição pela página pública).</p>
+      ` : candidato.temCurriculo ? `
+      <div class="checkbox-row" style="justify-content:space-between;">
+        <span>📎 ${esc(candidato.curriculoNome||'arquivo anexado')}</span>
+        <span class="btn btn-ghost btn-sm" data-action="baixar-curriculo-modal" data-id="${candidato.id}">Baixar</span>
+      </div>
+      <div class="checkbox-row"><input type="checkbox" id="chk-remover-curriculo" name="removerCurriculo"><label for="chk-remover-curriculo">Remover currículo anexado</label></div>
+      <div class="field full"><label>Substituir por outro arquivo (opcional)</label><input type="file" id="input-curriculo" accept=".pdf,.doc,.docx"></div>
+      ` : `
+      <div class="field full"><label>Anexar currículo (PDF ou Word, opcional)</label><input type="file" id="input-curriculo" accept=".pdf,.doc,.docx"></div>
+      `}
+      <p class="hint">Tamanho máximo: 4MB.</p>
+      <div id="area-leitura-curriculo" style="margin-top:8px;"></div>
+
       <div class="section-title">Dados do candidato</div>
       <div class="form-grid cols-3">
         <div class="field full"><label>Nome completo *</label><input required name="nome" value="${esc(candidato.nome)}"></div>
@@ -1769,6 +2119,31 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       </table></div>
       <p class="hint">Ao marcar "Avançou" ou "Não avançou" sem data, a data de hoje é preenchida automaticamente.</p>
 
+      ${editando && appsScriptConfigurado() ? `
+      <div class="section-title">Avaliação comportamental</div>
+      ${candidato.avaliacaoComportamental && candidato.avaliacaoComportamental.data ? (()=>{
+        const perfilObj = PERFIS_COMPORTAMENTAIS[candidato.avaliacaoComportamental.perfil];
+        const sc = candidato.avaliacaoComportamental.scores || {};
+        return `
+      <div class="checkbox-row" style="justify-content:space-between;">
+        <span>🧭 <strong>${esc(perfilObj?.nome || candidato.avaliacaoComportamental.perfil)}</strong> — respondida em ${formatDate(candidato.avaliacaoComportamental.data)}</span>
+        <span class="btn btn-ghost btn-sm" data-action="avaliacao-comportamental" data-id="${candidato.id}">Ver link</span>
+      </div>
+      <p class="hint" style="margin:4px 0 10px 0;">D: ${sc.D||0} · I: ${sc.I||0} · S: ${sc.S||0} · C: ${sc.C||0}</p>
+      ${perfilObj ? `
+      <div style="font-size:13px;line-height:1.6;">
+        <p style="margin:4px 0;"><strong>Pontos fortes:</strong> ${esc(perfilObj.positivos.slice(0,6).join(', '))}</p>
+        <p style="margin:4px 0;"><strong>Como atua em equipe:</strong> ${esc(perfilObj.equipe.join(', '))}</p>
+        <p style="margin:4px 0;"><strong>Ambiente ideal:</strong> ${esc(perfilObj.ambiente.join('; '))}</p>
+        <p style="margin:4px 0;"><strong>Pontos de atenção:</strong> ${esc(perfilObj.atencao.join(', '))}</p>
+      </div>` : ''}
+      `;
+      })() : `
+      <p class="hint" style="margin-bottom:8px;">Este candidato ainda não respondeu a avaliação comportamental.</p>
+      <span class="btn btn-secondary btn-sm" data-action="avaliacao-comportamental" data-id="${candidato.id}">🧭 Enviar link da avaliação</span>
+      `}
+      ` : ''}
+
       <div class="section-title">Convite e declínio</div>
       <div class="checkbox-row"><input type="checkbox" id="chk-convidado" name="convidado" ${candidato.convidado?'checked':''}><label for="chk-convidado">Candidato foi convidado a seguir no processo</label></div>
       <div class="checkbox-row"><input type="checkbox" id="chk-declinou" name="declinou" ${candidato.declinou?'checked':''}><label for="chk-declinou">Candidato declinou do processo</label></div>
@@ -1777,31 +2152,18 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
         <div class="field full"><label>Motivo do declínio</label><textarea name="motivoDeclinio">${esc(candidato.motivoDeclinio||'')}</textarea></div>
       </div>
 
-      <div class="section-title">Currículo</div>
-      ${candidato.curriculoUrl ? `
-      <div class="checkbox-row" style="justify-content:space-between;">
-        <span>📎 ${esc(candidato.curriculoNome||'currículo recebido pela página pública')}</span>
-        <a class="btn btn-ghost btn-sm" href="${esc(candidato.curriculoUrl)}" target="_blank">Ver currículo</a>
-      </div>
-      <p class="hint">Este currículo está salvo no Google Drive (via inscrição pela página pública).</p>
-      ` : candidato.temCurriculo ? `
-      <div class="checkbox-row" style="justify-content:space-between;">
-        <span>📎 ${esc(candidato.curriculoNome||'arquivo anexado')}</span>
-        <span class="btn btn-ghost btn-sm" data-action="baixar-curriculo-modal" data-id="${candidato.id}">Baixar</span>
-      </div>
-      <div class="checkbox-row"><input type="checkbox" id="chk-remover-curriculo" name="removerCurriculo"><label for="chk-remover-curriculo">Remover currículo anexado</label></div>
-      <div class="field full"><label>Substituir por outro arquivo (opcional)</label><input type="file" id="input-curriculo" accept=".pdf,.doc,.docx"></div>
-      ` : `
-      <div class="field full"><label>Anexar currículo (PDF ou Word, opcional)</label><input type="file" id="input-curriculo" accept=".pdf,.doc,.docx"></div>
-      `}
-      <p class="hint">Tamanho máximo: 4MB.</p>
-      <div id="area-leitura-curriculo" style="margin-top:8px;"></div>
-
       <div class="section-title">Banco de currículos</div>
       <div class="checkbox-row"><input type="checkbox" id="chk-banco" name="bancoDeCurriculos" ${candidato.bancoDeCurriculos?'checked':''}><label for="chk-banco">Adicionar ao banco de currículos (fica disponível para futuras vagas, mesmo sem processo em andamento)</label></div>
-      <div class="field full" id="banco-anotacoes-wrap" style="display:${candidato.bancoDeCurriculos?'block':'none'};margin-top:8px;">
-        <label>Anotações gerais do banco de currículos</label>
-        <textarea name="bancoAnotacoes" placeholder="Ex.: perfil forte para vendas, disponibilidade imediata, já entrevistado em 2025...">${esc(candidato.bancoAnotacoes||'')}</textarea>
+      <div class="form-grid" id="banco-anotacoes-wrap" style="display:${candidato.bancoDeCurriculos?'grid':'none'};margin-top:8px;">
+        <div class="field full">
+          <label>Área/cargo de interesse</label>
+          <input name="areaInteresse" value="${esc(candidato.areaInteresse||'')}" placeholder="Ex.: Vendas, Administrativo, Cozinha…">
+          <div class="hint">Ajuda a filtrar o banco quando surgir uma vaga nova parecida.</div>
+        </div>
+        <div class="field full">
+          <label>Anotações gerais do banco de currículos</label>
+          <textarea name="bancoAnotacoes" placeholder="Ex.: perfil forte para vendas, disponibilidade imediata, já entrevistado em 2025...">${esc(candidato.bancoAnotacoes||'')}</textarea>
+        </div>
       </div>
 
       <div class="section-title">Status e observações</div>
@@ -1840,7 +2202,7 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
   popularCargos();
 
   document.getElementById('chk-banco').addEventListener('change', e=>{
-    document.getElementById('banco-anotacoes-wrap').style.display = e.target.checked ? 'block' : 'none';
+    document.getElementById('banco-anotacoes-wrap').style.display = e.target.checked ? 'grid' : 'none';
   });
 
   document.getElementById('etapas-body').addEventListener('change', e=>{
@@ -1932,7 +2294,9 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       curriculoUrl: candidato.curriculoUrl || '',
       inscricaoId: candidato.inscricaoId || '',
       bancoDeCurriculos: bancoMarcado,
-      bancoAnotacoes: f.get('bancoAnotacoes').trim()
+      bancoAnotacoes: f.get('bancoAnotacoes').trim(),
+      areaInteresse: f.get('areaInteresse').trim(),
+      avaliacaoComportamental: candidato.avaliacaoComportamental || null
     };
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -1967,17 +2331,25 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
         }
       }
     }
+    const candidatoFinal = Object.assign({id:candidatoId}, dados);
+    const statusNovo = statusCandidato(candidatoFinal);
+    const mudouParaDesfecho = statusOriginal !== statusNovo && (statusNovo === 'contratado' || statusNovo === 'nao_avancou');
     closeModal(); saveDB(); renderView();
+    if(mudouParaDesfecho){ modalMensagemAutomatica(candidatoFinal, statusNovo); }
   });
 }
 
 /* ============================= AÇÕES GLOBAIS ============================= */
 function onGlobalClick(e){
+  const resultadosBusca = document.getElementById('busca-global-resultados');
+  if(resultadosBusca && !e.target.closest('.global-search-wrap')){ resultadosBusca.classList.remove('aberto'); }
+
   const el = e.target.closest('[data-action]');
   if(!el) return;
   const action = el.dataset.action;
   const id = el.dataset.id;
 
+  if(action === 'ir-busca'){ irParaResultadoBusca(el.dataset.tipo, id); return; }
   if(action === 'nav'){ state.tab = el.dataset.tab; renderView(); return; }
 
   if(action === 'novo-cliente'){ modalCliente(null); return; }
@@ -2014,6 +2386,19 @@ function onGlobalClick(e){
     return;
   }
   if(action === 'fechar-vaga'){ modalFecharVaga(getCargo(id)); return; }
+  if(action === 'avaliacao-comportamental'){ modalLinkAvaliacao(db.candidatos.find(c=>c.id===id)); return; }
+  if(action === 'copiar-link-avaliacao'){
+    const link = linkAvaliacao(id);
+    const finalizar = ()=> showToast('Link copiado! Envie para o candidato responder.');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(finalizar).catch(()=>{
+        const inp = document.getElementById('link-avaliacao-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+      });
+    } else {
+      const inp = document.getElementById('link-avaliacao-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+    }
+    return;
+  }
   if(action === 'reabrir-vaga'){
     const v = getCargo(id); v.status='aberta'; v.dataFechamentoReal=''; saveDB(); renderView();
     if(v.vagaPublicaAtiva){ sincronizarVagaPublica(v); }
@@ -2037,6 +2422,67 @@ function onGlobalClick(e){
   if(action === 'novo-candidato'){ modalCandidato(null, state.candCargoId || ''); return; }
   if(action === 'novo-candidato-banco'){ modalCandidato(null, '', true); return; }
   if(action === 'editar-candidato'){ modalCandidato(db.candidatos.find(c=>c.id===id)); return; }
+  if(action === 'avancar-etapa'){ avancarProximaEtapa(id); return; }
+  if(action === 'lote-avancar'){
+    let n=0;
+    state.candidatosSelecionados.forEach(cid=>{
+      const c = db.candidatos.find(x=>x.id===cid);
+      if(!c) return;
+      const idx = c.etapas.findIndex(e=>e.resultado==='');
+      if(idx===-1) return;
+      c.etapas[idx].resultado = 'avancou';
+      if(!c.etapas[idx].data) c.etapas[idx].data = todayISO();
+      n++;
+    });
+    state.candidatosSelecionados.clear();
+    saveDB(); renderView();
+    showToast(n+' candidato(s) avançaram de etapa.');
+    return;
+  }
+  if(action === 'lote-nao-avancou'){
+    if(!confirm('Marcar a próxima etapa pendente como "Não avançou" para todos os selecionados?')) return;
+    let n=0;
+    state.candidatosSelecionados.forEach(cid=>{
+      const c = db.candidatos.find(x=>x.id===cid);
+      if(!c) return;
+      const idx = c.etapas.findIndex(e=>e.resultado==='');
+      if(idx===-1) return;
+      c.etapas[idx].resultado = 'nao_avancou';
+      if(!c.etapas[idx].data) c.etapas[idx].data = todayISO();
+      n++;
+    });
+    state.candidatosSelecionados.clear();
+    saveDB(); renderView();
+    showToast(n+' candidato(s) marcados como não avançou.');
+    return;
+  }
+  if(action === 'lote-banco'){
+    let n=0;
+    state.candidatosSelecionados.forEach(cid=>{
+      const c = db.candidatos.find(x=>x.id===cid);
+      if(!c || c.bancoDeCurriculos) return;
+      c.bancoDeCurriculos = true;
+      n++;
+    });
+    state.candidatosSelecionados.clear();
+    saveDB(); renderView();
+    showToast(n+' candidato(s) adicionados ao banco de currículos.');
+    return;
+  }
+  if(action === 'lote-excluir'){
+    const qtd = state.candidatosSelecionados.size;
+    if(!confirm('Excluir '+qtd+' candidato(s) selecionado(s)? Esta ação não pode ser desfeita.')) return;
+    state.candidatosSelecionados.forEach(cid=>{
+      const c = db.candidatos.find(x=>x.id===cid);
+      if(c && c.temCurriculo) removerCurriculoStorage(cid);
+    });
+    db.candidatos = db.candidatos.filter(c=>!state.candidatosSelecionados.has(c.id));
+    state.candidatosSelecionados.clear();
+    saveDB(); renderView();
+    showToast(qtd+' candidato(s) excluído(s).');
+    return;
+  }
+  if(action === 'lote-limpar'){ state.candidatosSelecionados.clear(); renderView(); return; }
   if(action === 'baixar-curriculo' || action === 'baixar-curriculo-modal'){
     const cand = db.candidatos.find(c=>c.id===id);
     baixarCurriculo(id, cand ? cand.nome : id);
@@ -2062,6 +2508,7 @@ function onGlobalClick(e){
     loadDB().then(dadosCarregados=>{
       if(dbCarregadoComSucesso){
         db = dadosCarregados;
+        garantirConfiguracoes();
         renderView();
         esconderAvisoConfiguracao();
         showToast('Tudo certo! Dados recarregados e o armazenamento está funcionando.');
@@ -2072,6 +2519,7 @@ function onGlobalClick(e){
     });
     return;
   }
+  if(action === 'configurar-mensagens'){ modalConfigurarMensagens(); return; }
   if(action === 'recuperar-dados-antigos'){
     showToast('Procurando dados antigos…');
     lerStorageAntigo().then(dadosAntigos=>{
@@ -2102,6 +2550,19 @@ function onGlobalClick(e){
 
 function onGlobalChange(e){
   const t = e.target;
+  if(t.classList && t.classList.contains('chk-candidato')){
+    if(t.checked) state.candidatosSelecionados.add(t.dataset.id);
+    else state.candidatosSelecionados.delete(t.dataset.id);
+    renderView();
+    return;
+  }
+  if(t.id === 'chk-todos-candidatos'){
+    const linhas = document.querySelectorAll('.chk-candidato');
+    if(t.checked){ linhas.forEach(chk=> state.candidatosSelecionados.add(chk.dataset.id)); }
+    else { linhas.forEach(chk=> state.candidatosSelecionados.delete(chk.dataset.id)); }
+    renderView();
+    return;
+  }
   if(t.dataset.role === 'dash-cliente'){ state.dashClienteId = t.value; state.dashCargoId=''; renderView(); return; }
   if(t.dataset.role === 'dash-cargo'){ state.dashCargoId = t.value; renderView(); return; }
   if(t.dataset.role === 'cand-cliente'){ state.candClienteId = t.value; state.candCargoId=''; renderView(); return; }
@@ -2111,6 +2572,7 @@ function onGlobalChange(e){
   if(t.dataset.role === 'rel-cargo'){ state.dashCargoId = t.value; renderView(); return; }
   if(t.dataset.role === 'fat-cliente'){ state.fatClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'fat-status'){ state.fatStatus = t.value; renderView(); return; }
+  if(t.dataset.role === 'banco-area'){ state.bancoArea = t.value; renderView(); return; }
   if(t.dataset.role === 'sel-cliente-vagas'){ state.viewClienteId = t.value; renderView(); return; }
   if(t.id === 'import-file'){
     const file = t.files[0]; if(!file) return;
@@ -2120,7 +2582,7 @@ function onGlobalChange(e){
         const parsed = JSON.parse(ev.target.result);
         if(!parsed || !Array.isArray(parsed.clientes)) throw new Error('formato inválido');
         if(confirm('Importar este backup vai substituir todos os dados atuais. Deseja continuar?')){
-          db = parsed; dbCarregadoComSucesso = true; saveDB(true); renderView(); showToast('Backup importado com sucesso.');
+          db = parsed; garantirConfiguracoes(); dbCarregadoComSucesso = true; saveDB(true); renderView(); showToast('Backup importado com sucesso.');
         }
       }catch(err){ showToast('Arquivo inválido. Verifique se é um backup exportado por este painel.', true); }
     };
@@ -2145,15 +2607,22 @@ function onGlobalInput(e){
     const novo = document.querySelector('[data-role="banco-busca"]');
     if(novo){ novo.focus(); try{ novo.setSelectionRange(caret, caret); }catch(err){} }
   }
+  if(t.id === 'busca-global'){
+    executarBuscaGlobal(t.value);
+  }
 }
 
 /* ============================= INICIALIZAÇÃO ============================= */
 (async function init(){
   const cargoIdPublico = getHashCargoId();
+  const candidatoIdAvaliacao = getHashAvaliacaoId();
   if(cargoIdPublico){
     await renderPublicApplication(cargoIdPublico);
+  } else if(candidatoIdAvaliacao){
+    await renderAvaliacaoComportamental(candidatoIdAvaliacao);
   } else {
     db = await loadDB();
+    garantirConfiguracoes();
     renderShell();
     verificarPersistenciaInicial();
   }
