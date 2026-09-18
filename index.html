@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <style>
@@ -344,6 +345,113 @@ function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2,9
 function todayISO(){ const d = new Date(); const tz = d.getTimezoneOffset()*60000; return new Date(d-tz).toISOString().slice(0,10); }
 function formatDate(iso){ if(!iso) return '—'; const [y,m,d] = iso.split('-'); return d+'/'+m+'/'+y; }
 function daysBetween(a,b){ if(!a||!b) return null; const d1=new Date(a), d2=new Date(b); return Math.round((d2-d1)/86400000); }
+
+function dataMenosMeses(dataISO, meses){
+  const d = new Date(dataISO+'T00:00:00');
+  d.setMonth(d.getMonth() - meses);
+  return d.toISOString().slice(0,10);
+}
+function colaboradoresDoCliente(clienteId){ return db.colaboradores.filter(c=>c.clienteId===clienteId); }
+function funcoesDoCliente(clienteId){ return db.funcoes.filter(f=>f.clienteId===clienteId); }
+function getFuncao(id){ return db.funcoes.find(f=>f.id===id); }
+function getColaborador(id){ return db.colaboradores.find(c=>c.id===id); }
+const TIPOS_AFASTAMENTO = [
+  'Auxílio-doença (INSS)',
+  'Acidente de trabalho',
+  'Licença-maternidade',
+  'Licença-paternidade',
+  'Licença sem vencimento',
+  'Afastamento judicial',
+  'Outro'
+];
+
+function colaboradoresAtivosNaFuncao(funcaoId){ return db.colaboradores.filter(c=>c.funcaoId===funcaoId && statusColaborador(c)!=='desligado'); }
+function statusColaborador(c){
+  if(c.dataDesligamento) return 'desligado';
+  if(c.emAfastamento) return 'afastado';
+  return 'ativo';
+}
+function statusColaboradorBadge(c){
+  const s = statusColaborador(c);
+  if(s==='ativo') return '<span class="badge badge-green">Ativo</span>';
+  if(s==='afastado') return '<span class="badge badge-amber">Afastado</span>';
+  return '<span class="badge badge-red">Desligado</span>';
+}
+
+function calcularTurnover(clienteId, dataInicio, dataFim){
+  const todos = colaboradoresDoCliente(clienteId);
+  const ativoEm = (c, data) => c.dataAdmissao && c.dataAdmissao <= data && (!c.dataDesligamento || c.dataDesligamento > data);
+  const ativosInicio = todos.filter(c=>ativoEm(c, dataInicio)).length;
+  const ativosFim = todos.filter(c=>ativoEm(c, dataFim)).length;
+  const admitidos = todos.filter(c=>c.dataAdmissao && c.dataAdmissao >= dataInicio && c.dataAdmissao <= dataFim).length;
+  const desligados = todos.filter(c=>c.dataDesligamento && c.dataDesligamento >= dataInicio && c.dataDesligamento <= dataFim).length;
+  const media = (ativosInicio + ativosFim) / 2;
+  const taxa = media > 0 ? Math.round((desligados / media) * 1000) / 10 : 0;
+  return { ativosAtuais: ativosFim, admitidos, desligados, taxa };
+}
+
+function mesAtualRef(){ return todayISO().slice(0,7); }
+function primeiroDiaDoMes(mesRef){ return mesRef + '-01'; }
+function ultimoDiaDoMes(mesRef){
+  const [y,m] = mesRef.split('-').map(Number);
+  const ultimoDia = new Date(y, m, 0).getDate();
+  return mesRef + '-' + String(ultimoDia).padStart(2,'0');
+}
+function turnoverPorMes(clienteId, mesRef){
+  const inicio = primeiroDiaDoMes(mesRef);
+  let fim = ultimoDiaDoMes(mesRef);
+  const hoje = todayISO();
+  if(fim > hoje) fim = hoje;
+  return calcularTurnover(clienteId, inicio, fim);
+}
+function ultimos12Meses(){
+  const meses = [];
+  const hoje = new Date();
+  for(let i=11; i>=0; i--){
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    meses.push(d.toISOString().slice(0,7));
+  }
+  return meses;
+}
+
+function salarioAtualColaborador(c){
+  const hoje = todayISO();
+  const historico = (c.historicoSalarial||[]).filter(h=>h.data && h.data<=hoje).slice().sort((a,b)=>a.data.localeCompare(b.data));
+  if(historico.length>0) return parseFloat(historico[historico.length-1].valor) || 0;
+  return parseFloat(c.salarioAdmissao) || 0;
+}
+function folhaPagamentoCliente(clienteId){
+  return colaboradoresDoCliente(clienteId)
+    .filter(c=>statusColaborador(c)!=='desligado')
+    .reduce((s,c)=>s+salarioAtualColaborador(c), 0);
+}
+
+function formatMesRef(mesRef){
+  if(!mesRef) return '—';
+  const [y,m] = mesRef.split('-');
+  const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return nomes[parseInt(m,10)-1] + '/' + y;
+}
+function mesesDisponiveisMensalidades(){
+  const set = new Set(db.mensalidadesBPO.map(m=>m.mesReferencia));
+  set.add(mesAtualRef());
+  return Array.from(set).sort().reverse();
+}
+function gerarMensalidadesDoMes(mesRef){
+  const clientesBPO = db.clientes.filter(cl=>cl.tipoServico==='bpo');
+  let criadas = 0;
+  clientesBPO.forEach(cl=>{
+    const jaExiste = db.mensalidadesBPO.some(m=>m.clienteId===cl.id && m.mesReferencia===mesRef);
+    if(jaExiste) return;
+    db.mensalidadesBPO.push({
+      id: uid('mens'), clienteId: cl.id, mesReferencia: mesRef,
+      valor: cl.valorMensalidadeBPO || '', statusPagamento: 'pendente', dataPagamento: '', observacoes: ''
+    });
+    criadas++;
+  });
+  return criadas;
+}
+
 function esc(s){ return (s===undefined||s===null) ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ---- Currículos anexados (armazenados separadamente do banco principal) ---- */
@@ -519,6 +627,20 @@ const MENSAGEM_APROVADO_PADRAO = 'Olá {nome}! Temos uma ótima notícia: você 
 const MENSAGEM_REPROVADO_PADRAO = 'Olá {nome}, obrigado(a) por participar do nosso processo seletivo para a vaga de {vaga}. Neste momento optamos por seguir com outro(a) candidato(a), mas vamos manter seu currículo em nosso banco de talentos para futuras oportunidades. Agradecemos muito sua participação!';
 const MENSAGEM_AVALIACAO_PADRAO = 'Olá {nome}! Tudo bem? Você segue no nosso processo seletivo para a vaga de {vaga}. A próxima etapa é uma avaliação comportamental rápida (leva uns 8 a 10 minutinhos). Por favor, responda por este link: {link}';
 
+const BENEFICIOS_PADRAO = [
+  {chave:'va_vr', nome:'VA/VR (Vale Alimentação/Refeição)', placeholder:'Ex.: R$ 35,00 por dia útil'},
+  {chave:'vt', nome:'VT (Vale Transporte)', placeholder:'Ex.: conforme legislação (desconto de até 6% do salário)'},
+  {chave:'wellhub', nome:'Wellhub (Gympass)', placeholder:'Ex.: Plano Gold, custeado pela empresa'},
+  {chave:'assistenciaMedica', nome:'Assistência médica', placeholder:'Ex.: Unimed, coparticipação 20%'},
+  {chave:'assistenciaOdontologica', nome:'Assistência odontológica', placeholder:'Ex.: Odontoprev'},
+  {chave:'dayOff', nome:'Day off', placeholder:'Ex.: 1 dia no mês do aniversário'}
+];
+function beneficiosVazios(){
+  const obj = {};
+  BENEFICIOS_PADRAO.forEach(b=>{ obj[b.chave] = {ativo:false, valor:''}; });
+  return obj;
+}
+
 function garantirConfiguracoes(){
   if(!db.configuracoes){
     db.configuracoes = { mensagemAprovado: MENSAGEM_APROVADO_PADRAO, mensagemReprovado: MENSAGEM_REPROVADO_PADRAO, mensagemAvaliacao: MENSAGEM_AVALIACAO_PADRAO };
@@ -527,6 +649,20 @@ function garantirConfiguracoes(){
     if(!db.configuracoes.mensagemReprovado) db.configuracoes.mensagemReprovado = MENSAGEM_REPROVADO_PADRAO;
     if(!db.configuracoes.mensagemAvaliacao) db.configuracoes.mensagemAvaliacao = MENSAGEM_AVALIACAO_PADRAO;
   }
+  if(!Array.isArray(db.colaboradores)) db.colaboradores = [];
+  if(!Array.isArray(db.funcoes)) db.funcoes = [];
+  if(!Array.isArray(db.descritivosCargo)) db.descritivosCargo = [];
+  if(!Array.isArray(db.mensalidadesBPO)) db.mensalidadesBPO = [];
+  db.clientes.forEach(cl=>{
+    if(!cl.tipoServico) cl.tipoServico = 'rs';
+    if(cl.valorMensalidadeBPO===undefined) cl.valorMensalidadeBPO = '';
+    if(!cl.beneficios){ cl.beneficios = beneficiosVazios(); }
+    else { BENEFICIOS_PADRAO.forEach(b=>{ if(!cl.beneficios[b.chave]) cl.beneficios[b.chave] = {ativo:false, valor:''}; }); }
+  });
+  db.colaboradores.forEach(c=>{
+    if(c.salarioAdmissao===undefined) c.salarioAdmissao = '';
+    if(!Array.isArray(c.historicoSalarial)) c.historicoSalarial = [];
+  });
 }
 
 function montarMensagem(template, candidato, cargo, link){
@@ -646,7 +782,14 @@ let state = {
   candidatosSelecionados: new Set(),
   fatClienteId: '',
   fatStatus: '',
-  viewClienteId: ''
+  viewClienteId: '',
+  colabClienteId: '',
+  colabAba: 'colaboradores',
+  colabStatus: '',
+  mensClienteId: '',
+  mensMes: mesAtualRef(),
+  mensStatus: '',
+  indClienteId: ''
 };
 
 
@@ -661,6 +804,8 @@ function renderShell(){
         <div class="nav-item" data-action="nav" data-tab="candidatos"><span class="nav-dot"></span>Candidatos</div>
         <div class="nav-item" data-action="nav" data-tab="banco"><span class="nav-dot"></span>Banco de Currículos</div>
         <div class="nav-item" data-action="nav" data-tab="faturamento"><span class="nav-dot"></span>Faturamento</div>
+        <div class="nav-item" data-action="nav" data-tab="colaboradores"><span class="nav-dot"></span>Colaboradores (BPO)</div>
+        <div class="nav-item" data-action="nav" data-tab="indicadores"><span class="nav-dot"></span>Indicadores</div>
         <div class="nav-item" data-action="nav" data-tab="relatorio"><span class="nav-dot"></span>Relatório para o cliente</div>
       </div>
       <div class="global-search-wrap">
@@ -744,11 +889,14 @@ function renderView(){
   else if(state.tab === 'candidatos') view.innerHTML = viewCandidatos();
   else if(state.tab === 'banco') view.innerHTML = viewBancoCurriculos();
   else if(state.tab === 'faturamento') view.innerHTML = viewFaturamento();
+  else if(state.tab === 'colaboradores') view.innerHTML = viewColaboradores();
+  else if(state.tab === 'indicadores') view.innerHTML = viewIndicadores();
   else if(state.tab === 'relatorio') view.innerHTML = viewRelatorio();
   afterRenderView();
 }
 
 function afterRenderView(){
+  if(state.tab === 'indicadores') drawIndicadoresCharts();
 }
 
 /* ============================= DASHBOARD ============================= */
@@ -1111,7 +1259,343 @@ function viewFaturamento(){
         <tbody>${linhas}</tbody>
       </table></div>`}
     </div>
+
+    ${viewMensalidadesBPO()}
   `;
+}
+
+function viewMensalidadesBPO(){
+  const clientesBPO = db.clientes.filter(cl=>cl.tipoServico==='bpo');
+  if(clientesBPO.length===0) return '';
+
+  const clientesOptsBPO = clientesBPO.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.mensClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  const mesesOpts = mesesDisponiveisMensalidades().map(m=>'<option value="'+m+'" '+(state.mensMes===m?'selected':'')+'>'+formatMesRef(m)+'</option>').join('');
+
+  let lista = db.mensalidadesBPO.filter(m=>clientesBPO.some(cl=>cl.id===m.clienteId));
+  if(state.mensClienteId) lista = lista.filter(m=>m.clienteId===state.mensClienteId);
+  if(state.mensMes) lista = lista.filter(m=>m.mesReferencia===state.mensMes);
+  if(state.mensStatus) lista = lista.filter(m=>m.statusPagamento===state.mensStatus);
+  lista = lista.slice().sort((a,b)=> b.mesReferencia.localeCompare(a.mesReferencia) || getCliente(a.clienteId)?.nome.localeCompare(getCliente(b.clienteId)?.nome||'')||0);
+
+  const totalPrevisto = lista.reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const totalRecebidoMens = lista.filter(m=>m.statusPagamento==='pago').reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const totalPendenteMens = lista.filter(m=>m.statusPagamento==='pendente').reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const qtdPendentes = lista.filter(m=>m.statusPagamento==='pendente').length;
+
+  const linhasMens = lista.map(m=>{
+    const cl = getCliente(m.clienteId);
+    return `<tr>
+      <td>${esc(cl?.nome||'—')}</td>
+      <td>${formatMesRef(m.mesReferencia)}</td>
+      <td>${formatMoeda(parseFloat(m.valor)||0)}</td>
+      <td>${m.statusPagamento==='pago' ? '<span class="badge badge-green">Pago</span>' : '<span class="badge badge-amber">Pendente</span>'}</td>
+      <td>${m.dataPagamento ? formatDate(m.dataPagamento) : '—'}</td>
+      <td style="max-width:200px;">${esc(m.observacoes||'—')}</td>
+      <td class="no-print" style="white-space:nowrap;">
+        ${m.statusPagamento==='pendente' ? '<span class="btn btn-ghost btn-sm" data-action="marcar-mensalidade-paga" data-id="'+m.id+'">Marcar pago</span>' : ''}
+        <span class="btn btn-ghost btn-sm" data-action="editar-mensalidade" data-id="${m.id}">Editar</span>
+        <span class="btn btn-ghost btn-sm" data-action="excluir-mensalidade" data-id="${m.id}">Excluir</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="topbar" style="margin-top:28px;">
+      <div><h1 style="font-size:19px;">Mensalidades BPO</h1><p>Cobrança recorrente dos clientes de BPO de RH</p></div>
+      <div style="display:flex;gap:8px;">
+        <span class="btn btn-secondary" data-action="gerar-mensalidades-mes">Gerar mensalidades do mês</span>
+        <button class="btn btn-primary" data-action="nova-mensalidade">+ Mensalidade avulsa</button>
+      </div>
+    </div>
+    <div class="filters-row">
+      <select data-role="mens-cliente"><option value="">Todos os clientes BPO</option>${clientesOptsBPO}</select>
+      <select data-role="mens-mes"><option value="">Todos os meses</option>${mesesOpts}</select>
+      <select data-role="mens-status">
+        <option value="">Todos os status</option>
+        <option value="pendente" ${state.mensStatus==='pendente'?'selected':''}>Pendente</option>
+        <option value="pago" ${state.mensStatus==='pago'?'selected':''}>Pago</option>
+      </select>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">Total previsto no filtro</div><div class="value" style="font-size:22px;">${formatMoeda(totalPrevisto)}</div><div class="sub">${lista.length} mensalidade(s)</div></div>
+      <div class="kpi c-green"><div class="label">Total recebido</div><div class="value" style="font-size:22px;">${formatMoeda(totalRecebidoMens)}</div></div>
+      <div class="kpi c-red"><div class="label">Total pendente</div><div class="value" style="font-size:22px;">${formatMoeda(totalPendenteMens)}</div></div>
+      <div class="kpi c-amber"><div class="label">Mensalidades em aberto</div><div class="value">${qtdPendentes}</div></div>
+    </div>
+
+    <div class="card">
+      ${lista.length===0 ? '<p class="hint">Nenhuma mensalidade encontrada para este filtro. Use "Gerar mensalidades do mês" para criar automaticamente a cobrança de todos os clientes BPO no mês selecionado.</p>' : `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Cliente</th><th>Mês</th><th>Valor</th><th>Status</th><th>Data pagto.</th><th>Observações</th><th></th></tr></thead>
+        <tbody>${linhasMens}</tbody>
+      </table></div>`}
+    </div>
+  `;
+}
+
+/* ============================= COLABORADORES (BPO) ============================= */
+function viewResumoBeneficios(cliente){
+  const ativos = BENEFICIOS_PADRAO.filter(b=> cliente.beneficios && cliente.beneficios[b.chave] && cliente.beneficios[b.chave].ativo);
+  if(ativos.length===0){
+    return '<div class="card" style="margin-bottom:22px;"><h3 style="font-size:15px;margin-bottom:6px;">Benefícios oferecidos</h3><p class="hint">Nenhum benefício cadastrado para este cliente ainda. Edite o cliente em "Clientes e vagas" para adicionar.</p></div>';
+  }
+  return `
+    <div class="card" style="margin-bottom:22px;">
+      <h3 style="font-size:15px;margin-bottom:10px;">Benefícios oferecidos</h3>
+      <div class="form-grid cols-3">
+        ${ativos.map(b=>`<div class="field"><label>${esc(b.nome)}</label><div>${esc(cliente.beneficios[b.chave].valor||'—')}</div></div>`).join('')}
+      </div>
+      <p class="hint" style="margin-top:8px;">Para alterar, edite o cliente em "Clientes e vagas".</p>
+    </div>`;
+}
+
+function viewColaboradores(){
+  const clientesBPO = db.clientes.filter(cl=>cl.tipoServico==='bpo');
+
+  if(clientesBPO.length===0){
+    return `
+      <div class="topbar"><div><h1>Colaboradores (BPO)</h1><p>Turnover, cargos e acompanhamento mensal dos clientes de BPO de RH.</p></div></div>
+      <div class="card empty-state"><h3>Nenhum cliente de BPO cadastrado ainda</h3><p>Vá em "Clientes e vagas", edite um cliente e marque o tipo de atendimento como "BPO de RH" para liberar este módulo para ele.</p></div>`;
+  }
+
+  const opcoesClientes = clientesBPO.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.colabClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  const cl = state.colabClienteId ? getCliente(state.colabClienteId) : null;
+
+  if(!cl){
+    return `
+      <div class="topbar"><div><h1>Colaboradores (BPO)</h1><p>Turnover, cargos e acompanhamento mensal dos clientes de BPO de RH.</p></div></div>
+      <div class="filters-row"><select data-role="colab-cliente"><option value="">Selecione um cliente de BPO…</option>${opcoesClientes}</select></div>
+      <div class="card empty-state"><h3>Selecione um cliente acima</h3><p>Os colaboradores, cargos e indicadores do cliente selecionado aparecem aqui.</p></div>`;
+  }
+
+  const colaboradores = colaboradoresDoCliente(cl.id).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const funcoes = funcoesDoCliente(cl.id).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const hoje = todayISO();
+  const doze_meses = dataMenosMeses(hoje, 12);
+  const tv = calcularTurnover(cl.id, doze_meses, hoje);
+  const tvMes = turnoverPorMes(cl.id, mesAtualRef());
+  const historico12 = ultimos12Meses().map(m=>Object.assign({mes:m}, turnoverPorMes(cl.id, m)));
+  const folhaPagamento = folhaPagamentoCliente(cl.id);
+
+  const linhasColaboradores = colaboradores.filter(c=> !state.colabStatus || statusColaborador(c)===state.colabStatus).map(c=>{
+    const f = getFuncao(c.funcaoId);
+    return `<tr>
+      <td><strong>${esc(c.nome)}</strong></td>
+      <td>${esc(f?f.nome:'—')}</td>
+      <td>${formatDate(c.dataAdmissao)}</td>
+      <td>${statusColaborador(c)!=='desligado' ? formatMoeda(salarioAtualColaborador(c)) : '—'}</td>
+      <td>${c.dataDesligamento ? formatDate(c.dataDesligamento)+(c.tipoDesligamento?'<div class="hint">'+esc(c.tipoDesligamento)+'</div>':'') : '—'}</td>
+      <td>${statusColaboradorBadge(c)}${statusColaborador(c)==='afastado'&&c.tipoAfastamento?'<div class="hint">'+esc(c.tipoAfastamento)+'</div>':''}</td>
+      <td class="no-print" style="white-space:nowrap;">
+        <span class="btn btn-ghost btn-sm" data-action="editar-colaborador" data-id="${c.id}">Editar</span>
+        <span class="btn btn-ghost btn-sm" data-action="excluir-colaborador" data-id="${c.id}">Excluir</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const linhasFuncoes = funcoes.map(f=>{
+    const temDescritivo = db.descritivosCargo.some(d=>d.funcaoId===f.id);
+    const ocupados = colaboradoresAtivosNaFuncao(f.id).length;
+    const autorizado = f.quantidadeAutorizada!=='' && f.quantidadeAutorizada!=null ? parseInt(f.quantidadeAutorizada,10) : null;
+    let ocupacaoHtml;
+    if(autorizado===null){
+      ocupacaoHtml = '<span class="hint">'+ocupados+' ativo(s) · sem limite definido</span>';
+    } else if(ocupados > autorizado){
+      ocupacaoHtml = '<span class="badge badge-red">'+ocupados+' / '+autorizado+' · acima do quadro</span>';
+    } else if(ocupados === autorizado){
+      ocupacaoHtml = '<span class="badge badge-green">'+ocupados+' / '+autorizado+' · completo</span>';
+    } else {
+      ocupacaoHtml = '<span class="badge badge-amber">'+ocupados+' / '+autorizado+' · '+(autorizado-ocupados)+' vaga(s) em aberto</span>';
+    }
+    return `<tr>
+      <td><strong>${esc(f.nome)}</strong></td>
+      <td>${esc(f.subordinadoA||'—')}</td>
+      <td>${esc(f.area||'—')}</td>
+      <td>${ocupacaoHtml}</td>
+      <td>${temDescritivo ? '<span class="badge badge-green">Preenchido</span>' : '<span class="badge badge-gray">Pendente</span>'}</td>
+      <td class="no-print" style="white-space:nowrap;">
+        <span class="btn btn-ghost btn-sm" data-action="editar-funcao" data-id="${f.id}">Editar</span>
+        <span class="btn btn-ghost btn-sm" data-action="descritivo-cargo" data-id="${f.id}">📄 Descritivo do cargo</span>
+        <span class="btn btn-ghost btn-sm" data-action="excluir-funcao" data-id="${f.id}">Excluir</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="topbar">
+      <div><h1>Colaboradores (BPO)</h1><p>${esc(cl.nome)}</p></div>
+    </div>
+    <div class="filters-row"><select data-role="colab-cliente"><option value="">Selecione um cliente de BPO…</option>${opcoesClientes}</select></div>
+
+    <div class="kpi-grid">
+      <div class="kpi c-green"><div class="label">Colaboradores ativos</div><div class="value">${tv.ativosAtuais}</div></div>
+      <div class="kpi"><div class="label">Folha de pagamento mensal (estimada)</div><div class="value" style="font-size:20px;">${formatMoeda(folhaPagamento)}</div><div class="sub">Soma dos salários atuais (ativos + afastados)</div></div>
+      <div class="kpi c-amber"><div class="label">Turnover do mês (${formatMesRef(mesAtualRef())})</div><div class="value">${tvMes.taxa}%</div><div class="sub">${tvMes.admitidos} admitido(s) · ${tvMes.desligados} desligado(s)</div></div>
+      <div class="kpi c-amber"><div class="label">Turnover acumulado (12 meses)</div><div class="value">${tv.taxa}%</div><div class="sub">${tv.admitidos} admitido(s) · ${tv.desligados} desligado(s)</div></div>
+    </div>
+
+    ${viewResumoBeneficios(cl)}
+
+    <div class="card" style="margin-bottom:22px;">
+      <h3 style="font-size:15px;margin-bottom:12px;">Turnover mês a mês (últimos 12 meses)</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Mês</th><th>Ativos no fim do mês</th><th>Admitidos</th><th>Desligados</th><th>Turnover</th></tr></thead>
+        <tbody>
+          ${historico12.map(h=>`<tr${h.mes===mesAtualRef()?' style="font-weight:600;"':''}>
+            <td>${formatMesRef(h.mes)}</td>
+            <td>${h.ativosAtuais}</td>
+            <td>${h.admitidos}</td>
+            <td>${h.desligados}</td>
+            <td>${h.taxa}%</td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <span class="btn ${state.colabAba==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="colaboradores">Colaboradores</span>
+      <span class="btn ${state.colabAba==='funcoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="funcoes">Funções e cargos</span>
+    </div>
+
+    ${state.colabAba==='colaboradores' ? `
+    <div class="topbar" style="margin-bottom:10px;">
+      <div></div>
+      <button class="btn btn-primary btn-sm" data-action="novo-colaborador" data-cliente-id="${cl.id}">+ Novo colaborador</button>
+    </div>
+    <div class="filters-row" style="margin-bottom:10px;">
+      <select data-role="colab-status">
+        <option value="">Todos os status</option>
+        <option value="ativo" ${state.colabStatus==='ativo'?'selected':''}>Ativo</option>
+        <option value="afastado" ${state.colabStatus==='afastado'?'selected':''}>Afastado</option>
+        <option value="desligado" ${state.colabStatus==='desligado'?'selected':''}>Desligado</option>
+      </select>
+    </div>
+    ${colaboradores.length===0 ? '<div class="card empty-state"><h3>Nenhum colaborador cadastrado</h3><p>Clique em "+ Novo colaborador" para começar.</p></div>' : (linhasColaboradores==='' ? '<div class="card empty-state"><h3>Nenhum colaborador com esse status</h3><p>Ajuste o filtro acima.</p></div>' : `
+    <div class="card table-wrap"><table><thead><tr><th>Nome</th><th>Função</th><th>Admissão</th><th>Salário atual</th><th>Desligamento</th><th>Status</th><th></th></tr></thead><tbody>${linhasColaboradores}</tbody></table></div>`)}
+    ` : `
+    <div class="topbar" style="margin-bottom:10px;">
+      <div><p class="hint">${funcoes.length} função(ões) cadastrada(s) para ${esc(cl.nome)}</p></div>
+      <button class="btn btn-primary btn-sm" data-action="nova-funcao" data-cliente-id="${cl.id}">+ Nova função</button>
+    </div>
+    ${funcoes.length===0 ? '<div class="card empty-state"><h3>Nenhuma função cadastrada</h3><p>Clique em "+ Nova função" para começar.</p></div>' : `
+    <div class="card table-wrap"><table><thead><tr><th>Título do cargo</th><th>Subordinado a</th><th>Área</th><th>Ocupação</th><th>Descritivo</th><th></th></tr></thead><tbody>${linhasFuncoes}</tbody></table></div>`}
+    `}
+  `;
+}
+
+function viewIndicadores(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(c=>'<option value="'+c.id+'" '+(state.indClienteId===c.id?'selected':'')+'>'+esc(c.nome)+'</option>').join('');
+  const cliente = state.indClienteId ? getCliente(state.indClienteId) : null;
+
+  if(!cliente){
+    return `
+      <div class="topbar"><div><h1>Indicadores</h1><p>Selecione um cliente para acompanhar os indicadores em gráficos.</p></div></div>
+      <div class="filters-row"><select data-role="ind-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+      <div class="card empty-state"><h3>Selecione um cliente acima</h3><p>Os gráficos de recrutamento (e de BPO, se for o caso) aparecem aqui.</p></div>
+    `;
+  }
+
+  const cargos = cargosDoCliente(cliente.id);
+  const temDadosRecrutamento = cargos.length > 0;
+  const temMensalidades = db.mensalidadesBPO.some(m=>m.clienteId===cliente.id);
+
+  return `
+    <div class="topbar"><div><h1>Indicadores</h1><p>${esc(cliente.nome)}</p></div></div>
+    <div class="filters-row"><select data-role="ind-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+
+    ${temDadosRecrutamento ? `
+    <div class="charts-row">
+      <div class="card chart-card"><h3>Funil de candidatos (todas as vagas)</h3><div class="chart-wrap"><canvas id="chart-funil-ind"></canvas></div></div>
+      <div class="card chart-card"><h3>Status dos candidatos</h3><div class="chart-wrap"><canvas id="chart-status-ind"></canvas></div></div>
+    </div>` : '<div class="card empty-state"><h3>Nenhuma vaga cadastrada para este cliente ainda</h3><p>Os gráficos de recrutamento aparecem aqui assim que houver vagas.</p></div>'}
+
+    ${cliente.tipoServico==='bpo' ? `
+    <div class="card chart-card" style="margin-bottom:22px;"><h3>Turnover mês a mês (últimos 12 meses)</h3><div class="chart-wrap"><canvas id="chart-turnover-ind"></canvas></div></div>
+    ${temMensalidades ? `<div class="card chart-card"><h3>Mensalidades BPO — recebido x pendente por mês</h3><div class="chart-wrap"><canvas id="chart-fatmens-ind"></canvas></div></div>` : ''}
+    ` : ''}
+  `;
+}
+
+let chartsIndicadores = {};
+function destruirChartIndicador(id){
+  if(chartsIndicadores[id]){ try{ chartsIndicadores[id].destroy(); }catch(e){} delete chartsIndicadores[id]; }
+}
+
+function drawIndicadoresCharts(){
+  if(!window.Chart || !state.indClienteId) return;
+  const cliente = getCliente(state.indClienteId);
+  if(!cliente) return;
+
+  const cargos = cargosDoCliente(cliente.id);
+  const candidatosCliente = db.candidatos.filter(c=>c.clienteId===cliente.id);
+
+  const ctxFunil = document.getElementById('chart-funil-ind');
+  destruirChartIndicador('chart-funil-ind');
+  if(ctxFunil && cargos.length>0){
+    const m = metricsForCandidatos(candidatosCliente);
+    const recebidos = somaCurriculosRecebidos(cargos);
+    chartsIndicadores['chart-funil-ind'] = new Chart(ctxFunil, {
+      type: 'bar',
+      data: {
+        labels: ['Recebidos','Chamados','Avaliação','Gestor','Proposta','Contratados'],
+        datasets: [{ data: [recebidos, m.chamados, m.avaliacao, m.gestor, m.propostas, m.contratados], backgroundColor: '#B2573D' }]
+      },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}} }
+    });
+  }
+
+  const ctxStatus = document.getElementById('chart-status-ind');
+  destruirChartIndicador('chart-status-ind');
+  if(ctxStatus && cargos.length>0){
+    const counts = {em_processo:0, contratado:0, nao_avancou:0, declinou:0};
+    candidatosCliente.forEach(c=>{ const s = statusCandidato(c); if(counts[s]!==undefined) counts[s]++; });
+    chartsIndicadores['chart-status-ind'] = new Chart(ctxStatus, {
+      type: 'doughnut',
+      data: {
+        labels: ['Em processo','Contratado','Não avançou','Declinou'],
+        datasets: [{ data: [counts.em_processo, counts.contratado, counts.nao_avancou, counts.declinou], backgroundColor: ['#C9A24B','#4C8C6B','#B23A3A','#8C8C8C'] }]
+      },
+      options: { responsive:true, maintainAspectRatio:false }
+    });
+  }
+
+  if(cliente.tipoServico==='bpo'){
+    const ctxTurnover = document.getElementById('chart-turnover-ind');
+    destruirChartIndicador('chart-turnover-ind');
+    if(ctxTurnover){
+      const historico = ultimos12Meses().map(mm=>Object.assign({mes:mm}, turnoverPorMes(cliente.id, mm)));
+      chartsIndicadores['chart-turnover-ind'] = new Chart(ctxTurnover, {
+        type: 'line',
+        data: {
+          labels: historico.map(h=>formatMesRef(h.mes)),
+          datasets: [{ label:'Turnover %', data: historico.map(h=>h.taxa), borderColor:'#B2573D', backgroundColor:'rgba(178,87,61,0.15)', fill:true, tension:0.3 }]
+        },
+        options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}} }
+      });
+    }
+
+    const ctxFat = document.getElementById('chart-fatmens-ind');
+    destruirChartIndicador('chart-fatmens-ind');
+    if(ctxFat){
+      const mesesMens = Array.from(new Set(db.mensalidadesBPO.filter(m=>m.clienteId===cliente.id).map(m=>m.mesReferencia))).sort();
+      if(mesesMens.length>0){
+        const recebidoPorMes = mesesMens.map(mm => db.mensalidadesBPO.filter(m=>m.clienteId===cliente.id && m.mesReferencia===mm && m.statusPagamento==='pago').reduce((s,m)=>s+(parseFloat(m.valor)||0),0));
+        const pendentePorMes = mesesMens.map(mm => db.mensalidadesBPO.filter(m=>m.clienteId===cliente.id && m.mesReferencia===mm && m.statusPagamento==='pendente').reduce((s,m)=>s+(parseFloat(m.valor)||0),0));
+        chartsIndicadores['chart-fatmens-ind'] = new Chart(ctxFat, {
+          type: 'bar',
+          data: {
+            labels: mesesMens.map(formatMesRef),
+            datasets: [
+              { label:'Recebido', data: recebidoPorMes, backgroundColor:'#4C8C6B' },
+              { label:'Pendente', data: pendentePorMes, backgroundColor:'#C9A24B' }
+            ]
+          },
+          options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}} }
+        });
+      }
+    }
+  }
 }
 
 function viewRelatorio(){
@@ -1599,9 +2083,367 @@ async function renderAvaliacaoComportamental(candidatoId){
   });
 }
 
+function modalMensalidade(mensalidade){
+  const editando = !!mensalidade;
+  const clientesBPO = db.clientes.filter(cl=>cl.tipoServico==='bpo');
+  mensalidade = mensalidade || {id:'', clienteId:'', mesReferencia:mesAtualRef(), valor:'', statusPagamento:'pendente', dataPagamento:'', observacoes:''};
+  const clientesOpts = clientesBPO.map(cl=>'<option value="'+cl.id+'" '+(mensalidade.clienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${editando ? 'Editar mensalidade' : 'Nova mensalidade avulsa'}</h2>
+    <div class="modal-sub">Cobrança recorrente de cliente BPO</div>
+    <form id="form-mensalidade">
+      <div class="form-grid">
+        <div class="field full"><label>Cliente *</label><select required name="clienteId" ${editando?'disabled':''}>${editando?'<option value="'+mensalidade.clienteId+'">'+esc(getCliente(mensalidade.clienteId)?.nome||'')+'</option>':'<option value="">Selecione…</option>'+clientesOpts}</select></div>
+        <div class="field"><label>Mês de referência *</label><input required type="month" name="mesReferencia" value="${mensalidade.mesReferencia||''}"></div>
+        <div class="field"><label>Valor (R$) *</label><input required type="number" step="0.01" min="0" name="valor" value="${esc(mensalidade.valor)}"></div>
+        <div class="field"><label>Status de pagamento</label>
+          <select name="statusPagamento">
+            <option value="pendente" ${mensalidade.statusPagamento==='pendente'?'selected':''}>Pendente</option>
+            <option value="pago" ${mensalidade.statusPagamento==='pago'?'selected':''}>Pago</option>
+          </select>
+        </div>
+        <div class="field"><label>Data do pagamento</label><input type="date" name="dataPagamento" value="${mensalidade.dataPagamento||''}"></div>
+        <div class="field full"><label>Observações</label><textarea name="observacoes">${esc(mensalidade.observacoes||'')}</textarea></div>
+      </div>
+      <div class="modal-footer">
+        <span>${editando ? '<span class="btn btn-danger btn-sm" data-action=\"excluir-mensalidade\" data-id=\"'+mensalidade.id+'\">Excluir</span>' : ''}</span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar mensalidade</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-mensalidade').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const dados = {
+      clienteId: editando ? mensalidade.clienteId : f.get('clienteId'),
+      mesReferencia: f.get('mesReferencia'),
+      valor: f.get('valor'),
+      statusPagamento: f.get('statusPagamento'),
+      dataPagamento: f.get('dataPagamento') || '',
+      observacoes: f.get('observacoes').trim()
+    };
+    if(!dados.clienteId){ showToast('Selecione o cliente.', true); return; }
+    if(editando){ Object.assign(mensalidade, dados); }
+    else {
+      const jaExiste = db.mensalidadesBPO.some(m=>m.clienteId===dados.clienteId && m.mesReferencia===dados.mesReferencia);
+      if(jaExiste){ showToast('Já existe uma mensalidade para este cliente neste mês.', true); return; }
+      db.mensalidadesBPO.push(Object.assign({id:uid('mens')}, dados));
+    }
+    closeModal(); saveDB(); renderView();
+  });
+}
+
+const TIPOS_DESLIGAMENTO = [
+  'Demissão sem justa causa (pela empresa)',
+  'Demissão com justa causa (pela empresa)',
+  'Pedido de demissão (pelo colaborador)',
+  'Rescisão por acordo entre as partes',
+  'Término de contrato de experiência',
+  'Término de contrato por prazo determinado',
+  'Aposentadoria',
+  'Falecimento',
+  'Abandono de emprego',
+  'Redução de quadro / Reestruturação',
+  'Outro'
+];
+
+const MOTIVOS_ALTERACAO_SALARIAL = ['Reajuste / Dissídio coletivo', 'Promoção', 'Mérito', 'Equiparação salarial', 'Mudança de função', 'Outro'];
+
+function linhaHistoricoSalarial(item){
+  return `<div class="form-grid" data-linha-salario style="grid-template-columns:130px 140px 1fr 36px;margin-bottom:6px;">
+    <input type="date" class="input-sal-data" value="${item&&item.data||''}" placeholder="Data">
+    <input type="number" step="0.01" min="0" class="input-sal-valor" value="${item?esc(item.valor):''}" placeholder="Novo salário (R$)">
+    <select class="input-sal-motivo">
+      <option value="">Motivo…</option>
+      ${MOTIVOS_ALTERACAO_SALARIAL.map(m=>'<option '+(item&&item.motivo===m?'selected':'')+'>'+m+'</option>').join('')}
+    </select>
+    <button type="button" class="btn btn-danger btn-sm" data-remover-linha-salario style="padding:6px;">✕</button>
+  </div>`;
+}
+
+function modalColaborador(colaborador, clienteId){
+  const editando = !!colaborador;
+  colaborador = colaborador || {id:'', clienteId:clienteId, nome:'', funcaoId:'', dataAdmissao:todayISO(), dataDesligamento:'', tipoDesligamento:'', motivoDesligamento:'', observacoes:'', emAfastamento:false, tipoAfastamento:'', dataInicioAfastamento:'', dataFimAfastamento:'', salarioAdmissao:'', historicoSalarial:[]};
+  const funcoesOpts = funcoesDoCliente(colaborador.clienteId).map(f=>'<option value="'+f.id+'" '+(colaborador.funcaoId===f.id?'selected':'')+'>'+esc(f.nome)+'</option>').join('');
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${editando ? 'Editar colaborador' : 'Novo colaborador'}</h2>
+    <div class="modal-sub">${esc(getCliente(colaborador.clienteId)?.nome||'')}</div>
+    <form id="form-colaborador">
+      <div class="form-grid">
+        <div class="field full"><label>Nome completo *</label><input required name="nome" value="${esc(colaborador.nome)}"></div>
+        <div class="field full"><label>Função</label><select name="funcaoId"><option value="">Não informado</option>${funcoesOpts}</select></div>
+        <div class="field"><label>Data de admissão *</label><input required type="date" name="dataAdmissao" value="${colaborador.dataAdmissao||''}"></div>
+        <div class="field"><label>Salário de admissão (R$)</label><input type="number" step="0.01" min="0" name="salarioAdmissao" value="${esc(colaborador.salarioAdmissao)}"></div>
+      </div>
+
+      <div class="section-title">Histórico de alterações salariais</div>
+      ${editando ? '<p class="hint" style="margin-top:-4px;">Salário atual calculado: <strong>'+formatMoeda(salarioAtualColaborador(colaborador))+'</strong></p>' : ''}
+      <div id="lista-historico-salarial">${(colaborador.historicoSalarial.length?colaborador.historicoSalarial:[null]).map(linhaHistoricoSalarial).join('')}</div>
+      <span class="btn btn-secondary btn-sm" id="btn-add-historico-salarial" type="button">+ Adicionar alteração salarial</span>
+
+      <div class="section-title">Afastamento</div>
+      <div class="checkbox-row"><input type="checkbox" id="chk-afastamento" name="emAfastamento" ${colaborador.emAfastamento?'checked':''}><label for="chk-afastamento">Colaborador está afastado atualmente</label></div>
+      <div class="form-grid" id="afastamento-detalhes-wrap" style="display:${colaborador.emAfastamento?'grid':'none'};margin-top:8px;">
+        <div class="field full">
+          <label>Tipo de afastamento</label>
+          <select name="tipoAfastamento">
+            <option value="" ${!colaborador.tipoAfastamento?'selected':''}>Não informado</option>
+            ${TIPOS_AFASTAMENTO.map(t=>'<option '+(colaborador.tipoAfastamento===t?'selected':'')+'>'+t+'</option>').join('')}
+          </select>
+        </div>
+        <div class="field"><label>Início do afastamento</label><input type="date" name="dataInicioAfastamento" value="${colaborador.dataInicioAfastamento||''}"></div>
+        <div class="field"><label>Previsão de retorno (opcional)</label><input type="date" name="dataFimAfastamento" value="${colaborador.dataFimAfastamento||''}"></div>
+      </div>
+
+      <div class="section-title">Desligamento</div>
+      <div class="form-grid">
+        <div class="field"><label>Data de desligamento (opcional)</label><input type="date" name="dataDesligamento" value="${colaborador.dataDesligamento||''}"></div>
+        <div class="field full">
+          <label>Tipo de desligamento</label>
+          <select name="tipoDesligamento">
+            <option value="" ${!colaborador.tipoDesligamento?'selected':''}>Não informado</option>
+            ${TIPOS_DESLIGAMENTO.map(t=>'<option '+(colaborador.tipoDesligamento===t?'selected':'')+'>'+t+'</option>').join('')}
+          </select>
+        </div>
+        <div class="field full"><label>Detalhes adicionais do desligamento (opcional)</label><input name="motivoDesligamento" value="${esc(colaborador.motivoDesligamento||'')}" placeholder="Ex.: observações específicas do caso"></div>
+        <div class="field full"><label>Observações</label><textarea name="observacoes">${esc(colaborador.observacoes||'')}</textarea></div>
+      </div>
+      <div class="modal-footer">
+        <span>${editando ? '<span class="btn btn-danger btn-sm" data-action=\"excluir-colaborador\" data-id=\"'+colaborador.id+'\">Excluir</span>' : ''}</span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar colaborador</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('btn-add-historico-salarial').addEventListener('click', ()=>{
+    document.getElementById('lista-historico-salarial').insertAdjacentHTML('beforeend', linhaHistoricoSalarial(null));
+  });
+  document.getElementById('form-colaborador').addEventListener('click', e=>{
+    if(e.target.matches('[data-remover-linha-salario]')){
+      const linha = e.target.closest('[data-linha-salario]');
+      if(linha.parentElement.children.length > 1) linha.remove();
+      else { linha.querySelector('.input-sal-data').value=''; linha.querySelector('.input-sal-valor').value=''; }
+    }
+  });
+  document.getElementById('chk-afastamento').addEventListener('change', e=>{
+    document.getElementById('afastamento-detalhes-wrap').style.display = e.target.checked ? 'grid' : 'none';
+  });
+  document.getElementById('form-colaborador').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const historicoSalarial = Array.from(document.querySelectorAll('#lista-historico-salarial [data-linha-salario]'))
+      .map(linha => ({ data: linha.querySelector('.input-sal-data').value, valor: linha.querySelector('.input-sal-valor').value, motivo: linha.querySelector('.input-sal-motivo').value }))
+      .filter(h => h.data && h.valor);
+    const dados = {
+      clienteId: colaborador.clienteId,
+      nome: f.get('nome').trim(),
+      funcaoId: f.get('funcaoId') || '',
+      salarioAdmissao: f.get('salarioAdmissao') || '',
+      historicoSalarial: historicoSalarial,
+      dataAdmissao: f.get('dataAdmissao'),
+      emAfastamento: !!f.get('emAfastamento'),
+      tipoAfastamento: f.get('tipoAfastamento') || '',
+      dataInicioAfastamento: f.get('dataInicioAfastamento') || '',
+      dataFimAfastamento: f.get('dataFimAfastamento') || '',
+      dataDesligamento: f.get('dataDesligamento') || '',
+      tipoDesligamento: f.get('tipoDesligamento') || '',
+      motivoDesligamento: f.get('motivoDesligamento').trim(),
+      observacoes: f.get('observacoes').trim()
+    };
+    if(editando){ Object.assign(colaborador, dados); }
+    else { db.colaboradores.push(Object.assign({id:uid('colab')}, dados)); }
+    closeModal(); saveDB(); renderView();
+  });
+}
+
+function modalFuncao(funcao, clienteId){
+  const editando = !!funcao;
+  funcao = funcao || {id:'', clienteId:clienteId, nome:'', subordinadoA:'', area:'', quantidadeAutorizada:''};
+  const ocupacaoAtual = editando ? colaboradoresAtivosNaFuncao(funcao.id).length : 0;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${editando ? 'Editar função' : 'Nova função'}</h2>
+    <div class="modal-sub">${esc(getCliente(funcao.clienteId)?.nome||'')}</div>
+    <form id="form-funcao">
+      <div class="form-grid">
+        <div class="field full"><label>Título do cargo *</label><input required name="nome" value="${esc(funcao.nome)}"></div>
+        <div class="field"><label>Subordinado ao cargo</label><input name="subordinadoA" value="${esc(funcao.subordinadoA||'')}"></div>
+        <div class="field"><label>Unidade / Gerência / Área</label><input name="area" value="${esc(funcao.area||'')}"></div>
+        <div class="field">
+          <label>Quadro autorizado (nº de vagas para esta função)</label>
+          <input type="number" min="0" step="1" name="quantidadeAutorizada" value="${esc(funcao.quantidadeAutorizada)}" placeholder="Deixe em branco para não controlar">
+          ${editando ? '<div class="hint">Colaboradores ativos hoje nesta função: <strong>'+ocupacaoAtual+'</strong></div>' : ''}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span>${editando ? '<span class="btn btn-danger btn-sm" data-action=\"excluir-funcao\" data-id=\"'+funcao.id+'\">Excluir</span>' : ''}</span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar função</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-funcao').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const dados = { clienteId: funcao.clienteId, nome: f.get('nome').trim(), subordinadoA: f.get('subordinadoA').trim(), area: f.get('area').trim(), quantidadeAutorizada: f.get('quantidadeAutorizada') || '' };
+    if(editando){ Object.assign(funcao, dados); }
+    else { db.funcoes.push(Object.assign({id:uid('func')}, dados)); }
+    closeModal(); saveDB(); renderView();
+  });
+}
+
+function linhaHabilidade(item, datalistId){
+  return `<div class="form-grid" data-linha-habilidade style="grid-template-columns:1fr 160px 36px;margin-bottom:6px;">
+    <input placeholder="Nome da habilidade" value="${esc(item&&item.nome||'')}" class="input-hab-nome" list="${datalistId||''}" autocomplete="off">
+    <select class="input-hab-nivel">
+      <option value="1" ${(!item||item.nivel==='1')?'selected':''}>1 · Obrigatório</option>
+      <option value="2" ${item&&item.nivel==='2'?'selected':''}>2 · Desejável</option>
+      <option value="3" ${item&&item.nivel==='3'?'selected':''}>3 · Desenvolvimento</option>
+    </select>
+    <button type="button" class="btn btn-danger btn-sm" data-remover-linha style="padding:6px;">✕</button>
+  </div>`;
+}
+
+function habilidadesJaUsadas(campo){
+  const nomes = new Set();
+  db.descritivosCargo.forEach(d=>{
+    (d[campo]||[]).forEach(h=>{ if(h && h.nome) nomes.add(h.nome); });
+  });
+  return Array.from(nomes).sort((a,b)=>a.localeCompare(b));
+}
+
+function modalDescritivoCargo(funcao){
+  const existente = db.descritivosCargo.find(d=>d.funcaoId===funcao.id);
+  const d = existente || {
+    id:'', funcaoId:funcao.id, versao:'00', data:todayISO(), sumario:'', atividadesPrincipais:'',
+    grauInstrucao:'Superior Completo', formacaoRequerida:'', experienciaComFormacao:'', experienciaSemFormacao:'',
+    habilidadesComportamentais:[], habilidadesTecnicas:[], observacao:'', aprovadoPor:'', dataAprovacao:''
+  };
+  const editando = !!existente;
+  const cliente = getCliente(funcao.clienteId);
+  const sugestoesComp = habilidadesJaUsadas('habilidadesComportamentais');
+  const sugestoesTec = habilidadesJaUsadas('habilidadesTecnicas');
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Descrição e Perfil do Cargo</h2>
+    <div class="modal-sub">${esc(cliente?.nome||'')} — Versão: ${esc(d.versao)} · Data: ${formatDate(d.data)}</div>
+    <form id="form-descritivo">
+      <div class="section-title">1. Identificação</div>
+      <p class="hint">Título do cargo: <strong>${esc(funcao.nome)}</strong>${funcao.subordinadoA?' · Subordinado ao cargo: <strong>'+esc(funcao.subordinadoA)+'</strong>':''}${funcao.area?' · Unidade/Gerência/Área: <strong>'+esc(funcao.area)+'</strong>':''}</p>
+      <p class="hint">Para alterar esses dados, edite a função na tela anterior.</p>
+
+      <div class="section-title">2. Sumário do Cargo</div>
+      <p class="hint" style="margin-top:-4px;">Descreva em poucas linhas para que o cargo existe: o que faz, como, e para que faz.</p>
+      <div class="field full"><textarea name="sumario" style="min-height:70px;">${esc(d.sumario)}</textarea></div>
+
+      <div class="section-title">3. Atividades principais</div>
+      <p class="hint" style="margin-top:-4px;">Principais atividades desempenhadas pelo ocupante do cargo (uma por linha).</p>
+      <div class="field full"><textarea name="atividadesPrincipais" style="min-height:90px;">${esc(d.atividadesPrincipais)}</textarea></div>
+
+      <div class="section-title">4.1 Escolaridade e Experiência</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Grau de instrução (completo)</label>
+          <select name="grauInstrucao">
+            ${['Ens. Fundamental (1º Grau)','Ens. Médio (2º Grau)','Curso Técnico','Superior Incompleto','Superior Completo','Pós-graduação'].map(o=>'<option '+(d.grauInstrucao===o?'selected':'')+'>'+o+'</option>').join('')}
+          </select>
+        </div>
+        <div class="field"><label>Formação requerida</label><input name="formacaoRequerida" value="${esc(d.formacaoRequerida)}" placeholder="Ex.: Administração, Gestão de RH…"></div>
+        <div class="field"><label>Experiência mínima — com formação requerida</label><input name="experienciaComFormacao" value="${esc(d.experienciaComFormacao)}" placeholder="Ex.: 1 ano"></div>
+        <div class="field"><label>Experiência mínima — sem formação requerida</label><input name="experienciaSemFormacao" value="${esc(d.experienciaSemFormacao)}" placeholder="Ex.: 3 anos"></div>
+      </div>
+
+      <div class="section-title">4.2 Habilidades Comportamentais</div>
+      <p class="hint" style="margin-top:-4px;">Características comportamentais necessárias. Nível: 1 = Obrigatório · 2 = Desejável · 3 = Desenvolvimento. Comece a digitar para reaproveitar competências já usadas em outros cargos.</p>
+      <div id="lista-hab-comportamentais">${(d.habilidadesComportamentais.length?d.habilidadesComportamentais:[null]).map(h=>linhaHabilidade(h,'sugestoes-hab-comp')).join('')}</div>
+      <span class="btn btn-secondary btn-sm" id="btn-add-hab-comp" type="button">+ Adicionar habilidade comportamental</span>
+      <datalist id="sugestoes-hab-comp">${sugestoesComp.map(n=>'<option value="'+esc(n)+'">').join('')}</datalist>
+
+      <div class="section-title">4.3 Habilidades Técnicas</div>
+      <p class="hint" style="margin-top:-4px;">Conhecimentos técnicos requeridos. Mesmos níveis acima. Comece a digitar para reaproveitar competências já usadas em outros cargos.</p>
+      <div id="lista-hab-tecnicas">${(d.habilidadesTecnicas.length?d.habilidadesTecnicas:[null]).map(h=>linhaHabilidade(h,'sugestoes-hab-tec')).join('')}</div>
+      <span class="btn btn-secondary btn-sm" id="btn-add-hab-tec" type="button">+ Adicionar habilidade técnica</span>
+      <datalist id="sugestoes-hab-tec">${sugestoesTec.map(n=>'<option value="'+esc(n)+'">').join('')}</datalist>
+
+      <div class="section-title">5. Observação</div>
+      <div class="field full"><textarea name="observacao">${esc(d.observacao)}</textarea></div>
+
+      <div class="section-title">6. Aprovação</div>
+      <div class="form-grid">
+        <div class="field"><label>Superior imediato</label><input name="aprovadoPor" value="${esc(d.aprovadoPor)}"></div>
+        <div class="field"><label>Data</label><input type="date" name="dataAprovacao" value="${d.dataAprovacao||''}"></div>
+      </div>
+
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar descritivo</button>
+        </div>
+      </div>
+    </form>
+  `);
+
+  const form = document.getElementById('form-descritivo');
+  document.getElementById('btn-add-hab-comp').addEventListener('click', ()=>{
+    document.getElementById('lista-hab-comportamentais').insertAdjacentHTML('beforeend', linhaHabilidade(null, 'sugestoes-hab-comp'));
+  });
+  document.getElementById('btn-add-hab-tec').addEventListener('click', ()=>{
+    document.getElementById('lista-hab-tecnicas').insertAdjacentHTML('beforeend', linhaHabilidade(null, 'sugestoes-hab-tec'));
+  });
+  form.addEventListener('click', e=>{
+    if(e.target.matches('[data-remover-linha]')){
+      const linha = e.target.closest('[data-linha-habilidade]');
+      if(linha.parentElement.children.length > 1) linha.remove();
+      else { linha.querySelector('.input-hab-nome').value=''; }
+    }
+  });
+
+  form.addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const lerHabilidades = (containerId) => Array.from(document.querySelectorAll('#'+containerId+' [data-linha-habilidade]'))
+      .map(linha => ({ nome: linha.querySelector('.input-hab-nome').value.trim(), nivel: linha.querySelector('.input-hab-nivel').value }))
+      .filter(h => h.nome);
+
+    const dados = {
+      funcaoId: funcao.id,
+      versao: d.versao,
+      data: existente ? d.data : todayISO(),
+      sumario: f.get('sumario').trim(),
+      atividadesPrincipais: f.get('atividadesPrincipais').trim(),
+      grauInstrucao: f.get('grauInstrucao'),
+      formacaoRequerida: f.get('formacaoRequerida').trim(),
+      experienciaComFormacao: f.get('experienciaComFormacao').trim(),
+      experienciaSemFormacao: f.get('experienciaSemFormacao').trim(),
+      habilidadesComportamentais: lerHabilidades('lista-hab-comportamentais'),
+      habilidadesTecnicas: lerHabilidades('lista-hab-tecnicas'),
+      observacao: f.get('observacao').trim(),
+      aprovadoPor: f.get('aprovadoPor').trim(),
+      dataAprovacao: f.get('dataAprovacao') || ''
+    };
+
+    if(existente){ Object.assign(existente, dados); }
+    else { db.descritivosCargo.push(Object.assign({id:uid('desc')}, dados)); }
+    closeModal(); saveDB(); renderView();
+    showToast('Descritivo de cargo salvo.');
+  });
+}
+
 function modalCliente(cliente){
   const editando = !!cliente;
-  cliente = cliente || {id:'', nome:'', nomeContato:'', telefoneContato:'', emailContato:'', observacoes:'', temLogo:false, logoNome:'', logoUrlPublica:''};
+  cliente = cliente || {id:'', nome:'', nomeContato:'', telefoneContato:'', emailContato:'', observacoes:'', temLogo:false, logoNome:'', logoUrlPublica:'', tipoServico:'rs', beneficios:beneficiosVazios()};
+  if(!cliente.beneficios) cliente.beneficios = beneficiosVazios();
   let arquivoLogoSelecionado = null;
   openModal(`
     <button class="modal-close" data-action="fechar-modal">&times;</button>
@@ -1613,8 +2455,27 @@ function modalCliente(cliente){
         <div class="field"><label>Contato responsável</label><input name="nomeContato" value="${esc(cliente.nomeContato)}"></div>
         <div class="field"><label>Telefone</label><input name="telefoneContato" value="${esc(cliente.telefoneContato)}"></div>
         <div class="field full"><label>E-mail</label><input type="email" name="emailContato" value="${esc(cliente.emailContato)}"></div>
+        <div class="field full">
+          <label>Tipo de atendimento</label>
+          <select name="tipoServico">
+            <option value="rs" ${cliente.tipoServico==='rs'?'selected':''}>Recrutamento e Seleção (avulso)</option>
+            <option value="bpo" ${cliente.tipoServico==='bpo'?'selected':''}>BPO de RH (acompanhamento completo)</option>
+          </select>
+          <div class="hint">Clientes de BPO ganham acesso ao módulo de Colaboradores (turnover, cargos, etc). Clientes de R&S continuam só com vagas e candidatos.</div>
+        </div>
+        <div class="field"><label>Valor da mensalidade BPO (R$)</label><input type="number" step="0.01" min="0" name="valorMensalidadeBPO" value="${esc(cliente.valorMensalidadeBPO)}" placeholder="Ex.: 2500.00"></div>
         <div class="field full"><label>Observações</label><textarea name="observacoes">${esc(cliente.observacoes)}</textarea></div>
       </div>
+
+      <div class="section-title">Benefícios oferecidos</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Marque os benefícios que esta empresa oferece e descreva o valor/condição de cada um.</p>
+      ${BENEFICIOS_PADRAO.map(b=>{
+        const cfg = cliente.beneficios[b.chave] || {ativo:false, valor:''};
+        return `<div class="checkbox-row"><input type="checkbox" class="chk-beneficio" data-beneficio="${b.chave}" ${cfg.ativo?'checked':''}><label>${esc(b.nome)}</label></div>
+        <div class="field full" data-beneficio-valor-wrap="${b.chave}" style="display:${cfg.ativo?'block':'none'};margin:-4px 0 10px 0;">
+          <input data-beneficio-valor="${b.chave}" value="${esc(cfg.valor)}" placeholder="${b.placeholder}">
+        </div>`;
+      }).join('')}
 
       <div class="section-title">Logo do cliente</div>
       <p class="hint" style="margin-bottom:10px;">Aparece na página pública de divulgação das vagas deste cliente, ao lado da nossa marca.</p>
@@ -1640,6 +2501,12 @@ function modalCliente(cliente){
     if(img){ img.src = cliente.logoUrlPublica; document.getElementById('logo-preview-area').style.display='block'; }
   }
 
+  document.querySelectorAll('.chk-beneficio').forEach(chk=>{
+    chk.addEventListener('change', e=>{
+      const wrap = document.querySelector('[data-beneficio-valor-wrap="'+e.target.dataset.beneficio+'"]');
+      if(wrap) wrap.style.display = e.target.checked ? 'block' : 'none';
+    });
+  });
   document.getElementById('input-logo-cliente').addEventListener('change', e=>{
     const file = e.target.files[0];
     if(file && file.size > TAMANHO_MAX_LOGO){
@@ -1659,7 +2526,13 @@ function modalCliente(cliente){
     e.preventDefault();
     const f = new FormData(e.target);
     const clienteId = editando ? cliente.id : uid('cli');
-    const dados = {nome:f.get('nome').trim(), nomeContato:f.get('nomeContato').trim(), telefoneContato:f.get('telefoneContato').trim(), emailContato:f.get('emailContato').trim(), observacoes:f.get('observacoes').trim(), temLogo: cliente.temLogo||false, logoNome: cliente.logoNome||'', logoUrlPublica: cliente.logoUrlPublica||''};
+    const beneficios = {};
+    BENEFICIOS_PADRAO.forEach(b=>{
+      const chk = document.querySelector('.chk-beneficio[data-beneficio="'+b.chave+'"]');
+      const valorInput = document.querySelector('[data-beneficio-valor="'+b.chave+'"]');
+      beneficios[b.chave] = { ativo: !!(chk&&chk.checked), valor: valorInput?valorInput.value.trim():'' };
+    });
+    const dados = {nome:f.get('nome').trim(), nomeContato:f.get('nomeContato').trim(), telefoneContato:f.get('telefoneContato').trim(), emailContato:f.get('emailContato').trim(), observacoes:f.get('observacoes').trim(), tipoServico:f.get('tipoServico')||'rs', valorMensalidadeBPO:f.get('valorMensalidadeBPO')||'', beneficios: beneficios, temLogo: cliente.temLogo||false, logoNome: cliente.logoNome||'', logoUrlPublica: cliente.logoUrlPublica||''};
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = 'Salvando…'; }
@@ -2351,20 +3224,71 @@ function onGlobalClick(e){
 
   if(action === 'ir-busca'){ irParaResultadoBusca(el.dataset.tipo, id); return; }
   if(action === 'nav'){ state.tab = el.dataset.tab; renderView(); return; }
+  if(action === 'colab-aba'){ state.colabAba = el.dataset.aba; renderView(); return; }
+  if(action === 'novo-colaborador'){ modalColaborador(null, el.dataset.clienteId); return; }
+  if(action === 'editar-colaborador'){ modalColaborador(getColaborador(id)); return; }
+  if(action === 'excluir-colaborador'){
+    if(confirm('Excluir este colaborador? Esta ação não pode ser desfeita.')){
+      db.colaboradores = db.colaboradores.filter(c=>c.id!==id);
+      closeModal(); saveDB(); renderView();
+    }
+    return;
+  }
+  if(action === 'nova-funcao'){ modalFuncao(null, el.dataset.clienteId); return; }
+  if(action === 'editar-funcao'){ modalFuncao(getFuncao(id)); return; }
+  if(action === 'excluir-funcao'){
+    if(confirm('Excluir esta função? O descritivo de cargo vinculado também será removido. Colaboradores com essa função ficarão sem função definida.')){
+      db.descritivosCargo = db.descritivosCargo.filter(d=>d.funcaoId!==id);
+      db.colaboradores.forEach(c=>{ if(c.funcaoId===id) c.funcaoId=''; });
+      db.funcoes = db.funcoes.filter(f=>f.id!==id);
+      closeModal(); saveDB(); renderView();
+    }
+    return;
+  }
+  if(action === 'descritivo-cargo'){ modalDescritivoCargo(getFuncao(id)); return; }
+  if(action === 'nova-mensalidade'){ modalMensalidade(null); return; }
+  if(action === 'editar-mensalidade'){ modalMensalidade(db.mensalidadesBPO.find(m=>m.id===id)); return; }
+  if(action === 'marcar-mensalidade-paga'){
+    const m = db.mensalidadesBPO.find(x=>x.id===id);
+    if(m){ m.statusPagamento='pago'; if(!m.dataPagamento) m.dataPagamento = todayISO(); saveDB(); renderView(); showToast('Mensalidade marcada como paga.'); }
+    return;
+  }
+  if(action === 'excluir-mensalidade'){
+    if(confirm('Excluir esta mensalidade? Esta ação não pode ser desfeita.')){
+      db.mensalidadesBPO = db.mensalidadesBPO.filter(m=>m.id!==id);
+      closeModal(); saveDB(); renderView();
+    }
+    return;
+  }
+  if(action === 'gerar-mensalidades-mes'){
+    const mesAlvo = state.mensMes || mesAtualRef();
+    const n = gerarMensalidadesDoMes(mesAlvo);
+    state.mensMes = mesAlvo;
+    saveDB(); renderView();
+    showToast(n>0 ? n+' mensalidade(s) gerada(s) para '+formatMesRef(mesAlvo)+'.' : 'Todos os clientes BPO já tinham mensalidade gerada para '+formatMesRef(mesAlvo)+'.');
+    return;
+  }
 
   if(action === 'novo-cliente'){ modalCliente(null); return; }
   if(action === 'editar-cliente'){ modalCliente(getCliente(id)); return; }
   if(action === 'excluir-cliente'){
-    if(confirm('Excluir este cliente? Todas as vagas e candidatos vinculados também serão removidos. Esta ação não pode ser desfeita.')){
+    if(confirm('Excluir este cliente? Todas as vagas, candidatos, colaboradores e cargos vinculados também serão removidos. Esta ação não pode ser desfeita.')){
       const candidatosDoClienteExcluido = db.candidatos.filter(c=>c.clienteId===id);
       const cargosDoClienteExcluido = cargosDoCliente(id);
+      const funcoesDoClienteExcluido = funcoesDoCliente(id);
       cargosDoClienteExcluido.forEach(v=>{ if(v.vagaPublicaAtiva){ sincronizarVagaPublica(Object.assign({}, v, {vagaPublicaAtiva:false, status:'fechada'})); } });
       db.candidatos = db.candidatos.filter(c=>c.clienteId!==id);
       db.cargos = db.cargos.filter(v=>v.clienteId!==id);
+      db.colaboradores = db.colaboradores.filter(c=>c.clienteId!==id);
+      db.descritivosCargo = db.descritivosCargo.filter(d=>!funcoesDoClienteExcluido.some(f=>f.id===d.funcaoId));
+      db.funcoes = db.funcoes.filter(f=>f.clienteId!==id);
+      db.mensalidadesBPO = db.mensalidadesBPO.filter(m=>m.clienteId!==id);
       db.clientes = db.clientes.filter(c=>c.id!==id);
       candidatosDoClienteExcluido.forEach(c=>{ if(c.temCurriculo) removerCurriculoStorage(c.id); });
       removerLogoClienteStorage(id);
       if(state.viewClienteId === id) state.viewClienteId = '';
+      if(state.colabClienteId === id) state.colabClienteId = '';
+      if(state.mensClienteId === id) state.mensClienteId = '';
       closeModal(); saveDB(); renderView();
     }
     return;
@@ -2572,6 +3496,12 @@ function onGlobalChange(e){
   if(t.dataset.role === 'rel-cargo'){ state.dashCargoId = t.value; renderView(); return; }
   if(t.dataset.role === 'fat-cliente'){ state.fatClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'fat-status'){ state.fatStatus = t.value; renderView(); return; }
+  if(t.dataset.role === 'colab-cliente'){ state.colabClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'colab-status'){ state.colabStatus = t.value; renderView(); return; }
+  if(t.dataset.role === 'mens-cliente'){ state.mensClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'mens-mes'){ state.mensMes = t.value; renderView(); return; }
+  if(t.dataset.role === 'mens-status'){ state.mensStatus = t.value; renderView(); return; }
+  if(t.dataset.role === 'ind-cliente'){ state.indClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'banco-area'){ state.bancoArea = t.value; renderView(); return; }
   if(t.dataset.role === 'sel-cliente-vagas'){ state.viewClienteId = t.value; renderView(); return; }
   if(t.id === 'import-file'){
