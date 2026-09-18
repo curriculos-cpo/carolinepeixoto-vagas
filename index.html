@@ -671,6 +671,9 @@ function garantirConfiguracoes(){
   db.colaboradores.forEach(c=>{
     if(c.salarioAdmissao===undefined) c.salarioAdmissao = '';
     if(!Array.isArray(c.historicoSalarial)) c.historicoSalarial = [];
+    if(c.telefone===undefined) c.telefone = '';
+    if(c.email===undefined) c.email = '';
+    if(!Array.isArray(c.registros)) c.registros = [];
   });
 }
 
@@ -1541,13 +1544,14 @@ function viewColaboradores(){
   const linhasColaboradores = colaboradores.filter(c=> !state.colabStatus || statusColaborador(c)===state.colabStatus).map(c=>{
     const f = getFuncao(c.funcaoId);
     return `<tr>
-      <td><strong>${esc(c.nome)}</strong></td>
+      <td><span class="btn-link" data-action="abrir-prontuario" data-id="${c.id}" style="cursor:pointer;font-weight:600;color:var(--accent);">${esc(c.nome)}</span></td>
       <td>${esc(f?f.nome:'—')}</td>
       <td>${formatDate(c.dataAdmissao)}</td>
       <td>${statusColaborador(c)!=='desligado' ? formatMoeda(salarioAtualColaborador(c)) : '—'}</td>
       <td>${c.dataDesligamento ? formatDate(c.dataDesligamento)+(c.tipoDesligamento?'<div class="hint">'+esc(c.tipoDesligamento)+'</div>':'') : '—'}</td>
       <td>${statusColaboradorBadge(c)}${statusColaborador(c)==='afastado'&&c.tipoAfastamento?'<div class="hint">'+esc(c.tipoAfastamento)+'</div>':''}</td>
       <td class="no-print" style="white-space:nowrap;">
+        <span class="btn btn-ghost btn-sm" data-action="abrir-prontuario" data-id="${c.id}">📋 Prontuário</span>
         <span class="btn btn-ghost btn-sm" data-action="editar-colaborador" data-id="${c.id}">Editar</span>
         <span class="btn btn-ghost btn-sm" data-action="excluir-colaborador" data-id="${c.id}">Excluir</span>
       </td>
@@ -2434,9 +2438,124 @@ function linhaHistoricoSalarial(item){
   </div>`;
 }
 
+const TIPOS_REGISTRO_COLABORADOR = ['Feedback positivo', 'Feedback de melhoria', 'Conversa 1:1', 'Elogio formal', 'Advertência verbal', 'Advertência escrita', 'Suspensão', 'Outro'];
+
+function abrirProntuario(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const cliente = getCliente(c.clienteId);
+  const funcao = getFuncao(c.funcaoId);
+  const descritivo = funcao ? db.descritivosCargo.find(d=>d.funcaoId===funcao.id) : null;
+  const dataFimContagem = c.dataDesligamento || todayISO();
+  const diasCasa = daysBetween(c.dataAdmissao, dataFimContagem) || 0;
+  const anosCasa = Math.floor(diasCasa/365);
+  const mesesCasa = Math.floor((diasCasa%365)/30);
+  const tempoCasaTexto = (anosCasa>0? anosCasa+' ano(s) ':'') + mesesCasa+' mês(es)';
+
+  const historicoOrdenado = (c.historicoSalarial||[]).slice().sort((a,b)=>b.data.localeCompare(a.data));
+  const registros = (c.registros||[]).slice().sort((a,b)=>b.data.localeCompare(a.data));
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>📋 Prontuário — ${esc(c.nome)}</h2>
+    <div class="modal-sub">${esc(cliente?.nome||'')}${funcao?' · '+esc(funcao.nome):''}</div>
+
+    <div class="kpi-grid" style="margin:14px 0;">
+      <div class="kpi"><div class="label">Status</div><div style="margin-top:4px;">${statusColaboradorBadge(c)}</div></div>
+      <div class="kpi"><div class="label">Admissão</div><div class="value" style="font-size:16px;">${formatDate(c.dataAdmissao)}</div></div>
+      <div class="kpi"><div class="label">Tempo de casa</div><div class="value" style="font-size:16px;">${tempoCasaTexto}</div></div>
+      <div class="kpi"><div class="label">Salário atual</div><div class="value" style="font-size:16px;">${statusColaborador(c)!=='desligado' ? formatMoeda(salarioAtualColaborador(c)) : '—'}</div></div>
+    </div>
+
+    <div class="section-title">Contato</div>
+    <p class="hint">${c.telefone?esc(c.telefone):'Telefone não informado'}${c.email?' · '+esc(c.email):''}</p>
+
+    ${funcao ? `
+    <div class="section-title">Cargo</div>
+    <p class="hint">${esc(funcao.nome)}${funcao.subordinadoA?' · Subordinado a '+esc(funcao.subordinadoA):''}${funcao.area?' · '+esc(funcao.area):''}<br>
+    ${descritivo ? '📄 Descritivo de cargo preenchido — <span class="btn btn-ghost btn-sm" data-action="descritivo-cargo" data-id="'+funcao.id+'">Ver descritivo</span>' : 'Nenhum descritivo de cargo cadastrado para esta função.'}</p>
+    ` : '<div class="section-title">Cargo</div><p class="hint">Nenhuma função vinculada.</p>'}
+
+    ${c.emAfastamento ? `
+    <div class="section-title">Afastamento atual</div>
+    <p class="hint">${esc(c.tipoAfastamento||'Tipo não informado')} — desde ${formatDate(c.dataInicioAfastamento)}${c.dataFimAfastamento?' · previsão de retorno '+formatDate(c.dataFimAfastamento):''}</p>
+    ` : ''}
+
+    ${c.dataDesligamento ? `
+    <div class="section-title">Desligamento</div>
+    <p class="hint">${formatDate(c.dataDesligamento)} — ${esc(c.tipoDesligamento||'Tipo não informado')}${c.motivoDesligamento?'<br>'+esc(c.motivoDesligamento):''}</p>
+    ` : ''}
+
+    <div class="section-title">Histórico salarial</div>
+    <div class="table-wrap"><table><thead><tr><th>Data</th><th>Valor</th><th>Motivo</th></tr></thead><tbody>
+      ${historicoOrdenado.map(h=>'<tr><td>'+formatDate(h.data)+'</td><td>'+formatMoeda(parseFloat(h.valor)||0)+'</td><td>'+esc(h.motivo||'—')+'</td></tr>').join('')}
+      <tr><td>${formatDate(c.dataAdmissao)}</td><td>${formatMoeda(parseFloat(c.salarioAdmissao)||0)}</td><td>Salário de admissão</td></tr>
+    </tbody></table></div>
+
+    ${c.observacoes ? `<div class="section-title">Observações gerais</div><p class="hint">${esc(c.observacoes)}</p>` : ''}
+
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Registros (feedbacks, 1:1, advertências, suspensões)</span>
+      <span class="btn btn-secondary btn-sm" data-action="novo-registro-colaborador" data-id="${c.id}">+ Novo registro</span>
+    </div>
+    ${registros.length===0 ? '<p class="hint">Nenhum registro ainda.</p>' : registros.map(r=>`
+      <div class="card" style="padding:10px 14px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <strong>${esc(r.tipo)}</strong>
+          <span class="hint" style="white-space:nowrap;">${formatDate(r.data)}</span>
+        </div>
+        <p style="margin:6px 0 0 0;font-size:13.5px;white-space:pre-line;">${esc(r.descricao)}</p>
+        ${r.registradoPor?'<p class="hint" style="margin:6px 0 0 0;">Registrado por: '+esc(r.registradoPor)+'</p>':''}
+      </div>
+    `).join('')}
+
+    <div class="modal-footer">
+      <span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="editar-colaborador" data-id="${c.id}">Editar dados cadastrais</span>
+      </div>
+    </div>
+  `);
+}
+
+function modalNovoRegistro(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Novo registro</h2>
+    <div class="modal-sub">${esc(c.nome)}</div>
+    <form id="form-registro">
+      <div class="form-grid">
+        <div class="field full"><label>Tipo *</label><select required name="tipo">${TIPOS_REGISTRO_COLABORADOR.map(t=>'<option>'+t+'</option>').join('')}</select></div>
+        <div class="field"><label>Data *</label><input required type="date" name="data" value="${todayISO()}"></div>
+        <div class="field"><label>Registrado por</label><input name="registradoPor" placeholder="Seu nome"></div>
+        <div class="field full"><label>Descrição *</label><textarea required name="descricao" style="min-height:100px;" placeholder="Detalhe o ocorrido..."></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar registro</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-registro').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    if(!Array.isArray(c.registros)) c.registros = [];
+    c.registros.push({id:uid('reg'), tipo:f.get('tipo'), data:f.get('data'), descricao:f.get('descricao').trim(), registradoPor:f.get('registradoPor').trim()});
+    saveDB();
+    showToast('Registro salvo.');
+    abrirProntuario(colaboradorId);
+  });
+}
+
 function modalColaborador(colaborador, clienteId){
   const editando = !!colaborador;
-  colaborador = colaborador || {id:'', clienteId:clienteId, nome:'', funcaoId:'', dataAdmissao:todayISO(), dataDesligamento:'', tipoDesligamento:'', motivoDesligamento:'', observacoes:'', emAfastamento:false, tipoAfastamento:'', dataInicioAfastamento:'', dataFimAfastamento:'', salarioAdmissao:'', historicoSalarial:[]};
+  colaborador = colaborador || {id:'', clienteId:clienteId, nome:'', funcaoId:'', dataAdmissao:todayISO(), dataDesligamento:'', tipoDesligamento:'', motivoDesligamento:'', observacoes:'', emAfastamento:false, tipoAfastamento:'', dataInicioAfastamento:'', dataFimAfastamento:'', salarioAdmissao:'', historicoSalarial:[], telefone:'', email:'', registros:[]};
   const funcoesOpts = funcoesDoCliente(colaborador.clienteId).map(f=>'<option value="'+f.id+'" '+(colaborador.funcaoId===f.id?'selected':'')+'>'+esc(f.nome)+'</option>').join('');
   openModal(`
     <button class="modal-close" data-action="fechar-modal">&times;</button>
@@ -2446,6 +2565,8 @@ function modalColaborador(colaborador, clienteId){
       <div class="form-grid">
         <div class="field full"><label>Nome completo *</label><input required name="nome" value="${esc(colaborador.nome)}"></div>
         <div class="field full"><label>Função</label><select name="funcaoId"><option value="">Não informado</option>${funcoesOpts}</select></div>
+        <div class="field"><label>Telefone</label><input name="telefone" value="${esc(colaborador.telefone||'')}"></div>
+        <div class="field"><label>E-mail</label><input type="email" name="email" value="${esc(colaborador.email||'')}"></div>
         <div class="field"><label>Data de admissão *</label><input required type="date" name="dataAdmissao" value="${colaborador.dataAdmissao||''}"></div>
         <div class="field"><label>Salário de admissão (R$)</label><input type="number" step="0.01" min="0" name="salarioAdmissao" value="${esc(colaborador.salarioAdmissao)}"></div>
       </div>
@@ -2514,8 +2635,11 @@ function modalColaborador(colaborador, clienteId){
       clienteId: colaborador.clienteId,
       nome: f.get('nome').trim(),
       funcaoId: f.get('funcaoId') || '',
+      telefone: f.get('telefone').trim(),
+      email: f.get('email').trim(),
       salarioAdmissao: f.get('salarioAdmissao') || '',
       historicoSalarial: historicoSalarial,
+      registros: colaborador.registros || [],
       dataAdmissao: f.get('dataAdmissao'),
       emAfastamento: !!f.get('emAfastamento'),
       tipoAfastamento: f.get('tipoAfastamento') || '',
@@ -3541,6 +3665,8 @@ function onGlobalClick(e){
   }
   if(action === 'novo-colaborador'){ modalColaborador(null, el.dataset.clienteId); return; }
   if(action === 'editar-colaborador'){ modalColaborador(getColaborador(id)); return; }
+  if(action === 'abrir-prontuario'){ abrirProntuario(id); return; }
+  if(action === 'novo-registro-colaborador'){ modalNovoRegistro(id); return; }
   if(action === 'excluir-colaborador'){
     if(confirm('Excluir este colaborador? Esta ação não pode ser desfeita.')){
       db.colaboradores = db.colaboradores.filter(c=>c.id!==id);
