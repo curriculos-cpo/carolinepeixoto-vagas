@@ -1,0 +1,5396 @@
+{
+  "clientes": [
+    {
+      "id": "cli_v3w1w1qmu25fxtp",
+      "nome": "MAXXIMUS CONTABILIDADE E CONSULTORIA",
+      "nomeContato": "PAULO",
+      "telefoneContato": "075 98213-0060",
+      "emailContato": "",
+      "observacoes": "",
+      "temLogo": true,
+      "logoNome": "maxximize (3).jpg",
+      "logoUrlPublica": "https://drive.google.com/uc?export=view&id=1FoJJ8-m111UIiAtRO1i-_VOuyTJRc2Ab",
+      "tipoServico": "bpo",
+      "valorMensalidadeBPO": "2000.00",
+      "beneficios": {
+        "va_vr": {
+          "ativo": true,
+          "valor": "R$ 300,00"
+        },
+        "vt": {
+          "ativo": true,
+          "valor": "R$ 11,00 por dia"
+        },
+        "wellhub": {
+          "ativo": true,
+          "valor": "R$ 21,90"
+        },
+        "assistenciaMedica": {
+          "ativo": true,
+          "valor": "Hapvida, com coparticipação - subsídio da empresa de R$ 230,00"
+        },
+        "assistenciaOdontologica": {
+          "ativo": true,
+          "valor": "Bradesco Dental R$ 27,42 - custo colaborador"
+        },
+        "dayOff": {
+          "ativo": false,
+          "valor": ""
+        }
+      }
+    },
+    {
+      "id": "cli_7xa7quumu25pt8q",
+      "nome": "CASA DE MOA GASTRONOMIA",
+      "nomeContato": "GISELE",
+      "telefoneContato": "075 98306-1720",
+      "emailContato": "",
+      "observacoes": "",
+      "temLogo": true,
+      "logoNome": "CASA DE MOÁ.jpg",
+      "logoUrlPublica": "https://drive.google.com/uc?export=view&id=1zrIYqW6HkW849uwokUm9BFotkxKEahVs",
+      "tipoServico": "bpo",
+      "valorMensalidadeBPO": "2500.00",
+      "beneficios": {
+        "va_vr": {
+          "ativo": false,
+          "valor": ""
+        },
+        "vt": {
+          "ativo": true,
+          "valor": ""
+        },
+        "wellhub": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaMedica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaOdontologica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "dayOff": {
+          "ativo": true,
+          "valor": ""
+        }
+      }
+    },
+    {
+      "id": "cli_g2gxhm8mu26y8py",
+      "nome": "DEMAIS SORVETES E DOCES LTDA",
+      "nomeContato": "Mara",
+      "telefoneContato": "075 98197-2458",
+      "emailContato": "",
+      "observacoes": "",
+      "temLogo": true,
+      "logoNome": "Dmais.jpg",
+      "logoUrlPublica": "https://drive.google.com/uc?export=view&id=15iuU2bzi-kvtMDbf7dnNEqVRYPqHxiGM",
+      "tipoServico": "rs",
+      "valorMensalidadeBPO": "",
+      "beneficios": {
+        "va_vr": {
+          "ativo": false,
+          "valor": ""
+        },
+        "vt": {
+          "ativo": false,
+          "valor": ""
+        },
+        "wellhub": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaMedica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaOdontologica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "dayOff": {
+          "ativo": false,
+          "valor": ""
+        }
+      }
+    },
+    {
+      "id": "cli_80m5qemmu27263j",
+      "nome": "YAKI DOCES",
+      "nomeContato": "Bruna",
+      "telefoneContato": "+55 75 8191-1948",
+      "emailContato": "",
+      "observacoes": "",
+      "temLogo": true,
+      "logoNome": "YAKI DOCES.jpg",
+      "logoUrlPublica": "https://drive.google.com/uc?export=view&id=1YMCi0UZtVd_oafre2Gl3VHwvOo5dDkjB",
+      "tipoServico": "rs",
+      "valorMensalidadeBPO": "",
+      "beneficios": {
+        "va_vr": {
+          "ativo": false,
+          "valor": ""
+        },
+        "vt": {
+          "ativo": false,
+          "valor": ""
+        },
+        "wellhub": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaMedica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaOdontologica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "dayOff": {
+          "ativo": false,
+          "valor": ""
+        }
+      }
+    },
+    {
+      "id": "cli_rgf6q7rmu411qyb",
+      "nome": "INFINITY STORE",
+      "nomeContato": "Vinicius",
+      "telefoneContato": "75 99287-5052",
+      "emailContato": "",
+      "observacoes": "",
+      "temLogo": false,
+      "logoNome": "",
+      "logoUrlPublica": "",
+      "tipoServico": "rs",
+      "valorMensalidadeBPO": "",
+      "beneficios": {
+        "va_vr": {
+          "ativo": false,
+          "valor": ""
+        },
+        "vt": {
+          "ativo": false,
+          "valor": ""
+        },
+        "wellhub": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaMedica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaOdontologica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "dayOff": {
+          "ativo": false,
+          "valor": ""
+        }
+      }
+    },
+    {
+      "id": "cli_8llrkermu72uc1u",
+      "nome": "NATULAB LABORATORIO S.A",
+      "nomeContato": "BIANCA",
+      "telefoneContato": "+55 75 9862-3462",
+      "emailContato": "biancasantos@natulab.com.br",
+      "observacoes": "",
+      "tipoServico": "rs",
+      "valorMensalidadeBPO": "",
+      "beneficios": {
+        "va_vr": {
+          "ativo": false,
+          "valor": ""
+        },
+        "vt": {
+          "ativo": false,
+          "valor": ""
+        },
+        "wellhub": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaMedica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "assistenciaOdontologica": {
+          "ativo": false,
+          "valor": ""
+        },
+        "dayOff": {
+          "ativo": false,
+          "valor": ""
+        }
+      },
+      "temLogo": false,
+      "logoNome": "",
+      "logoUrlPublica": ""
+    }
+  ],
+  "cargos": [
+    {
+      "id": "vg_vbn3dlvmu25ia2s",
+      "status": "fechada",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "titulo": "ANALISTA DE DP JR",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 0,
+      "responsavel": "",
+      "dataAbertura": "2026-09-15",
+      "dataFechamentoPrevista": "",
+      "houveContratacao": "sim",
+      "observacoes": "",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 1500,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": "Contratação de Anatalia. Admissão em janeiro/2026"
+    },
+    {
+      "id": "vg_orxecv9mu25jzmq",
+      "status": "fechada",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "titulo": "ANALISTA FISCAL",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 0,
+      "responsavel": "",
+      "dataAbertura": "2026-09-15",
+      "dataFechamentoPrevista": "",
+      "houveContratacao": "sim",
+      "observacoes": "",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 2150,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": "Contratação de Aline, janeir/2026."
+    },
+    {
+      "id": "vg_phm0o5hmu25l1oc",
+      "status": "fechada",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "titulo": "ANALISTA DE DP",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 0,
+      "responsavel": "",
+      "dataAbertura": "2026-09-15",
+      "dataFechamentoPrevista": "",
+      "houveContratacao": "sim",
+      "observacoes": "",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 2250,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": "Contratação de Aline"
+    },
+    {
+      "id": "vg_z4no1jxmu25mjrf",
+      "status": "fechada",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "titulo": "ESTAGIÁRIO CONTÁBIL",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 0,
+      "responsavel": "",
+      "dataAbertura": "2026-09-15",
+      "dataFechamentoPrevista": "",
+      "houveContratacao": "sim",
+      "observacoes": "",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 440,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": "Contratação de Layla"
+    },
+    {
+      "id": "vg_epjbpm5mu25o7vs",
+      "status": "fechada",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "titulo": "AUXILIAR DEPARTAMENTO FISCAL",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 0,
+      "responsavel": "",
+      "dataAbertura": "2026-09-15",
+      "dataFechamentoPrevista": "",
+      "houveContratacao": "sim",
+      "observacoes": "",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 925,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": "Contrato de Lucas"
+    },
+    {
+      "id": "vg_w5cpxoimu25y009",
+      "status": "aberta",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_7xa7quumu25pt8q",
+      "titulo": "COZINHEIRO",
+      "quantidadeVagas": 2,
+      "curriculosRecebidos": 6,
+      "responsavel": "",
+      "dataAbertura": "2026-09-07",
+      "dataFechamentoPrevista": "2026-10-07",
+      "houveContratacao": "",
+      "observacoes": "",
+      "vagaPublicaAtiva": true,
+      "exibirNomeCliente": true,
+      "modalidade": "Presencial",
+      "localTrabalho": "Feira de Santana/BA",
+      "descricaoPublica": "A Casa de Moá está com oportunidade para quem acredita que cozinhar vai muito além de preparar alimentos: envolve técnica, organização, cuidado com os detalhes e trabalho em equipe.\n\nBuscamos um(a) Cozinheiro(a) com experiência na função, domínio de técnicas de corte e cocção e, principalmente, comprometimento com a qualidade de cada entrega.",
+      "salario": "1800,00",
+      "oQueVaiFazer": "No dia a dia, esse profissional será responsável pelo pré-preparo e mise en place, execução das cocções, montagem e finalização dos pratos, organização do fluxo da cozinha e controle de porções e desperdícios.",
+      "oQueBuscamos": "Além da experiência técnica, procuramos alguém com organização, disciplina, pontualidade, proatividade, equilíbrio emocional e facilidade para trabalhar em equipe.",
+      "beneficios": {
+        "vt": true,
+        "va_vr": false,
+        "comissao": true,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": true,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 1800,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": ""
+    },
+    {
+      "id": "vg_a1c7tbwmu27183q",
+      "status": "aberta",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "titulo": "AUXILIAR ADMINISTRATIVO",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 428,
+      "responsavel": "MARA",
+      "dataAbertura": "2026-09-07",
+      "dataFechamentoPrevista": "2026-10-07",
+      "houveContratacao": "",
+      "observacoes": "",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 810.5,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": ""
+    },
+    {
+      "id": "vg_v3k9qa1mu273rn7",
+      "status": "fechada",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_80m5qemmu27263j",
+      "titulo": "VENDEDORA",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 0,
+      "responsavel": "",
+      "dataAbertura": "2026-09-07",
+      "dataFechamentoPrevista": "2026-09-10",
+      "houveContratacao": "sim",
+      "observacoes": "Candidata selecionada Emile",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 880,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": ""
+    },
+    {
+      "id": "vg_cogtcv1mu274zej",
+      "status": "fechada",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_80m5qemmu27263j",
+      "titulo": "MULTIOPERADOR",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 0,
+      "responsavel": "Bruna",
+      "dataAbertura": "2026-10-08",
+      "dataFechamentoPrevista": "2026-10-11",
+      "houveContratacao": "sim",
+      "observacoes": "",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 880,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": ""
+    },
+    {
+      "id": "vg_22wqmipmu41310u",
+      "status": "aberta",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_rgf6q7rmu411qyb",
+      "titulo": "OPERADOR DE CAIXA",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 7,
+      "responsavel": "",
+      "dataAbertura": "2026-09-15",
+      "dataFechamentoPrevista": "2026-09-30",
+      "houveContratacao": "",
+      "observacoes": "Vaga solicitada por áudio no whatsapp",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": 880,
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": ""
+    },
+    {
+      "id": "vg_amirup3mu429gbg",
+      "status": "aberta",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "titulo": "ASSISTENTE FISCAL",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 88,
+      "responsavel": "",
+      "dataAbertura": "2026-09-08",
+      "dataFechamentoPrevista": "2029-10-08",
+      "houveContratacao": "",
+      "observacoes": "",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": "",
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": ""
+    },
+    {
+      "id": "vg_g6v7i7zmu42a5lr",
+      "status": "aberta",
+      "dataFechamentoReal": "",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "titulo": "ENCARREGADO DE PRODUÇÃO",
+      "quantidadeVagas": 1,
+      "curriculosRecebidos": 51,
+      "responsavel": "",
+      "dataAbertura": "2026-09-08",
+      "dataFechamentoPrevista": "2026-10-08",
+      "houveContratacao": "",
+      "observacoes": "",
+      "vagaPublicaAtiva": false,
+      "exibirNomeCliente": true,
+      "modalidade": "",
+      "localTrabalho": "",
+      "descricaoPublica": "",
+      "salario": "",
+      "oQueVaiFazer": "",
+      "oQueBuscamos": "",
+      "beneficios": {
+        "vt": false,
+        "va_vr": false,
+        "comissao": false,
+        "assistenciaMedica": false,
+        "assistenciaOdontologica": false,
+        "dayoffAniversario": false,
+        "seguroVida": false,
+        "gympass": false
+      },
+      "beneficiosOutros": "",
+      "valorServico": "",
+      "statusPagamento": "pendente",
+      "valorPago": 0,
+      "dataPagamento": "",
+      "observacoesFinanceiras": ""
+    }
+  ],
+  "candidatos": [
+    {
+      "id": "cand_v6kkckzmu261waf",
+      "clienteId": "cli_7xa7quumu25pt8q",
+      "cargoId": "vg_w5cpxoimu25y009",
+      "nome": "Lívia Akenaton Rodrigues",
+      "telefone": "(75)  98240-9146",
+      "email": "akenatonrodrigueslivia@gmail.com",
+      "origem": "Outro",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Lívia Akenaton Rodrigues.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1n_4WWnJlY-K946oq8e_ibWGSGtOsHLUf/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": ""
+    },
+    {
+      "id": "cand_yxyv5n8mu26e9we",
+      "clienteId": "cli_7xa7quumu25pt8q",
+      "cargoId": "vg_w5cpxoimu25y009",
+      "nome": "Luana Patrícia",
+      "telefone": "(75) 9 8181-0528",
+      "email": "",
+      "origem": "Outro",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-07",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "LUANA PATRICIA.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1LZz1lEZT9T8cnTSIraJGk_1BaoeGXRkg/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": ""
+    },
+    {
+      "id": "cand_vsbuzqrmu26g55j",
+      "clienteId": "cli_7xa7quumu25pt8q",
+      "cargoId": "vg_w5cpxoimu25y009",
+      "nome": "PRISCILLA LIMA PEREIRA",
+      "telefone": "75 98114-3022",
+      "email": "limapriscilla1203@gmail.com",
+      "origem": "Outro",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-03",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "PRISCILLA LIMA PEREIRA.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1oTZ7eOerPRkcWXN_l8ZfWIluvuUYOiIB/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": ""
+    },
+    {
+      "id": "cand_nj7666mmu26hqde",
+      "clienteId": "cli_7xa7quumu25pt8q",
+      "cargoId": "vg_w5cpxoimu25y009",
+      "nome": "ROSANA DE OLIVEIRA RIBEIRO",
+      "telefone": "(75) 99168-3034",
+      "email": "rosanaegui2018@outlook.com",
+      "origem": "Outro",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-07",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "ROSANA DE OLIVEIA RIBEIRO.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1X9QS-aNAxxaDNQ6Nk3AHVUrxYVr1pa9l/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": ""
+    },
+    {
+      "id": "cand_8k621u6mu26knmc",
+      "clienteId": "",
+      "cargoId": "",
+      "nome": "LUCAS MONTEIRO",
+      "telefone": "(71) 98200-8677",
+      "email": "lucas.monteiro1996@outlook.coM",
+      "origem": "Outro",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-14",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Lucas_Monteiro_2026.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1wnkfi-XiUZcB2q9yzwmsn6zOO7EhKuHu/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "Profissional multidisciplinar com experiência consolidada em coordenação de projetos, gestão \nde obras civis e industriais, desenho técnico CAD/3D, orçamentação e compras estratégicas. \nAtuação simultânea como PJ em empresas de médio e grande porte, com entregas para clientes \nde nível internacional como GE (General Electric) e BYD. Vivência em licitações de obras \npúblicas, gestão de contratos, liderança de equipes e planejamento estratégico. Formação dupla \nem Engenharia Mecânica e Civil, com domínio de SolidWorks, AutoCAD, Excel Avançado e \nInteligência Artificial aplicada à gestão de processos."
+    },
+    {
+      "id": "cand_mol3b4rmu26s4d6",
+      "clienteId": "",
+      "cargoId": "",
+      "nome": "VICTOR SANTOS GONÇALVES",
+      "telefone": "(75) 98353-7591",
+      "email": "victorscont@gmail.com",
+      "origem": "Indicação",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "curriculo_victor_atualizado.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1SDShEPa4YubFpmF_7BBhP71qjUB5qBmb/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "Suporte e Atendimento ao Cliente\nExperiência como frentista"
+    },
+    {
+      "id": "cand_0ypnxbpmu3b8eit",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "ALINE SANTIAGO DOS SANTOS",
+      "telefone": "75 98281-2385",
+      "email": "aline1996santiago@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-13",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "aline santiago dos santos.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1tUqO-tbqWhTDlII1H_ueGFTF5Lsy8QKT/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_bwbh7vnmu3bae6g",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "BRENDA NATÁLIA PONCHET BRANDÃO",
+      "telefone": "(75) 99218-6042",
+      "email": "brendinhaponchet@hotmail.com",
+      "origem": "Outro",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Errou a identificação da divergência no pedido - pouca atenção",
+      "temCurriculo": true,
+      "curriculoNome": "Brenda Currículo (5) (1) (1) (1) (1).docx",
+      "curriculoUrl": "https://docs.google.com/document/d/1h5dAwExDxyhdkAVCupZGv69KOvL-TMbV/edit?usp=drivesdk&ouid=110304743166187140230&rtpof=true&sd=true",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_2kxnaoymu3bbygm",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "PAULO JOSÉ F. DO ROSÁRIO",
+      "telefone": "75 98191-8311",
+      "email": "",
+      "origem": "Outro",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "C27C2E77-0A1E-4D80-9A19-CC88E1217071.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1i6TsfvkYRPaIiNr6Wm03zKSCXWQc_vAF/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_9l6lab2mu3bdqr0",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "CAMILA VITORIA SANTOS SANTANA",
+      "telefone": "(75) 982791203",
+      "email": "camilla.vittoria6@gmail.com",
+      "origem": "Outro",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "CAMILA (1).pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/11m65_0RpP3_4WBNJGZY8V1aNTaOnI7pZ/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_fpjycspmu3beghs",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "CAMILA DIAS CIDREIRA FERNANDES",
+      "telefone": "(75) 98278-3000",
+      "email": "camila.faculdade@hotmail.com",
+      "origem": "Indicação",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Camila_Dias_Cidreira_Fernandes_atualizado.docx",
+      "curriculoUrl": "https://docs.google.com/document/d/11ETzQV7tlxv7OJ8XEI7lx4Td0E_SUE4c/edit?usp=drivesdk&ouid=110304743166187140230&rtpof=true&sd=true",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_fs2wikkmu3bfnln",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "DEISEANE SILVA GONÇALVES DE OLIVEIRA",
+      "telefone": "(75) 981764105",
+      "email": "Odeyse572@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Curri_culo simples redatora e social media branco e preto.pdf.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1bPgSeO_PVyZnZLCytCdYOcZYt_ehuNVN/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_j73pza1mu3bh5qr",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "RANNIELE DO CARMO",
+      "telefone": "(75) 98208-0000",
+      "email": "ranylaine@icloud.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo  (1).pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1fo6erDX6Dhtq19Fh3zJvOU-tZIJ7nHxc/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_9ynaz9pmu3bix4m",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "CONSTANTINO GARCIA SOTO NETO",
+      "telefone": "(75) 99153-8747",
+      "email": "netog027@gmai.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Errou comparação de números no questionário - pouca atenção",
+      "temCurriculo": true,
+      "curriculoNome": "Curriculo - Constantino (1).pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1tczCmw6Ie-5h1xCFbgcIUSQJ0OPcaNtW/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_m40f1p6mu3bkifd",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "LUANA DOS SANTOS SODRÉ",
+      "telefone": "(75) 98295-1282",
+      "email": "lusodre182@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "CURRÍCULO - LUANA DOS SANTOS SODRÉ 2026-1.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/183zQOk_gtitaLAZFO0ZbaPFq6gSQBhZB/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_wu7zu5zmu3bnoe9",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "WANESSA NUNES DOS SANTOS",
+      "telefone": "(75) 98130-4781",
+      "email": "wanessanunes8130@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "CURRÍCULO - WANESSA NUNES DOS SANTOS  2026.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1DJ9vWhv8hXS6vKv-Qm9QURiSC-GwohBV/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_rh656v5mu3borp9",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "SABRINA DIAS SANTOS",
+      "telefone": "71996796520",
+      "email": "sabrinadiassantos377@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo .pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1U_iCSX6GZiQGJOAFowmg_le84snezsz4/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_lh1mn74mu3bqgzf",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "ANA CAROLINE DOS SANTOS GONÇALVES",
+      "telefone": "75 98848-1986",
+      "email": "krol10fsa@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Deixou nove questões obrigatórias sem responder.",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo Ana Caroline -1 (3).pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1hytVVtui5y1hNdx1I7ZSF8PfrSqA71Qc/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_613u817mu3brjpa",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "ANDREA DOS SANTOS BARRETO",
+      "telefone": "075 98146-8338",
+      "email": "andreabarreto185@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Deixou quatro questões obrigatórias sem responder.",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo Andrea atualizado .pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1DwFcNpSfSNKKhFUwiRRhwPvsr4KqwCWo/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_vr8rrc1mu3bsib7",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "ANNA RAQUEL SANTOS PEIXOTO",
+      "telefone": "075 98108-9810",
+      "email": "peixotoannaraquel@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-17",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": true,
+      "dataDeclinio": "2026-09-18",
+      "motivoDeclinio": "Informou que havia esquecido que tinha agendamento médico, e não poderia comparecer na entrevista.",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo Anna Raquel Pieoxoto.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1a3SPx_R7XMj3f2PRB1_nU0M-xqvsoD8V/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": "",
+      "avaliacaoComportamental": null
+    },
+    {
+      "id": "cand_2gwes4nmu3bthox",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "ANA KAROLINA DOS S. SILVA",
+      "telefone": "(75) 98180-3564",
+      "email": "s97@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo Atualizado 2026 (1) (1) (1).pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1zMID6MduCkrvYwHvJEUtXkNvj1UmpBlc/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_x0v449umu3bv3ya",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "BIANCA SILVA DE FREITAS",
+      "telefone": "(75) 99169-1373",
+      "email": "biancasilvadffreitas01@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-26",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo Bianca Silva de Freitas.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/183kesROLj_GmmorpcLaOV4mw9_HXf26a/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_23fdstmmu3bwamz",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "BRUNA FRANCISCA DA PURIFICAÇÃO SANTOS",
+      "telefone": "(75)98272-1908",
+      "email": "bfrancisca314@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "CURRÍCULO DE BRUNA FRANCISCA .pdf.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1WCnguXx23XDohgK6FDZjAeJQ8uafaqvf/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_j4k6i7zmu3bxake",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "CYNTHIA SILVA BISPO",
+      "telefone": "(75) 99121-1607",
+      "email": "cynthia_sissy@hotmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo de Cynthia Bispo.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1sds8MYgtIzeSH5eDCjVifUNL8e4Z7EEe/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_ofnweohmu3byp67",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Naiara Silva Santos Almeida",
+      "telefone": "(75) 98318-6275",
+      "email": "",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-17",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "2026-09-18",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Curriculo de Naiara.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1pZeMbnw4xPbcEEW2e_5yzL9e6ZAPH-Hy/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_jkr9yy1mu3bzufz",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Emanuelle Silva e Silva",
+      "telefone": "(75)9 9915-0805",
+      "email": "emanuellessilva.96@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Curriculo Emanuelle 2026 em PDF.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/16ACQvWIVbQr348_m3U4R8S1hXX8YyRdZ/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_tgs7098mu3c1027",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Ester Dos Santos Lima",
+      "telefone": "75 -99250-5124",
+      "email": "Estersantoslimas4@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo Ester .pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1clHmtX69llbOJDhm7rFL2tGOGkowL837/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_azvbyrkmu3c3akj",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "EVELYN DE JESUS OLIVEIRA",
+      "telefone": "75 98829-4778",
+      "email": "evelyndejesusoliveira394@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-17",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "2026-09-18",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo Evelyn de Jesus _20260831_173731_0000.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1BAOhaxTSrq9CVXLk_n_MEjX8oZqXZblI/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_p2vl88lmu3c3y3s",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Jaqueline da Paixão da Silva",
+      "telefone": "75 98373-1064",
+      "email": "jaquelinepaixao186@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo feira novo .docx",
+      "curriculoUrl": "https://docs.google.com/document/d/18oqVi8WqIYUFkCFyncB7OpCu8EF0h-bQ/edit?usp=drivesdk&ouid=110304743166187140230&rtpof=true&sd=true",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_6kqsfoxmu3c4fga",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Daniela Costa Coelho",
+      "telefone": "(75) 98298-2911",
+      "email": "arajojanedy150@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Documento (2) (1) (2).docx",
+      "curriculoUrl": "https://docs.google.com/document/d/10FcRb4WgsXRaHYg9qw6GjAhCXZs-3lzK/edit?usp=drivesdk&ouid=110304743166187140230&rtpof=true&sd=true",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_0wht29cmu3c4yaa",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Thailane Conceição Araujo",
+      "telefone": "(75) 98365-2333",
+      "email": "Thailane.13fsa@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Deixou nove questões obrigatórias sem responder.",
+      "temCurriculo": true,
+      "curriculoNome": "Curriculo_Thailane_Conceicao_Araujo.docx",
+      "curriculoUrl": "https://docs.google.com/document/d/1GYivcZvkoy2U7j5brDy-6pFlIXdBWxMj/edit?usp=drivesdk&ouid=110304743166187140230&rtpof=true&sd=true",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_qvhrcbxmu3c5iao",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "JERLAN SANTOS DA SILVA",
+      "telefone": "(75) 99893-4918",
+      "email": "jerlansantos2005@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Curriculo_Jerlan_Santos_Com_Idade.docx",
+      "curriculoUrl": "https://docs.google.com/document/d/1KGckF7iz6josaxqryVbBnKPlDLETyqIq/edit?usp=drivesdk&ouid=110304743166187140230&rtpof=true&sd=true",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_ed89y0bmu3c6515",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "RAVENNA SILVA SANTOS",
+      "telefone": "(75) 98147-4399",
+      "email": "raasena357@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-17",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo único.docx",
+      "curriculoUrl": "https://docs.google.com/document/d/1ipL17LwO3UH8IyZS8ChxolpmRPe7SGkQ/edit?usp=drivesdk&ouid=110304743166187140230&rtpof=true&sd=true",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_gjxjzdpmu3cgngm",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "GERLANE MARIA ADONES",
+      "telefone": "(75) 99838-2935",
+      "email": "Gerlaneadones@hotmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "CURRICULO GERLANE ADONES.pdf_20260829_113914_0000.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1W7vQwyUjeEKfEpiDDwBVi-g-TnXVlc80/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_if1uu7qmu3cj4d5",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "ISABELA MONIZ DE OLIVEIRA",
+      "telefone": "(75) 99986-6315",
+      "email": "lunnaove2009@hotmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "curriculo- Isabela -1 (1)-1.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/12o_ufWL1364uzRdfebOl2bEwhGhWS7UH/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_ihigdypmu3clw13",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Isis de Santana Ribeiro",
+      "telefone": "(75) 98324-7402",
+      "email": "isis.sant.27@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "CURRÍCULO ISIS ATUALIZADO 06.08.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1bODQtCiHumu_gKfdBVg0R75PA57J-W3u/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_xqa0pgkmu3cnxk1",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Ismael Profeta de Jesus",
+      "telefone": "(75) 9 8347-3675",
+      "email": "ismaelprofetaxx@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo Ismael Profeta at..pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1gfQzxD_TfunDYzuRRLSAuek9MxZ7zbhX/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_cg39lt2mu3cp0ht",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "AMANDA SANTOS LEMOS",
+      "telefone": "(75)991748666",
+      "email": "amandasantoslemos32@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo minimalista preto e cinza.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1e1hYa2_420grkOOh59AoO1eok-99Sb9p/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_80tays5mu3cr4t0",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "MERISSA DE ALMEIDA ALVES",
+      "telefone": "75 99135-5347",
+      "email": "merissa.lopes4@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "Currículo Novíssimo Merissa.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1kws6q51-3cU4glN2XPZIsq3V_DzWmoh2/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_g7ru039mu3cuw9s",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "MAYANE SANTOS",
+      "telefone": "(75) 98349-4899",
+      "email": "mayane.santoss173@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-15",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_2r3yme4mu3wk6uk",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "WESLANE ARAUJO DOS SANTOS",
+      "telefone": "75 99210-2442",
+      "email": "weslanearauj62@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_d7w4m75mu3wlf1j",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "YASMIN CORREIA",
+      "telefone": "77 98834-1858",
+      "email": "yasmincorreia567@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-17",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Candidata não compareceu na entrevista com RH",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": "",
+      "avaliacaoComportamental": null
+    },
+    {
+      "id": "cand_1gfel1vmu3wm0u1",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "VITOR JOSÉ OLIVEIRA DA SILVA",
+      "telefone": "(75) 98708-8812",
+      "email": "",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-26",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Deixou 5 questões obrigatórias sem responder",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_q0k2r5fmu3wmnmn",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "THAINÁ DOS SANTOS CERQUEIRA",
+      "telefone": "(75) 98238-6870",
+      "email": "santos.thaynatc@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_fy5gwb6mu3wn804",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "RODRIGO ALVES DA SILVA",
+      "telefone": "(75) 9.9180-9807",
+      "email": "rodrigosilva199818@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_sim821cmu3wo4s4",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "NAYMARA DOS SANTOS BARRETOS",
+      "telefone": "75 98712-8525",
+      "email": "naymarasantosbarreto6@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_2ie3431mu3woqw2",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "LUANA CRUZ FERREIRA",
+      "telefone": "(75) 99831-4969",
+      "email": "luanaferreira1211@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Deixou sete questões obrigatórias sem responder.",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_f8e69s7mu3wpjwe",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "LÍVIA PEREIRA MOURA",
+      "telefone": "(75) 98122 -  3975",
+      "email": "liviapereira8097@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_6920klsmu3wq81t",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Lindabergh Caldas Figueiredo",
+      "telefone": "(75) 981777802",
+      "email": "lyyndafigueiredo@hotmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": "",
+      "avaliacaoComportamental": null
+    },
+    {
+      "id": "cand_yycsejrmu3wqzu0",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "KAMILA ABREU DOS SANTOS",
+      "telefone": "(75) 99868-6752",
+      "email": "kamilabreusantos@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "2026-09-17",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": true,
+      "dataDeclinio": "2026-09-17",
+      "motivoDeclinio": "Recebeu o retorno de um outro processo seletivo ontem, e aceitou a proposta.",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": "",
+      "avaliacaoComportamental": {
+        "data": "2026-09-17",
+        "perfil": "D",
+        "scores": {
+          "D": 69,
+          "I": 66,
+          "S": 62,
+          "C": 53
+        }
+      }
+    },
+    {
+      "id": "cand_sdidf4lmu3wrnfq",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Jamile Lima Moura",
+      "telefone": "(71) 99246-7698",
+      "email": "jamilelimamoura8@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_yoa7u8cmu3wsdr2",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "HYGOR S RAMOS",
+      "telefone": "75 98177-6456",
+      "email": "ramos.hygor@icloud.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_019n9pmmu3wtbtr",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Edileni Souza Galiza",
+      "telefone": "(75) 991133393",
+      "email": "lene76751@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_3jpn31ymu3wu1y3",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Vanessa Da Silva Lima",
+      "telefone": "(75) 98233-4925",
+      "email": "vanessasilva199951@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_p1fv6gtmu3wuxw7",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "JULIAN PEREIRA DO CARMO",
+      "telefone": "(75) 9 8140-9072",
+      "email": "juliancarmo41@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_xo9hpuemu3wvj6i",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "JESSICA PEREIRA DE AGUILAR",
+      "telefone": "(75) 9 8369-2562",
+      "email": "jessic.aguilar2412@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Deixou sete questões obrigatórias sem responder.",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_n7xjhttmu3ww4ub",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Daniele Almeida de Jesus",
+      "telefone": "(75) 98807-1217",
+      "email": "danialmeidafssa32@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_srflbfimu3wwt6y",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "REBECA MOREIRA DANTAS",
+      "telefone": "(75) 99252-7028",
+      "email": "rebecamoreirad00@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_76fmg6amu3wxypy",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "RAFHAELA DA SILVA",
+      "telefone": "075981859149",
+      "email": "raphalas@yahoo.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-17",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "2026-09-18",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": "",
+      "avaliacaoComportamental": {
+        "data": "2026-09-18",
+        "perfil": "C",
+        "scores": {
+          "D": 57,
+          "I": 52,
+          "S": 57,
+          "C": 84
+        }
+      }
+    },
+    {
+      "id": "cand_f89d1gumu3wylxa",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "RAQUEL DOS SANTOS SOARES DIAS",
+      "telefone": "(75) 98893-5300",
+      "email": "raquelsoaresdias1234@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_s1hr1hdmu3wzfix",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "MÔNICA MARIA DE JESUS DOS SANTOS",
+      "telefone": "(75) 98133-8027",
+      "email": "ms1798441@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_ogvllb0mu3x0afx",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "MARIA EDUARDA DA SILVA SOARES",
+      "telefone": "(75) 9 8314-9462",
+      "email": "duda88970@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_ld2w97bmu3x1fju",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "MARCELA RIBEIRO LEITE",
+      "telefone": "75 98116-4317",
+      "email": "leitemarcela123@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-17",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_z4k07vimu3x2ydo",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "JAINNE HUNGRIA SILVA SANTANA",
+      "telefone": "75 98287-3791",
+      "email": "jainnehungria06@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_yltkh2lmu3x3uco",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "Cristiane dos Santos Rios",
+      "telefone": "(75) 98296-3048",
+      "email": "crisfsa_@hotmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_12fp6jamu3x4xd0",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "DÉBORA CRISTINA BISPO DOS SANTOS",
+      "telefone": "(75) 98209-4823",
+      "email": "deboracristinabs@yahoo.com.br",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_pj4k1ydmu3x604e",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "ADRIELE LIMA DE FREITAS",
+      "telefone": "(75) 99856-2052",
+      "email": "adrielefreitas18@hotmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "Deixou seis questões obrigatórias sem responder.",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "",
+      "areaInteresse": ""
+    },
+    {
+      "id": "cand_nx3utu9mu418nog",
+      "clienteId": "cli_rgf6q7rmu411qyb",
+      "cargoId": "vg_22wqmipmu41310u",
+      "nome": "SUELLEN SANTOS PIRES",
+      "telefone": "(75) 98806-6496",
+      "email": "",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": ""
+    },
+    {
+      "id": "cand_8wx67o9mu419ht1",
+      "clienteId": "cli_rgf6q7rmu411qyb",
+      "cargoId": "vg_22wqmipmu41310u",
+      "nome": "ROSANA ARAÚJO",
+      "telefone": "(75) 98104-5845",
+      "email": "araujorosana130@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-08",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": ""
+    },
+    {
+      "id": "cand_yw2xxdtmu41aoga",
+      "clienteId": "cli_rgf6q7rmu411qyb",
+      "cargoId": "vg_22wqmipmu41310u",
+      "nome": "FERNANDA DA SILVA AMORIM DE BRITO",
+      "telefone": "(75) 98230-6168",
+      "email": "fernandamorim1221@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-08",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-16",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": ""
+    },
+    {
+      "id": "cand_a4qkgqvmu41cwu8",
+      "clienteId": "cli_rgf6q7rmu411qyb",
+      "cargoId": "vg_22wqmipmu41310u",
+      "nome": "RAYANE GONÇALVES PINHO FELÍCIO",
+      "telefone": "71 98251-7942",
+      "email": "ryanepinho2006@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "2026-09-09",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": ""
+    },
+    {
+      "id": "cand_xe9psjgmu41dq5s",
+      "clienteId": "cli_rgf6q7rmu411qyb",
+      "cargoId": "vg_22wqmipmu41310u",
+      "nome": "LUANA CRUZ FERREIRA",
+      "telefone": "(75) 99831-4969",
+      "email": "luanaferreira1211@gmail.com",
+      "origem": "",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-08",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "2026-09-09",
+          "resultado": "nao_avancou"
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "Caixa, atendimento"
+    },
+    {
+      "id": "cand_q787t11mu4dgnmm",
+      "clienteId": "cli_7xa7quumu25pt8q",
+      "cargoId": "vg_w5cpxoimu25y009",
+      "nome": "Gabriel Bastos Borges",
+      "telefone": "71 99339-1266",
+      "email": "",
+      "origem": "Outro",
+      "dataRecebimento": "2026-09-16",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-16",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": ""
+    },
+    {
+      "id": "cand_yqvzjvumu6a3utc",
+      "clienteId": "",
+      "cargoId": "",
+      "nome": "IVANA ARAÚJO BRITO",
+      "telefone": "75 99908-0094",
+      "email": "ivanairis1@hotmail.com",
+      "origem": "Indicação",
+      "dataRecebimento": "2026-09-17",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "",
+      "curriculoUrl": "",
+      "inscricaoId": "",
+      "bancoDeCurriculos": true,
+      "bancoAnotacoes": "Indicada por Ilka Barros",
+      "areaInteresse": "Farmacêutica",
+      "avaliacaoComportamental": null
+    },
+    {
+      "id": "cand_2ke9ylbmu6xvwyy",
+      "inscricaoId": "insc_1789737433902_4733",
+      "clienteId": "cli_7xa7quumu25pt8q",
+      "cargoId": "vg_w5cpxoimu25y009",
+      "nome": "Ana Caroline Peixoto Oliveira",
+      "telefone": "75 998853645",
+      "email": "carolpeixoto.oliveira@gmail.com",
+      "origem": "Página pública (link)",
+      "dataRecebimento": "2026-09-18",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": false,
+      "curriculoNome": "CAROLINE PEIXOTO - RECRUTAMENTO E SELEÇAO.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1PejD6ixUMph0HjscCGKfrBEKPj7EbKrj/view?usp=drivesdk"
+    },
+    {
+      "id": "cand_zpzbw1kmu71cw19",
+      "clienteId": "cli_g2gxhm8mu26y8py",
+      "cargoId": "vg_a1c7tbwmu27183q",
+      "nome": "JESSICA MOREIRA FERREIRA",
+      "telefone": "(75) 99939-5578",
+      "email": "jessicamoreiraferreira3@gmail.com",
+      "origem": "Indicação",
+      "dataRecebimento": "2026-09-18",
+      "etapas": [
+        {
+          "chave": "triagem",
+          "nome": "Triagem de currículo",
+          "data": "2026-09-18",
+          "resultado": "avancou"
+        },
+        {
+          "chave": "entrevista_rh",
+          "nome": "Entrevista RH",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "avaliacao_comportamental",
+          "nome": "Avaliação comportamental",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "entrevista_gestor",
+          "nome": "Entrevista com gestor / cliente",
+          "data": "",
+          "resultado": ""
+        },
+        {
+          "chave": "proposta",
+          "nome": "Proposta",
+          "data": "",
+          "resultado": ""
+        }
+      ],
+      "convidado": false,
+      "declinou": false,
+      "dataDeclinio": "",
+      "motivoDeclinio": "",
+      "statusManual": "",
+      "observacoes": "",
+      "temCurriculo": true,
+      "curriculoNome": "8. JESSICA MOREIRA FERREIRA - CURRICULO.pdf",
+      "curriculoUrl": "https://drive.google.com/file/d/1HpV2ZVri71YEljLsx9IUkToyp28YAgpf/view?usp=drivesdk",
+      "inscricaoId": "",
+      "bancoDeCurriculos": false,
+      "bancoAnotacoes": "",
+      "areaInteresse": "",
+      "avaliacaoComportamental": null
+    }
+  ],
+  "configuracoes": {
+    "mensagemAprovado": "Olá {nome}! Temos uma ótima notícia: você foi aprovado(a) no processo seletivo para a vaga de {vaga}! 🎉 Em breve entraremos em contato com os próximos passos.",
+    "mensagemReprovado": "Olá {nome}, obrigado(a) por participar do nosso processo seletivo para a vaga de {vaga}. Neste momento optamos por seguir com outro(a) candidato(a), mas vamos manter seu currículo em nosso banco de talentos para futuras oportunidades. Agradecemos muito sua participação!",
+    "mensagemAvaliacao": "Olá {nome}! Tudo bem? Você segue no nosso processo seletivo para a vaga de {vaga}. A próxima etapa é uma avaliação comportamental rápida (leva uns 8 a 10 minutinhos). Por favor, responda por este link: {link}"
+  },
+  "colaboradores": [
+    {
+      "id": "colab_bimjdvsmu672qw0",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ALINE DE OLIVEIRA SOUZA CARDOSO",
+      "funcaoId": "func_9im7vgsmu675mab",
+      "dataAdmissao": "2026-04-07",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "4500.00",
+      "historicoSalarial": [],
+      "emAfastamento": false,
+      "tipoAfastamento": "",
+      "dataInicioAfastamento": "",
+      "dataFimAfastamento": "",
+      "tipoDesligamento": "",
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_gyy7ucrmu67sk1l",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "LUCIANA LIMA CARDOSO",
+      "funcaoId": "func_ah7k69fmu67q1e5",
+      "dataAdmissao": "2026-03-16",
+      "dataDesligamento": "2026-06-13",
+      "motivoDesligamento": "PEDIDO DE DEMISSÃO",
+      "observacoes": "",
+      "salarioAdmissao": "4300.00",
+      "historicoSalarial": [],
+      "emAfastamento": false,
+      "tipoAfastamento": "",
+      "dataInicioAfastamento": "",
+      "dataFimAfastamento": "",
+      "tipoDesligamento": "",
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_5np65zqmu67v8t3",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "DAVI FERNANDES DOS SANTOS",
+      "funcaoId": "func_rfqs4pkmu67fqvz",
+      "dataAdmissao": "2026-02-04",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "",
+      "historicoSalarial": [],
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_okhdellmu67w4er",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "JIRLENE DE SOUZA GONÇALVES",
+      "funcaoId": "func_tevpfg4mu67j1ze",
+      "dataAdmissao": "2025-10-01",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "",
+      "historicoSalarial": [],
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_tm1ibhhmu67x1gu",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ANATALIA ALBANO DA SILVA ARAUJO",
+      "funcaoId": "func_bhpe68smu67egzj",
+      "dataAdmissao": "2026-01-26",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "",
+      "historicoSalarial": [],
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_ta10839mu67y3p9",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "THIAGO DA CRUZ SILVA",
+      "funcaoId": "func_e1ek2himu67hosc",
+      "dataAdmissao": "2025-10-01",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "",
+      "historicoSalarial": [],
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_bu4flyvmu67z2fm",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "WALTER MATHEUS DA SILVA MONTEIRO",
+      "funcaoId": "func_qnkhs29mu67il52",
+      "dataAdmissao": "2026-03-16",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "",
+      "historicoSalarial": [],
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_4ilbquomu67zvhv",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ANA MIRELA DE CASTRO SANTANA CRUZ",
+      "funcaoId": "func_fw28vhlmu67mb1l",
+      "dataAdmissao": "2026-04-01",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "4300.00",
+      "historicoSalarial": [],
+      "emAfastamento": false,
+      "tipoAfastamento": "",
+      "dataInicioAfastamento": "",
+      "dataFimAfastamento": "",
+      "tipoDesligamento": "",
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_debd9wmmu680jlh",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "LAYLA SANTOS SANTANA",
+      "funcaoId": "func_qjx9prwmu67ghrw",
+      "dataAdmissao": "2026-06-26",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "",
+      "historicoSalarial": [],
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_l9me6irmu6819vl",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "LUCAS CAVALCANTE ALMEIDA",
+      "funcaoId": "func_tevpfg4mu67j1ze",
+      "dataAdmissao": "2026-06-08",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "",
+      "historicoSalarial": [],
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    },
+    {
+      "id": "colab_1cd98kdmu6820i4",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "MILLENA ARAÚJO SANTOS",
+      "funcaoId": "",
+      "dataAdmissao": "2026-07-14",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "",
+      "historicoSalarial": [],
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": "45",
+      "duracaoExperiencia2": "45",
+      "emAfastamento": false,
+      "tipoAfastamento": "",
+      "dataInicioAfastamento": "",
+      "dataFimAfastamento": "",
+      "tipoDesligamento": ""
+    },
+    {
+      "id": "colab_6z5bwaamu682yin",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "VALQUIRIA PINTO PEREIRA SANTOS",
+      "funcaoId": "func_qnkhs29mu67il52",
+      "dataAdmissao": "2026-09-04",
+      "dataDesligamento": "",
+      "motivoDesligamento": "",
+      "observacoes": "",
+      "salarioAdmissao": "4300.00",
+      "historicoSalarial": [],
+      "emAfastamento": false,
+      "tipoAfastamento": "",
+      "dataInicioAfastamento": "",
+      "dataFimAfastamento": "",
+      "tipoDesligamento": "",
+      "telefone": "",
+      "email": "",
+      "registros": [],
+      "avaliacoesExperiencia": [],
+      "duracaoExperiencia1": 45,
+      "duracaoExperiencia2": 45
+    }
+  ],
+  "funcoes": [
+    {
+      "id": "func_9im7vgsmu675mab",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ANALISTA DE DEPARTAMENTO PESSOAL SR",
+      "subordinadoA": "CEO",
+      "area": "DP"
+    },
+    {
+      "id": "func_bhpe68smu67egzj",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ANALISTA DE DEPARTAMENTO PESSOAL JR",
+      "subordinadoA": "ANALISTA DEPARTAMENTO PESSOAL SR",
+      "area": "DP"
+    },
+    {
+      "id": "func_tdztfu5mu67eyly",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ANALISTA DE DEPARTAMENTO PESSOAL PL",
+      "subordinadoA": "ANALISTA DEPARTAMENTO PESSOAL SR",
+      "area": "DP"
+    },
+    {
+      "id": "func_rfqs4pkmu67fqvz",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ASSISTENTE DE DEPARTAMENTO PESSOAL",
+      "subordinadoA": "ANALISTA DEPARTAMENTO PESSOAL SR",
+      "area": "DP"
+    },
+    {
+      "id": "func_qjx9prwmu67ghrw",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "AUXILIAR DEPARTAMENTO CONTÁBIL",
+      "subordinadoA": "LIDER DEPARTAMENTO CONTABIL/FISCAL",
+      "area": "CONTÁBIL"
+    },
+    {
+      "id": "func_e1ek2himu67hosc",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ASSISTENTE DE DEPARTAMENTO CONTÁBIL",
+      "subordinadoA": "LIDER DEPARTAMENTO CONTABIL/FISCAL",
+      "area": "CONTÁBIL"
+    },
+    {
+      "id": "func_qnkhs29mu67il52",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ANALISTA DE DEPARTAMENTO CONTÁBIL SR",
+      "subordinadoA": "LIDER DEPARTAMENTO CONTABIL/FISCAL",
+      "area": "CONTÁBIL"
+    },
+    {
+      "id": "func_tevpfg4mu67j1ze",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "AUXILIAR DEPARTAMENTO FISCAL",
+      "subordinadoA": "LIDER DEPARTAMENTO CONTABIL/FISCAL",
+      "area": "FISCAL"
+    },
+    {
+      "id": "func_tr4x1rimu67m143",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ASSISTENTE DEPARTAMENTO FISCAL",
+      "subordinadoA": "LIDER DEPARTAMENTO CONTABIL/FISCAL",
+      "area": "FISCAL"
+    },
+    {
+      "id": "func_fw28vhlmu67mb1l",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "ANALISTA DEPARTAMENTO FISCAL SR",
+      "subordinadoA": "LIDER DEPARTAMENTO CONTABIL/FISCAL",
+      "area": "FISCAL"
+    },
+    {
+      "id": "func_ah7k69fmu67q1e5",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "nome": "LÍDER DEPARTAMENTO FISCAL",
+      "subordinadoA": "CEO",
+      "area": "FISCAL"
+    }
+  ],
+  "descritivosCargo": [
+    {
+      "id": "desc_eiq7uutmu67cooj",
+      "funcaoId": "func_9im7vgsmu675mab",
+      "versao": "00",
+      "data": "2026-09-17",
+      "sumario": "Liderar e acompanhar as rotinas de Departamento Pessoal, assegurando a execução correta dos processos de admissão, folha, encargos, jornada, benefícios, férias, afastamentos e desligamentos. Atua por meio da coordenação operacional da equipe, definição de prioridades, conferência técnica e suporte às lideranças, com o objetivo de garantir conformidade legal, organização dos processos e qualidade das entregas da área.",
+      "atividadesPrincipais": "•\tLiderar a execução das rotinas de Departamento Pessoal, distribuindo atividades, acompanhando prazos e apoiando tecnicamente a equipe.\n•\tConferir e validar processos de admissão, folha de pagamento, férias, rescisões, encargos trabalhistas e previdenciários.\n•\tSupervisionar processos e tratar inconsistências.\n•\tAcompanhar o envio de obrigações acessórias e informações legais, como eSocial, FGTS Digital e demais rotinas correlatas.\n•\tOrientar colaboradores, gestores e equipe interna sobre procedimentos de DP, legislação trabalhista e políticas internas.\n•\tMonitorar afastamentos previdenciários, benefícios, licenças e retornos ao trabalho.\n•\tGarantir a organização documental da área, bem como a rastreabilidade e segurança das informações trabalhistas.\n•\tIdentificar riscos, falhas operacionais e oportunidades de melhoria nos processos de Departamento Pessoal.\n•\tAcompanhar indicadores da área, produtividade da equipe e cumprimento de cronogramas mensais.\n•\tApoiar auditorias, fiscalizações e demandas estratégicas relacionadas à administração de pessoal.\n•\tDesenvolver tecnicamente o time, oferecendo direcionamento, acompanhamento e devolutivas sobre a execução das atividades.",
+      "grauInstrucao": "Superior Completo",
+      "formacaoRequerida": "Ciências Contábeis, Administração, Gestão de Rh",
+      "experienciaComFormacao": "24 meses",
+      "experienciaSemFormacao": "",
+      "habilidadesComportamentais": [
+        {
+          "nome": "Liderança de Pessoas",
+          "nivel": "1"
+        },
+        {
+          "nome": "Comunicação assertiva",
+          "nivel": "1"
+        },
+        {
+          "nome": "Organização",
+          "nivel": "1"
+        },
+        {
+          "nome": "Ética",
+          "nivel": "1"
+        },
+        {
+          "nome": "Orientação para processos",
+          "nivel": "1"
+        }
+      ],
+      "habilidadesTecnicas": [
+        {
+          "nome": "Legislação trabalhista e previdenciária aplicada ao DP",
+          "nivel": "1"
+        },
+        {
+          "nome": "Conferência e validação de folha de pagamento, férias, rescisões e encargos",
+          "nivel": "1"
+        },
+        {
+          "nome": "eSocial, FGTS Digital e obrigações acessórias da área",
+          "nivel": "1"
+        },
+        {
+          "nome": "Domínio de pacote Office, especialmente Excel",
+          "nivel": "2"
+        },
+        {
+          "nome": "Conhecimento do Sistema Domínio",
+          "nivel": "1"
+        }
+      ],
+      "observacao": "",
+      "aprovadoPor": "",
+      "dataAprovacao": ""
+    }
+  ],
+  "mensalidadesBPO": [
+    {
+      "id": "mens_6spwbcamu69783w",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "mesReferencia": "2026-08",
+      "valor": "2000.00",
+      "statusPagamento": "pendente",
+      "dataPagamento": "",
+      "observacoes": ""
+    },
+    {
+      "id": "mens_oos6x24mu698fxu",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "mesReferencia": "2026-07",
+      "valor": "2000.00",
+      "statusPagamento": "pendente",
+      "dataPagamento": "",
+      "observacoes": ""
+    },
+    {
+      "id": "mens_j372hnbmu6990x2",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "mesReferencia": "2026-01",
+      "valor": "2000",
+      "statusPagamento": "pago",
+      "dataPagamento": "",
+      "observacoes": ""
+    },
+    {
+      "id": "mens_o3wieugmu699enj",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "mesReferencia": "2026-02",
+      "valor": "2000",
+      "statusPagamento": "pago",
+      "dataPagamento": "",
+      "observacoes": ""
+    },
+    {
+      "id": "mens_3enksnmmu699onq",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "mesReferencia": "2026-03",
+      "valor": "2000",
+      "statusPagamento": "pago",
+      "dataPagamento": "",
+      "observacoes": ""
+    },
+    {
+      "id": "mens_aljqsqdmu699yed",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "mesReferencia": "2026-04",
+      "valor": "2000",
+      "statusPagamento": "pago",
+      "dataPagamento": "",
+      "observacoes": ""
+    },
+    {
+      "id": "mens_z1b2tzgmu69abqu",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "mesReferencia": "2026-05",
+      "valor": "2000",
+      "statusPagamento": "pago",
+      "dataPagamento": "",
+      "observacoes": ""
+    },
+    {
+      "id": "mens_7vjuapomu69amtb",
+      "clienteId": "cli_v3w1w1qmu25fxtp",
+      "mesReferencia": "2026-06",
+      "valor": "2000",
+      "statusPagamento": "pago",
+      "dataPagamento": "",
+      "observacoes": ""
+    }
+  ],
+  "servicosAvulsos": [
+    {
+      "id": "serv_akc0akdmu72vcev",
+      "clienteId": "cli_8llrkermu72uc1u",
+      "tipoServico": "Treinamento",
+      "descricao": "Gestão de Conflitos - Coordenadores",
+      "dataServico": "2026-10-05",
+      "valor": "2000.00",
+      "statusPagamento": "pendente",
+      "dataPagamento": "",
+      "observacoes": ""
+    }
+  ],
+  "absenteismo": [],
+  "agenda": [
+    {
+      "id": "ag_aq7u2eumu74ypvs",
+      "titulo": "JUSTIÇA DO TRABALHO",
+      "data": "2026-09-21",
+      "hora": "08:30",
+      "tipo": "Outro",
+      "clienteId": "",
+      "descricao": "VPO - VISITA JUSTIÇA DO TRABALHO COM ALUNOS - GRAU TÉCNICO",
+      "concluido": false
+    },
+    {
+      "id": "ag_qkc79v5mu74z15q",
+      "titulo": "UNHA",
+      "data": "2026-09-21",
+      "hora": "11:30",
+      "tipo": "Reunião",
+      "clienteId": "",
+      "descricao": "OAB",
+      "concluido": false
+    },
+    {
+      "id": "ag_aqoxz42mu7513k3",
+      "titulo": "MAXXIMIZE - ROTA DE LÍDERES",
+      "data": "2026-09-21",
+      "hora": "14:00",
+      "tipo": "Reunião",
+      "clienteId": "",
+      "descricao": "",
+      "concluido": false
+    }
+  ]
+}
