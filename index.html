@@ -706,12 +706,13 @@ const MENSAGEM_REPROVADO_PADRAO = 'Olá {nome}, obrigado(a) por participar do no
 const MENSAGEM_AVALIACAO_PADRAO = 'Olá {nome}! Tudo bem? Você segue no nosso processo seletivo para a vaga de {vaga}. A próxima etapa é uma avaliação comportamental rápida (leva uns 8 a 10 minutinhos). Por favor, responda por este link: {link}';
 
 const BENEFICIOS_PADRAO = [
-  {chave:'va_vr', nome:'VA/VR (Vale Alimentação/Refeição)', placeholder:'Ex.: R$ 35,00 por dia útil'},
-  {chave:'vt', nome:'VT (Vale Transporte)', placeholder:'Ex.: conforme legislação (desconto de até 6% do salário)'},
-  {chave:'wellhub', nome:'Wellhub (Gympass)', placeholder:'Ex.: Plano Gold, custeado pela empresa'},
-  {chave:'assistenciaMedica', nome:'Assistência médica', placeholder:'Ex.: Unimed, coparticipação 20%'},
+  {chave:'va_vr', nome:'VA/VR (Vale Alimentação/Refeição)', placeholder:'Ex.: R$ 15,00 por dia trabalhado'},
+  {chave:'vt', nome:'VT (Vale Transporte)', placeholder:'Ex.: R$ 11,00 por dia trabalhado'},
+  {chave:'wellhub', nome:'Wellhub (Gympass)', placeholder:'Ex.: convênio com planos de academia, pagos no app'},
+  {chave:'assistenciaMedica', nome:'Assistência médica', placeholder:'Ex.: União Médica — Subsídio de R$ 230,00 — Com coparticipação'},
   {chave:'assistenciaOdontologica', nome:'Assistência odontológica', placeholder:'Ex.: Odontoprev'},
-  {chave:'dayOff', nome:'Day off', placeholder:'Ex.: 1 dia no mês do aniversário'}
+  {chave:'dayOff', nome:'Day off', placeholder:'Ex.: 1 dia no mês do aniversário'},
+  {chave:'conexa', nome:'Conexa (suporte psicológico e nutricional)', placeholder:'Ex.: 2 consultas mensais gratuitas com psicólogo e nutricionista'}
 ];
 function beneficiosVazios(){
   const obj = {};
@@ -735,6 +736,7 @@ function garantirConfiguracoes(){
   if(!Array.isArray(db.absenteismo)) db.absenteismo = [];
   if(!Array.isArray(db.agenda)) db.agenda = [];
   db.agenda.forEach(e=>{ if(!e.ata) e.ata = {participantes:'', decisoes:'', proximosPassos:''}; });
+  if(!Array.isArray(db.diagnosticosCultura)) db.diagnosticosCultura = [];
   db.clientes.forEach(cl=>{
     if(!cl.tipoServico) cl.tipoServico = 'rs';
     if(cl.valorMensalidadeBPO===undefined) cl.valorMensalidadeBPO = '';
@@ -1467,6 +1469,7 @@ function viewCandidatos(){
         <span class="btn btn-ghost btn-sm" data-action="editar-candidato" data-id="${c.id}">Ver / editar</span>
         ${(statusCandidato(c)==='em_processo' && c.etapas.some(e=>e.resultado==='')) ? '<span class="btn btn-ghost btn-sm" data-action="avancar-etapa" data-id="'+c.id+'" title="Marcar próxima etapa como avançada">▶ Avançar</span>' : ''}
         ${appsScriptConfigurado() ? '<span class="btn btn-ghost btn-sm" data-action="avaliacao-comportamental" data-id="'+c.id+'" title="Enviar/ver avaliação comportamental">🧭'+(c.avaliacaoComportamental&&c.avaliacaoComportamental.data?' '+esc(c.avaliacaoComportamental.perfil):'')+'</span>' : ''}
+        ${statusCandidato(c)==='contratado' ? '<span class="btn btn-ghost btn-sm" data-action="carta-proposta" data-id="'+c.id+'" title="Gerar carta proposta">📄 Proposta</span>' : ''}
         ${btnWhatsApp(c.telefone, c.nome)}
         ${c.curriculoUrl ? '<a class="btn btn-ghost btn-sm" href="'+esc(c.curriculoUrl)+'" target="_blank">Ver CV</a>' : (c.temCurriculo ? '<span class="btn btn-ghost btn-sm" data-action="baixar-curriculo" data-id="'+c.id+'">Baixar CV</span>' : '')}
         <span class="btn btn-ghost btn-sm" data-action="excluir-candidato" data-id="${c.id}">Excluir</span>
@@ -1918,10 +1921,11 @@ function viewColaboradores(){
 
     ${viewResumoBeneficios(cl)}
 
-    <div style="display:flex;gap:8px;margin-bottom:14px;">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
       <span class="btn ${state.colabAba==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="colaboradores">Colaboradores</span>
       <span class="btn ${state.colabAba==='funcoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="funcoes">Funções e cargos</span>
       <span class="btn ${state.colabAba==='absenteismo'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="absenteismo">Absenteísmo</span>
+      <span class="btn ${state.colabAba==='cultura'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="cultura">Cultura Organizacional</span>
     </div>
 
     ${state.colabAba==='colaboradores' ? `
@@ -1946,7 +1950,45 @@ function viewColaboradores(){
     </div>
     ${funcoes.length===0 ? '<div class="card empty-state"><h3>Nenhuma função cadastrada</h3><p>Clique em "+ Nova função" para começar.</p></div>' : `
     <div class="card table-wrap"><table><thead><tr><th>Título do cargo</th><th>Subordinado a</th><th>Área</th><th>Ocupação</th><th>Descritivo</th><th></th></tr></thead><tbody>${linhasFuncoes}</tbody></table></div>`}
-    ` : viewAbsenteismo(cl)}
+    ` : state.colabAba==='absenteismo' ? viewAbsenteismo(cl) : viewDiagnosticoCulturaAdmin(cl)}
+  `;
+}
+
+function viewDiagnosticoCulturaAdmin(cliente){
+  if(!appsScriptConfigurado()){
+    return '<div class="card empty-state"><h3>Integração com o Google ainda não configurada</h3><p>Essa funcionalidade depende do link público, que precisa da integração ativa.</p></div>';
+  }
+  const resultado = calcularResultadoCultura(cliente.id);
+  const respostas = db.diagnosticosCultura.filter(d=>d.clienteId===cliente.id).slice().sort((a,b)=>b.data.localeCompare(a.data));
+  const maxMedia = 5;
+
+  return `
+    <div class="topbar" style="margin-bottom:10px;">
+      <div><p class="hint">${resultado.totalRespostas} resposta(s) recebida(s)</p></div>
+      <span class="btn btn-primary btn-sm" data-action="link-cultura" data-id="${cliente.id}">🔗 Enviar link do diagnóstico</span>
+    </div>
+
+    ${resultado.totalRespostas===0 ? '<div class="card empty-state"><h3>Nenhuma resposta ainda</h3><p>Envie o link para os colaboradores desta empresa responderem. Quanto mais pessoas responderem, mais confiável fica o resultado.</p></div>' : `
+    <div class="card" style="margin-bottom:22px;">
+      <h3 style="font-size:15px;margin-bottom:4px;">Perfil de cultura dominante: ${PERFIS_CULTURA[resultado.dominante].nome}</h3>
+      <p class="hint" style="margin-bottom:16px;">${esc(PERFIS_CULTURA[resultado.dominante].descricao)}</p>
+      ${['cla','adhocracia','mercado','hierarquia'].map(tipo=>`
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+            <strong>${PERFIS_CULTURA[tipo].nome}</strong><span>${resultado.mediaPorTipo[tipo]} / 5</span>
+          </div>
+          <div class="funnel-bar-bg"><div class="funnel-bar" style="width:${Math.round((resultado.mediaPorTipo[tipo]/maxMedia)*100)}%;${tipo===resultado.dominante?'':'opacity:.55;'}"></div></div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:15px;margin-bottom:12px;">Respostas individuais</h3>
+      <div class="table-wrap"><table><thead><tr><th>Data</th><th>Respondente</th></tr></thead><tbody>
+        ${respostas.map(r=>'<tr><td>'+formatDate(r.data)+'</td><td>'+esc(r.nomeRespondente||'Anônimo')+'</td></tr>').join('')}
+      </tbody></table></div>
+    </div>
+    `}
   `;
 }
 
@@ -2290,6 +2332,12 @@ function getHashAvaliacaoId(){
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+function getHashCulturaId(){
+  const h = window.location.hash || '';
+  const m = h.match(/^#cultura-(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 function paginaPublicaIndisponivel(mensagem){
   return `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
     <h2 style="margin-bottom:10px;">Vaga não disponível</h2>
@@ -2366,6 +2414,98 @@ const PERFIS_COMPORTAMENTAIS = {
 function linkAvaliacao(candidatoId){
   return window.location.origin + window.location.pathname + '#avaliacao-' + candidatoId;
 }
+
+const DIMENSOES_CULTURA = [
+  {
+    chave:'caracteristicas', nome:'Características Dominantes',
+    afirmacoes:{
+      cla:'A organização é um lugar muito pessoal, como uma grande família. As pessoas parecem compartilhar muito de si mesmas.',
+      adhocracia:'A organização é um lugar muito dinâmico e empreendedor. As pessoas estão dispostas a assumir riscos.',
+      mercado:'A organização é orientada para resultados. A principal preocupação é fazer o trabalho ser feito; as pessoas são competitivas e focadas em objetivos.',
+      hierarquia:'A organização é um lugar muito controlado e estruturado. Procedimentos formais geralmente governam o que as pessoas fazem.'
+    }
+  },
+  {
+    chave:'lideranca', nome:'Liderança Organizacional',
+    afirmacoes:{
+      cla:'A liderança é geralmente considerada um exemplo de mentoria, facilitação ou cuidado com as pessoas.',
+      adhocracia:'A liderança é geralmente considerada um exemplo de empreendedorismo, inovação ou disposição a assumir riscos.',
+      mercado:'A liderança é geralmente considerada um exemplo de foco em resultados, agressividade ou orientação a objetivos.',
+      hierarquia:'A liderança é geralmente considerada um exemplo de coordenação, organização ou eficiência.'
+    }
+  },
+  {
+    chave:'gestaoPessoas', nome:'Gestão de Pessoas',
+    afirmacoes:{
+      cla:'O estilo de gestão é caracterizado por trabalho em equipe, consenso e participação.',
+      adhocracia:'O estilo de gestão é caracterizado por assumir riscos individuais, inovação, liberdade e singularidade.',
+      mercado:'O estilo de gestão é caracterizado por competitividade exigente, alta demanda e realização.',
+      hierarquia:'O estilo de gestão é caracterizado por segurança no emprego, conformidade, previsibilidade e estabilidade.'
+    }
+  },
+  {
+    chave:'uniao', nome:'União da Organização',
+    afirmacoes:{
+      cla:'O que mantém a organização unida é a lealdade e a confiança mútua. O comprometimento é alto.',
+      adhocracia:'O que mantém a organização unida é o compromisso com inovação e desenvolvimento. Há ênfase em estar na vanguarda.',
+      mercado:'O que mantém a organização unida é a ênfase em realização e cumprimento de metas.',
+      hierarquia:'O que mantém a organização unida são regras e políticas formais. Manter a organização funcionando de forma tranquila é importante.'
+    }
+  },
+  {
+    chave:'enfases', nome:'Ênfases Estratégicas',
+    afirmacoes:{
+      cla:'A organização enfatiza o desenvolvimento humano. Alta confiança, abertura e participação persistem.',
+      adhocracia:'A organização enfatiza adquirir novos recursos e criar novos desafios. Experimentar coisas novas é valorizado.',
+      mercado:'A organização enfatiza ações competitivas e realização. Atingir metas e vencer no mercado é importante.',
+      hierarquia:'A organização enfatiza permanência e estabilidade. Eficiência, controle e operações tranquilas são importantes.'
+    }
+  },
+  {
+    chave:'sucesso', nome:'Critérios de Sucesso',
+    afirmacoes:{
+      cla:'A organização define sucesso com base no desenvolvimento de pessoas, trabalho em equipe e cuidado com as pessoas.',
+      adhocracia:'A organização define sucesso com base em ter os produtos/serviços mais exclusivos ou mais novos. É líder em inovação.',
+      mercado:'A organização define sucesso com base em vencer no mercado e superar a concorrência.',
+      hierarquia:'A organização define sucesso com base em eficiência. Entrega confiável, cronogramas tranquilos e baixo custo.'
+    }
+  }
+];
+
+const PERFIS_CULTURA = {
+  cla: {nome:'Clã', descricao:'Ambiente colaborativo, como uma família. Valoriza lealdade, trabalho em equipe, desenvolvimento das pessoas e participação.'},
+  adhocracia: {nome:'Adhocracia', descricao:'Ambiente dinâmico e empreendedor. Valoriza inovação, criatividade, disposição a assumir riscos e estar à frente do mercado.'},
+  mercado: {nome:'Mercado', descricao:'Ambiente orientado a resultados e competitividade. Valoriza metas, produtividade e vencer a concorrência.'},
+  hierarquia: {nome:'Hierarquia', descricao:'Ambiente estruturado e controlado. Valoriza eficiência, procedimentos formais, estabilidade e previsibilidade.'}
+};
+
+function linkDiagnosticoCultura(clienteId){
+  return window.location.origin + window.location.pathname + '#cultura-' + clienteId;
+}
+
+function calcularResultadoCultura(clienteId){
+  const respostas = db.diagnosticosCultura.filter(d=>d.clienteId===clienteId);
+  const somas = {cla:0, adhocracia:0, mercado:0, hierarquia:0};
+  let totalItens = 0;
+  respostas.forEach(r=>{
+    DIMENSOES_CULTURA.forEach(dim=>{
+      const resp = r.respostas[dim.chave];
+      if(!resp) return;
+      ['cla','adhocracia','mercado','hierarquia'].forEach(tipo=>{
+        if(resp[tipo]!==undefined){ somas[tipo]+=parseFloat(resp[tipo])||0; totalItens++; }
+      });
+    });
+  });
+  const mediaPorTipo = {};
+  const itensPorTipo = respostas.length * DIMENSOES_CULTURA.length;
+  ['cla','adhocracia','mercado','hierarquia'].forEach(tipo=>{
+    mediaPorTipo[tipo] = itensPorTipo>0 ? Math.round((somas[tipo]/itensPorTipo)*10)/10 : 0;
+  });
+  let dominante = 'cla';
+  ['adhocracia','mercado','hierarquia'].forEach(t=>{ if(mediaPorTipo[t]>mediaPorTipo[dominante]) dominante = t; });
+  return { totalRespostas: respostas.length, mediaPorTipo, dominante: respostas.length>0 ? dominante : null };
+}
+
 
 async function renderPublicApplication(cargoId){
   document.title = 'Inscrição de vaga · Caroline Peixoto DHO';
@@ -2524,6 +2664,140 @@ function avancarProximaEtapa(candidatoId){
   showToast('Avançou: '+c.etapas[idx].nome+' — '+c.nome+'.');
   if(statusAntes !== statusDepois && (statusDepois==='contratado' || statusDepois==='nao_avancou')){
     modalMensagemAutomatica(c, statusDepois);
+  }
+}
+
+function extensoReais(valor){
+  valor = Math.round((parseFloat(valor)||0) * 100) / 100;
+  const inteiro = Math.floor(valor);
+  const centavos = Math.round((valor - inteiro) * 100);
+  const unidades = ['zero','um','dois','três','quatro','cinco','seis','sete','oito','nove'];
+  const dezA19 = ['dez','onze','doze','treze','quatorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+  const dezenas = ['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+  const centenas = ['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+
+  function tresDigitos(n){
+    if(n === 0) return '';
+    if(n === 100) return 'cem';
+    const c = Math.floor(n/100), r = n%100;
+    const partes = [];
+    if(c>0) partes.push(centenas[c]);
+    if(r>0){
+      if(r<10) partes.push(unidades[r]);
+      else if(r<20) partes.push(dezA19[r-10]);
+      else {
+        const d = Math.floor(r/10), u = r%10;
+        partes.push(dezenas[d] + (u>0 ? ' e '+unidades[u] : ''));
+      }
+    }
+    return partes.join(' e ');
+  }
+  function grupoMilhar(n){
+    if(n === 0) return 'zero';
+    const milhar = Math.floor(n/1000), resto = n%1000;
+    const partes = [];
+    if(milhar>0) partes.push(milhar===1 ? 'mil' : tresDigitos(milhar)+' mil');
+    if(resto>0) partes.push(tresDigitos(resto));
+    return partes.join(milhar>0 && resto>0 ? ' e ' : '');
+  }
+
+  const textoInteiro = grupoMilhar(inteiro);
+  const sufixoReal = inteiro === 1 ? 'real' : 'reais';
+  let resultado = textoInteiro + ' ' + sufixoReal;
+  if(centavos>0){
+    const textoCentavos = centavos<10 ? unidades[centavos] : tresDigitos(centavos);
+    resultado += ' e ' + textoCentavos + (centavos===1 ? ' centavo' : ' centavos');
+  }
+  return resultado;
+}
+
+function dataPorExtenso(dataISO){
+  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const [y,m,d] = dataISO.split('-').map(Number);
+  return d + ' de ' + meses[m-1] + ' de ' + y;
+}
+
+function montarTextoCartaProposta(candidato, cargo, cliente, dadosProposta){
+  const valorNum = parseFloat(dadosProposta.salario) || 0;
+  const valorFormatado = valorNum ? valorNum.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '';
+  const generoSaudacao = 'Prezado(a)';
+
+  let texto = (dadosProposta.cidade || 'Feira de Santana/BA').split('/')[0] + ', ' + dataPorExtenso(todayISO()) + '.\n\n';
+  texto += 'CARTA PROPOSTA\n\n';
+  texto += generoSaudacao + ' ' + candidato.nome.toUpperCase() + ',\n\n';
+  texto += 'É com grande satisfação que estamos formalizando a proposta de trabalho na ' + (cliente?cliente.nome:'nossa empresa') + ', em ' + (dadosProposta.cidade || 'Feira de Santana/BA') + ', para o cargo de ' + (cargo?cargo.titulo:'—') + (valorNum ? ' com salário base mensal de R$ ' + valorFormatado + ' (' + extensoReais(valorNum) + ')' : '') + '.\n\n';
+  texto += 'As condições abaixo listadas são parte integrante da proposta:\n\n';
+
+  const beneficiosAtivos = cliente && cliente.beneficios ? BENEFICIOS_PADRAO.filter(b=>cliente.beneficios[b.chave] && cliente.beneficios[b.chave].ativo) : [];
+  beneficiosAtivos.forEach(b=>{
+    texto += '- ' + b.nome.toUpperCase() + ': ' + (cliente.beneficios[b.chave].valor || '(condição a combinar)') + '\n';
+  });
+  if(beneficiosAtivos.length) texto += '\n';
+
+  if(dadosProposta.observacoes) texto += dadosProposta.observacoes + '\n\n';
+
+  texto += 'Informamos que a data prevista para efetivação da sua contratação é ' + formatDate(dadosProposta.dataAdmissao) + '. A sua assinatura no espaço abaixo evidenciará a aceitação dessa proposta de trabalho, que ao final do processo seletivo será devidamente formalizada por meio de contrato específico, de acordo com a legislação trabalhista.\n\n\n';
+  texto += '__________________________________\n' + candidato.nome.toUpperCase();
+  return texto;
+}
+
+function modalCartaProposta(candidato){
+  const cargo = getCargo(candidato.cargoId);
+  const cliente = getCliente(candidato.clienteId);
+  const salarioSugerido = cargo && cargo.salario ? String(cargo.salario).replace(/[^0-9.,]/g,'').replace(',','.') : '';
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>📄 Carta Proposta</h2>
+    <div class="modal-sub">${esc(candidato.nome)} — ${esc(cargo?cargo.titulo:'')}${cliente?' · '+esc(cliente.nome):''}</div>
+
+    <div class="form-grid">
+      <div class="field"><label>Cidade/UF</label><input id="cp-cidade" value="Feira de Santana/BA"></div>
+      <div class="field"><label>Data de admissão *</label><input required type="date" id="cp-data-admissao" value="${todayISO()}"></div>
+      <div class="field"><label>Salário base mensal (R$) *</label><input required type="number" step="0.01" min="0" id="cp-salario" value="${esc(salarioSugerido)}" placeholder="Ex.: 2600.00"></div>
+      <div class="field full"><label>Observações adicionais (opcional)</label><textarea id="cp-observacoes" placeholder="Qualquer condição especial da proposta..."></textarea></div>
+    </div>
+
+    ${cliente && cliente.beneficios ? (()=>{
+      const ativos = BENEFICIOS_PADRAO.filter(b=>cliente.beneficios[b.chave] && cliente.beneficios[b.chave].ativo);
+      if(!ativos.length) return '<p class="hint">Este cliente não tem benefícios cadastrados. Cadastre em "Clientes e vagas" se quiser que apareçam aqui.</p>';
+      return `<div class="section-title">Benefícios que serão incluídos</div>
+      <div class="table-wrap"><table><thead><tr><th>Benefício</th><th>Detalhe</th></tr></thead><tbody>
+        ${ativos.map(b=>'<tr><td>'+esc(b.nome)+'</td><td>'+esc(cliente.beneficios[b.chave].valor||'—')+'</td></tr>').join('')}
+      </tbody></table></div>`;
+    })() : ''}
+
+    <div class="section-title">Texto da proposta</div>
+    <textarea id="cp-texto" style="min-height:320px;font-family:monospace;font-size:12.5px;width:100%;"></textarea>
+    <span class="btn btn-secondary btn-sm" id="btn-gerar-cp" type="button" style="margin-top:8px;">🔄 Gerar / atualizar texto</span>
+
+    <div class="modal-footer">
+      <span><span class="btn btn-secondary btn-sm" data-action="cp-copiar">Copiar texto</span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        ${candidato.telefone ? '<span class="btn btn-primary" id="btn-enviar-cp-whatsapp">💬 Enviar por WhatsApp</span>' : ''}
+      </div>
+    </div>
+  `);
+
+  function gerarTexto(){
+    const dadosProposta = {
+      cidade: document.getElementById('cp-cidade').value.trim(),
+      dataAdmissao: document.getElementById('cp-data-admissao').value,
+      salario: document.getElementById('cp-salario').value,
+      observacoes: document.getElementById('cp-observacoes').value.trim()
+    };
+    document.getElementById('cp-texto').value = montarTextoCartaProposta(candidato, cargo, cliente, dadosProposta);
+  }
+  gerarTexto();
+  document.getElementById('btn-gerar-cp').addEventListener('click', gerarTexto);
+
+  const btnWpp = document.getElementById('btn-enviar-cp-whatsapp');
+  if(btnWpp){
+    btnWpp.addEventListener('click', ()=>{
+      const texto = document.getElementById('cp-texto').value;
+      window.open(linkWhatsApp(candidato.telefone, texto), '_blank');
+    });
   }
 }
 
@@ -3313,6 +3587,104 @@ function modalDescritivoCargo(funcao){
   });
 }
 
+async function renderDiagnosticoCultura(clienteId){
+  document.title = 'Diagnóstico de Cultura Organizacional · Caroline Peixoto DHO';
+  document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando… isso pode levar alguns segundos na primeira vez.</div></div><div id="toast-slot"></div>';
+  const root = document.getElementById('public-root');
+
+  if(!appsScriptConfigurado()){
+    root.innerHTML = paginaPublicaIndisponivel('A integração desta página ainda não foi concluída por quem administra o painel.');
+    return;
+  }
+
+  let info;
+  try{
+    info = await chamarAppsScriptGet('action=clienteInfoPublico&id=' + encodeURIComponent(clienteId));
+  }catch(err){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Não foi possível carregar</h2>
+      <p class="hint" style="margin-bottom:16px;">${esc(err.message || 'Ocorreu um erro ao carregar o diagnóstico.')}</p>
+      <span class="btn btn-primary" id="btn-tentar-novamente-cultura">Tentar novamente</span>
+    </div>`;
+    const btn = document.getElementById('btn-tentar-novamente-cultura');
+    if(btn) btn.addEventListener('click', ()=> renderDiagnosticoCultura(clienteId));
+    return;
+  }
+
+  if(!info || !info.nome){
+    root.innerHTML = paginaPublicaIndisponivel('Empresa não encontrada. Confira o link recebido.');
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card" style="max-width:680px;margin:32px auto;padding:0;overflow:hidden;">
+      <div style="background:var(--spine);padding:26px 32px;text-align:center;">
+        <img src="data:image/png;base64,${LOGO_CLARO_B64}" alt="Caroline Peixoto DHO" style="max-width:260px;width:100%;height:auto;display:inline-block;">
+      </div>
+      <div style="padding:32px;">
+        <h1 style="font-size:22px;margin-bottom:6px;">Diagnóstico de Cultura Organizacional</h1>
+        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 20px 0;">${esc(info.nome)} — Sua opinião é importante! Em cada grupo abaixo, avalie de <strong>1 (discordo totalmente)</strong> a <strong>5 (concordo totalmente)</strong> o quanto cada frase representa a empresa hoje. Não existe resposta certa ou errada. Leva cerca de 5 minutos. Suas respostas não identificam você a menos que queira se identificar.</p>
+
+        <form id="form-cultura">
+          <div class="field full"><label>Seu nome (opcional)</label><input name="nomeRespondente" placeholder="Pode deixar em branco se preferir não se identificar"></div>
+
+          ${DIMENSOES_CULTURA.map((dim, i)=>{
+            const tipos = ['cla','adhocracia','mercado','hierarquia'];
+            const ordem = [...tipos].sort(()=>Math.random()-0.5);
+            return `
+            <div style="border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:12px;">
+              <div class="hint" style="margin-bottom:10px;">Grupo ${i+1} de ${DIMENSOES_CULTURA.length} — ${esc(dim.nome)}</div>
+              ${ordem.map(tipo=>`
+                <div style="margin-bottom:12px;">
+                  <p style="font-size:13.5px;margin:0 0 6px 0;">${esc(dim.afirmacoes[tipo])}</p>
+                  <div style="display:flex;gap:14px;align-items:center;">
+                    ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;">
+                      <input type="radio" name="dim_${dim.chave}_${tipo}" value="${n}" ${n===3?'checked':''} required>${n}
+                    </label>`).join('')}
+                  </div>
+                </div>
+              `).join('')}
+            </div>`;
+          }).join('')}
+
+          <p class="hint" id="erro-cultura" style="color:var(--red);display:none;"></p>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;" id="btn-enviar-cultura">Enviar respostas</button>
+        </form>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--ink-soft);font-size:12px;margin-top:16px;">Caroline Peixoto DHO · Desenvolvimento Humano e Organizacional</p>
+  `;
+
+  document.getElementById('form-cultura').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-cultura');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const respostas = {};
+    DIMENSOES_CULTURA.forEach(dim=>{
+      respostas[dim.chave] = {
+        cla: f.get('dim_'+dim.chave+'_cla'),
+        adhocracia: f.get('dim_'+dim.chave+'_adhocracia'),
+        mercado: f.get('dim_'+dim.chave+'_mercado'),
+        hierarquia: f.get('dim_'+dim.chave+'_hierarquia')
+      };
+    });
+    const btn = document.getElementById('btn-enviar-cultura');
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try{
+      await chamarAppsScriptPost('salvarDiagnosticoCultura', {clienteId: clienteId, nomeRespondente: f.get('nomeRespondente').trim(), respostas: respostas});
+      root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+        <h2 style="margin-bottom:10px;">Respostas enviadas! 🎉</h2>
+        <p class="hint">Muito obrigado pela sua participação. Suas respostas ajudam a empresa a entender melhor sua cultura organizacional.</p>
+      </div>`;
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível enviar agora. Verifique sua conexão e tente novamente.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Enviar respostas';
+    }
+  });
+}
+
 function modalCliente(cliente){
   const editando = !!cliente;
   cliente = cliente || {id:'', nome:'', nomeContato:'', telefoneContato:'', emailContato:'', observacoes:'', temLogo:false, logoNome:'', logoUrlPublica:'', tipoServico:'rs', beneficios:beneficiosVazios()};
@@ -3753,6 +4125,32 @@ function modalLinkVaga(cargo){
   `);
 }
 
+function modalLinkCultura(cliente){
+  const link = linkDiagnosticoCultura(cliente.id);
+  const mensagem = 'Olá! Estamos aplicando um diagnóstico de cultura organizacional na '+cliente.nome+', e sua participação é muito importante. Leva uns 5 minutinhos e suas respostas ajudam a empresa a evoluir. Responda por aqui: '+link;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Diagnóstico de Cultura Organizacional</h2>
+    <div class="modal-sub">${esc(cliente.nome)}</div>
+    <p class="hint" style="margin-bottom:10px;">Esse link é o mesmo para todos os colaboradores desta empresa — pode enviar para quantas pessoas quiser (grupo de WhatsApp, e-mail, etc.), cada resposta conta para o resultado consolidado.</p>
+    <div class="field full">
+      <label>Link público</label>
+      <input type="text" readonly value="${esc(link)}" id="link-cultura-input" onclick="this.select()">
+    </div>
+    <div class="field full">
+      <label>Mensagem sugerida (para colar num grupo, e-mail, etc.)</label>
+      <textarea id="texto-cultura-mensagem" style="min-height:100px;">${esc(mensagem)}</textarea>
+    </div>
+    <div class="modal-footer">
+      <span><span class="btn btn-secondary btn-sm" data-action="copiar-link-cultura" data-id="${cliente.id}">Copiar link</span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="copiar-mensagem-cultura">Copiar mensagem completa</span>
+      </div>
+    </div>
+  `);
+}
+
 function modalLinkAvaliacao(candidato){
   garantirConfiguracoes();
   const link = linkAvaliacao(candidato.id);
@@ -3888,6 +4286,12 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       <p class="hint" style="margin-bottom:8px;">Este candidato ainda não respondeu a avaliação comportamental.</p>
       <span class="btn btn-secondary btn-sm" data-action="avaliacao-comportamental" data-id="${candidato.id}">🧭 Enviar link da avaliação</span>
       `}
+      ` : ''}
+
+      ${editando && candidato.cargoId ? `
+      <div class="section-title">Carta proposta</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Gere o texto da proposta (com os benefícios da empresa) e envie por WhatsApp.</p>
+      <span class="btn btn-secondary btn-sm" data-action="carta-proposta" data-id="${candidato.id}">📄 Gerar carta proposta</span>
       ` : ''}
 
       <div class="section-title">Convite e declínio</div>
@@ -4211,6 +4615,7 @@ function onGlobalClick(e){
       db.mensalidadesBPO = db.mensalidadesBPO.filter(m=>m.clienteId!==id);
       db.servicosAvulsos = db.servicosAvulsos.filter(s=>s.clienteId!==id);
       db.absenteismo = db.absenteismo.filter(a=>a.clienteId!==id);
+      db.diagnosticosCultura = db.diagnosticosCultura.filter(d=>d.clienteId!==id);
       db.agenda.forEach(e=>{ if(e.clienteId===id) e.clienteId=''; });
       db.clientes = db.clientes.filter(c=>c.id!==id);
       candidatosDoClienteExcluido.forEach(c=>{ if(c.temCurriculo) removerCurriculoStorage(c.id); });
@@ -4240,6 +4645,16 @@ function onGlobalClick(e){
   }
   if(action === 'fechar-vaga'){ modalFecharVaga(getCargo(id)); return; }
   if(action === 'avaliacao-comportamental'){ modalLinkAvaliacao(db.candidatos.find(c=>c.id===id)); return; }
+  if(action === 'carta-proposta'){ modalCartaProposta(db.candidatos.find(c=>c.id===id)); return; }
+  if(action === 'cp-copiar'){
+    const campo = document.getElementById('cp-texto');
+    if(!campo) return;
+    const finalizar = ()=> showToast('Texto da proposta copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(campo.value).then(finalizar).catch(()=>{ campo.select(); document.execCommand('copy'); finalizar(); });
+    } else { campo.select(); document.execCommand('copy'); finalizar(); }
+    return;
+  }
   if(action === 'copiar-link-avaliacao'){
     const link = linkAvaliacao(id);
     const finalizar = ()=> showToast('Link copiado! Envie para o candidato responder.');
@@ -4250,6 +4665,28 @@ function onGlobalClick(e){
     } else {
       const inp = document.getElementById('link-avaliacao-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
     }
+    return;
+  }
+  if(action === 'link-cultura'){ modalLinkCultura(getCliente(id)); return; }
+  if(action === 'copiar-link-cultura'){
+    const link = linkDiagnosticoCultura(id);
+    const finalizar = ()=> showToast('Link copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(finalizar).catch(()=>{
+        const inp = document.getElementById('link-cultura-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+      });
+    } else {
+      const inp = document.getElementById('link-cultura-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+    }
+    return;
+  }
+  if(action === 'copiar-mensagem-cultura'){
+    const campo = document.getElementById('texto-cultura-mensagem');
+    if(!campo) return;
+    const finalizar = ()=> showToast('Mensagem copiada!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(campo.value).then(finalizar).catch(()=>{ campo.select(); document.execCommand('copy'); finalizar(); });
+    } else { campo.select(); document.execCommand('copy'); finalizar(); }
     return;
   }
   if(action === 'reabrir-vaga'){
@@ -4481,10 +4918,13 @@ function onGlobalInput(e){
 (async function init(){
   const cargoIdPublico = getHashCargoId();
   const candidatoIdAvaliacao = getHashAvaliacaoId();
+  const clienteIdCultura = getHashCulturaId();
   if(cargoIdPublico){
     await renderPublicApplication(cargoIdPublico);
   } else if(candidatoIdAvaliacao){
     await renderAvaliacaoComportamental(candidatoIdAvaliacao);
+  } else if(clienteIdCultura){
+    await renderDiagnosticoCultura(clienteIdCultura);
   } else {
     db = await loadDB();
     garantirConfiguracoes();
