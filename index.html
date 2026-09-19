@@ -530,6 +530,26 @@ function gerarMensalidadesDoMes(mesRef){
   return criadas;
 }
 
+function mesesDisponiveisMensalidadesDenuncia(){
+  const set = new Set(db.mensalidadesCanalDenuncia.map(m=>m.mesReferencia));
+  set.add(mesAtualRef());
+  return Array.from(set).sort().reverse();
+}
+function gerarMensalidadesCanalDenunciaDoMes(mesRef){
+  const clientesAtivos = db.clientes.filter(cl=>cl.canalDenuncia && cl.canalDenuncia.ativo);
+  let criadas = 0;
+  clientesAtivos.forEach(cl=>{
+    const jaExiste = db.mensalidadesCanalDenuncia.some(m=>m.clienteId===cl.id && m.mesReferencia===mesRef);
+    if(jaExiste) return;
+    db.mensalidadesCanalDenuncia.push({
+      id: uid('mensden'), clienteId: cl.id, mesReferencia: mesRef,
+      valor: cl.canalDenuncia.valorMensalidade || '', statusPagamento: 'pendente', dataPagamento: ''
+    });
+    criadas++;
+  });
+  return criadas;
+}
+
 function esc(s){ return (s===undefined||s===null) ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ---- Currículos anexados (armazenados separadamente do banco principal) ---- */
@@ -737,11 +757,14 @@ function garantirConfiguracoes(){
   if(!Array.isArray(db.agenda)) db.agenda = [];
   db.agenda.forEach(e=>{ if(!e.ata) e.ata = {participantes:'', decisoes:'', proximosPassos:''}; });
   if(!Array.isArray(db.diagnosticosCultura)) db.diagnosticosCultura = [];
+  if(!Array.isArray(db.denuncias)) db.denuncias = [];
+  if(!Array.isArray(db.mensalidadesCanalDenuncia)) db.mensalidadesCanalDenuncia = [];
   db.clientes.forEach(cl=>{
     if(!cl.tipoServico) cl.tipoServico = 'rs';
     if(cl.valorMensalidadeBPO===undefined) cl.valorMensalidadeBPO = '';
     if(!cl.beneficios){ cl.beneficios = beneficiosVazios(); }
     else { BENEFICIOS_PADRAO.forEach(b=>{ if(!cl.beneficios[b.chave]) cl.beneficios[b.chave] = {ativo:false, valor:''}; }); }
+    if(!cl.canalDenuncia) cl.canalDenuncia = {ativo:false, emails:[], valorMensalidade:''};
   });
   db.colaboradores.forEach(c=>{
     if(c.salarioAdmissao===undefined) c.salarioAdmissao = '';
@@ -887,7 +910,11 @@ let state = {
   agendaDiaSelecionado: todayISO(),
   servClienteId: '',
   servTipo: '',
-  servStatus: ''
+  servStatus: '',
+  denClienteId: '',
+  denMensClienteId: '',
+  denMensMes: '',
+  denMensStatus: ''
 };
 
 
@@ -1008,7 +1035,7 @@ function renderView(){
   else if(state.tab === 'colaboradores') view.innerHTML = viewColaboradores();
   else if(state.tab === 'indicadores') view.innerHTML = viewIndicadores();
   else if(state.tab === 'drive') view.innerHTML = viewEmConstrucao('Drive — Materiais e documentos', 'Aqui você vai poder guardar, por empresa, políticas, regimentos, códigos de conduta e outros materiais construídos. Ainda estamos construindo essa parte.');
-  else if(state.tab === 'denuncia') view.innerHTML = viewEmConstrucao('Canal de denúncia', 'Formulário anônimo com QR code para os colaboradores das empresas atendidas reportarem denúncias, direcionadas por e-mail. Ainda estamos construindo essa parte — e vamos revisar juntas os requisitos legais antes de disponibilizar aos clientes.');
+  else if(state.tab === 'denuncia') view.innerHTML = viewCanalDenunciaAdmin();
   else if(state.tab === 'relatorio') view.innerHTML = viewRelatorio();
   afterRenderView();
 }
@@ -1628,6 +1655,7 @@ function viewFaturamento(){
 
     ${viewMensalidadesBPO()}
     ${viewServicosAvulsos()}
+    ${viewMensalidadesCanalDenuncia()}
   `;
 }
 
@@ -1758,6 +1786,67 @@ function viewServicosAvulsos(){
       ${lista.length===0 ? '<p class="hint">Nenhum serviço avulso cadastrado ainda.</p>' : `
       <div class="table-wrap"><table>
         <thead><tr><th>Cliente</th><th>Tipo</th><th>Descrição</th><th>Data</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table></div>`}
+    </div>
+  `;
+}
+
+function viewMensalidadesCanalDenuncia(){
+  const clientesAtivos = db.clientes.filter(cl=>cl.canalDenuncia && cl.canalDenuncia.ativo);
+  if(clientesAtivos.length===0) return '';
+
+  const clientesOpts = clientesAtivos.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.denMensClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  const mesesOpts = mesesDisponiveisMensalidadesDenuncia().map(m=>'<option value="'+m+'" '+(state.denMensMes===m?'selected':'')+'>'+formatMesRef(m)+'</option>').join('');
+
+  let lista = db.mensalidadesCanalDenuncia.filter(m=>clientesAtivos.some(cl=>cl.id===m.clienteId));
+  if(state.denMensClienteId) lista = lista.filter(m=>m.clienteId===state.denMensClienteId);
+  if(state.denMensMes) lista = lista.filter(m=>m.mesReferencia===state.denMensMes);
+  if(state.denMensStatus) lista = lista.filter(m=>m.statusPagamento===state.denMensStatus);
+  lista = lista.slice().sort((a,b)=> b.mesReferencia.localeCompare(a.mesReferencia) || getCliente(a.clienteId)?.nome.localeCompare(getCliente(b.clienteId)?.nome||'')||0);
+
+  const totalPrevisto = lista.reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const totalRecebido = lista.filter(m=>m.statusPagamento==='pago').reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const totalPendente = lista.filter(m=>m.statusPagamento==='pendente').reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+
+  const linhas = lista.map(m=>{
+    const cl = getCliente(m.clienteId);
+    return `<tr>
+      <td>${esc(cl?.nome||'—')}</td>
+      <td>${formatMesRef(m.mesReferencia)}</td>
+      <td>${formatMoeda(parseFloat(m.valor)||0)}</td>
+      <td>${m.statusPagamento==='pago' ? '<span class="badge badge-green">Pago</span>' : '<span class="badge badge-amber">Pendente</span>'}</td>
+      <td>${m.dataPagamento ? formatDate(m.dataPagamento) : '—'}</td>
+      <td class="no-print" style="white-space:nowrap;">
+        ${m.statusPagamento==='pendente' ? '<span class="btn btn-ghost btn-sm" data-action="marcar-mensalidade-denuncia-paga" data-id="'+m.id+'">Marcar pago</span>' : ''}
+        <span class="btn btn-ghost btn-sm" data-action="excluir-mensalidade-denuncia" data-id="${m.id}">Excluir</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="topbar" style="margin-top:28px;">
+      <div><h1 style="font-size:19px;">Canal de Denúncias — Mensalidades</h1><p>Cobrança recorrente do produto Canal de Denúncia</p></div>
+      <span class="btn btn-secondary" data-action="gerar-mensalidades-denuncia-mes">Gerar mensalidades do mês</span>
+    </div>
+    <div class="filters-row">
+      <select data-role="den-mens-cliente"><option value="">Todos os clientes</option>${clientesOpts}</select>
+      <select data-role="den-mens-mes"><option value="">Todos os meses</option>${mesesOpts}</select>
+      <select data-role="den-mens-status">
+        <option value="">Todos os status</option>
+        <option value="pendente" ${state.denMensStatus==='pendente'?'selected':''}>Pendente</option>
+        <option value="pago" ${state.denMensStatus==='pago'?'selected':''}>Pago</option>
+      </select>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">Total previsto no filtro</div><div class="value" style="font-size:22px;">${formatMoeda(totalPrevisto)}</div><div class="sub">${lista.length} mensalidade(s)</div></div>
+      <div class="kpi c-green"><div class="label">Total recebido</div><div class="value" style="font-size:22px;">${formatMoeda(totalRecebido)}</div></div>
+      <div class="kpi c-red"><div class="label">Total pendente</div><div class="value" style="font-size:22px;">${formatMoeda(totalPendente)}</div></div>
+    </div>
+    <div class="card">
+      ${lista.length===0 ? '<p class="hint">Nenhuma mensalidade encontrada. Use "Gerar mensalidades do mês" para criar automaticamente.</p>' : `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Cliente</th><th>Mês</th><th>Valor</th><th>Status</th><th>Data pagto.</th><th></th></tr></thead>
         <tbody>${linhas}</tbody>
       </table></div>`}
     </div>
@@ -1970,16 +2059,19 @@ function viewDiagnosticoCulturaAdmin(cliente){
 
     ${resultado.totalRespostas===0 ? '<div class="card empty-state"><h3>Nenhuma resposta ainda</h3><p>Envie o link para os colaboradores desta empresa responderem. Quanto mais pessoas responderem, mais confiável fica o resultado.</p></div>' : `
     <div class="card" style="margin-bottom:22px;">
-      <h3 style="font-size:15px;margin-bottom:4px;">Perfil de cultura dominante: ${PERFIS_CULTURA[resultado.dominante].nome}</h3>
-      <p class="hint" style="margin-bottom:16px;">${esc(PERFIS_CULTURA[resultado.dominante].descricao)}</p>
+      <h3 style="font-size:15px;margin-bottom:4px;">Cultura atual dominante: ${PERFIS_CULTURA[resultado.dominante].nome}</h3>
+      <p class="hint" style="margin-bottom:4px;">${esc(PERFIS_CULTURA[resultado.dominante].descricao)}</p>
+      ${resultado.dominanteDesejado !== resultado.dominante ? `<p class="hint" style="margin-bottom:16px;">⚠️ A cultura <strong>desejada</strong> pelos respondentes aponta mais para <strong>${PERFIS_CULTURA[resultado.dominanteDesejado].nome}</strong> — um sinal de que há vontade de mudança.</p>` : '<p class="hint" style="margin-bottom:16px;">A cultura desejada pelos respondentes aponta para o mesmo perfil — sinal de que a empresa está confortável com o caminho atual.</p>'}
       ${['cla','adhocracia','mercado','hierarquia'].map(tipo=>`
-        <div style="margin-bottom:10px;">
+        <div style="margin-bottom:14px;">
           <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
-            <strong>${PERFIS_CULTURA[tipo].nome}</strong><span>${resultado.mediaPorTipo[tipo]} / 5</span>
+            <strong>${PERFIS_CULTURA[tipo].nome}</strong><span>Atual: ${resultado.mediaAtual[tipo]} · Desejado: ${resultado.mediaDesejado[tipo]} ${resultado.gap[tipo]!==0 ? '<span style="color:'+(resultado.gap[tipo]>0?'var(--green)':'var(--red)')+';">('+(resultado.gap[tipo]>0?'+':'')+resultado.gap[tipo]+')</span>' : ''}</span>
           </div>
-          <div class="funnel-bar-bg"><div class="funnel-bar" style="width:${Math.round((resultado.mediaPorTipo[tipo]/maxMedia)*100)}%;${tipo===resultado.dominante?'':'opacity:.55;'}"></div></div>
+          <div class="funnel-bar-bg" style="margin-bottom:3px;"><div class="funnel-bar" style="width:${Math.round((resultado.mediaAtual[tipo]/maxMedia)*100)}%;${tipo===resultado.dominante?'':'opacity:.55;'}"></div></div>
+          <div class="funnel-bar-bg" style="height:8px;"><div class="funnel-bar" style="width:${Math.round((resultado.mediaDesejado[tipo]/maxMedia)*100)}%;background:var(--amber);"></div></div>
         </div>
       `).join('')}
+      <p class="hint">Barra de cima (mais grossa) = como a empresa é hoje. Barra de baixo (fina, laranja) = como os respondentes gostariam que fosse.</p>
     </div>
 
     <div class="card">
@@ -2065,6 +2157,64 @@ function calcularIndicadoresCompletos(clienteId, mesIni, mesFim){
   }
 
   return { vagasAbertasPeriodo, vagasFechadasPeriodo, tempoMedioContratacao, candidatosInscritosPeriodo: candidatosPeriodo.length, taxaConversao, candidatosPorVagaFechada, bpo };
+}
+
+function viewCanalDenunciaAdmin(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.denClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+(cl.canalDenuncia&&cl.canalDenuncia.ativo?' ✓':'')+'</option>').join('');
+  const cliente = state.denClienteId ? getCliente(state.denClienteId) : null;
+
+  if(!cliente){
+    return `
+      <div class="topbar"><div><h1>Canal de Denúncia</h1><p>Selecione um cliente para configurar ou acompanhar denúncias.</p></div></div>
+      <div class="filters-row"><select data-role="den-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+      <div class="card empty-state"><h3>Selecione um cliente acima</h3><p>Marque com "✓" na lista os clientes que já têm o canal ativo.</p></div>
+    `;
+  }
+
+  const cd = cliente.canalDenuncia || {ativo:false, emails:[], valorMensalidade:''};
+  const denuncias = db.denuncias.filter(d=>d.clienteId===cliente.id).slice().sort((a,b)=>b.data.localeCompare(a.data));
+  const recebidas = denuncias.filter(d=>d.status==='recebida').length;
+  const emAnalise = denuncias.filter(d=>d.status==='em_analise').length;
+  const concluidas = denuncias.filter(d=>d.status==='concluida').length;
+
+  return `
+    <div class="topbar"><div><h1>Canal de Denúncia</h1><p>${esc(cliente.nome)}</p></div></div>
+    <div class="filters-row"><select data-role="den-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+
+    <div class="card" style="margin-bottom:22px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${cd.ativo?'14px':'0'};">
+        <h3 style="font-size:15px;margin:0;">Configuração</h3>
+        <span class="btn btn-secondary btn-sm" data-action="config-canal-denuncia" data-id="${cliente.id}">⚙️ Configurar</span>
+      </div>
+      ${cd.ativo ? `
+      <p class="hint">Canal <strong style="color:var(--green);">ativo</strong> para este cliente. E-mails notificados: ${cd.emails && cd.emails.length ? esc(cd.emails.join(', ')) : '<span style="color:var(--red);">nenhum cadastrado — as denúncias não serão notificadas por e-mail!</span>'}</p>
+      <span class="btn btn-primary btn-sm" data-action="link-canal-denuncia" data-id="${cliente.id}" style="margin-top:8px;">🔗 Enviar link do canal</span>
+      ` : '<p class="hint">Canal ainda não ativado para este cliente. Clique em "Configurar" para ativar.</p>'}
+    </div>
+
+    ${cd.ativo ? `
+    <div class="kpi-grid">
+      <div class="kpi c-amber"><div class="label">Recebidas</div><div class="value">${recebidas}</div></div>
+      <div class="kpi c-amber"><div class="label">Em análise</div><div class="value">${emAnalise}</div></div>
+      <div class="kpi c-green"><div class="label">Concluídas</div><div class="value">${concluidas}</div></div>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:15px;margin-bottom:12px;">Denúncias recebidas</h3>
+      ${denuncias.length===0 ? '<p class="hint">Nenhuma denúncia recebida ainda.</p>' : `
+      <div class="table-wrap"><table><thead><tr><th>Protocolo</th><th>Data</th><th>Categoria</th><th>Identificado</th><th>Status</th><th></th></tr></thead><tbody>
+        ${denuncias.map(d=>`<tr>
+          <td><code>${esc(d.protocolo)}</code></td>
+          <td>${formatDate(d.data)}</td>
+          <td>${esc(d.categoria)}</td>
+          <td>${d.identificado ? 'Sim' : 'Não (anônimo)'}</td>
+          <td><span class="badge ${STATUS_DENUNCIA[d.status].cor}">${STATUS_DENUNCIA[d.status].nome}</span></td>
+          <td class="no-print"><span class="btn btn-ghost btn-sm" data-action="ver-denuncia" data-id="${d.id}">Ver / responder</span></td>
+        </tr>`).join('')}
+      </tbody></table></div>`}
+    </div>
+    ` : ''}
+  `;
 }
 
 function viewEmConstrucao(titulo, texto){
@@ -2338,6 +2488,12 @@ function getHashCulturaId(){
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+function getHashDenunciaId(){
+  const h = window.location.hash || '';
+  const m = h.match(/^#denuncia-(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 function paginaPublicaIndisponivel(mensagem){
   return `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
     <h2 style="margin-bottom:10px;">Vaga não disponível</h2>
@@ -2479,31 +2635,76 @@ const PERFIS_CULTURA = {
   hierarquia: {nome:'Hierarquia', descricao:'Ambiente estruturado e controlado. Valoriza eficiência, procedimentos formais, estabilidade e previsibilidade.'}
 };
 
+const CATEGORIAS_DENUNCIA = [
+  'Assédio moral',
+  'Assédio sexual',
+  'Discriminação',
+  'Fraude / Desvio financeiro',
+  'Corrupção / Suborno',
+  'Segurança do trabalho',
+  'Violação do código de conduta',
+  'Conflito de interesses',
+  'Outro'
+];
+const STATUS_DENUNCIA = {
+  recebida: {nome:'Recebida', cor:'badge-amber'},
+  em_analise: {nome:'Em análise', cor:'badge-amber'},
+  concluida: {nome:'Concluída', cor:'badge-green'}
+};
+
+function linkCanalDenuncia(clienteId){
+  return window.location.origin + window.location.pathname + '#denuncia-' + clienteId;
+}
+
 function linkDiagnosticoCultura(clienteId){
   return window.location.origin + window.location.pathname + '#cultura-' + clienteId;
 }
 
 function calcularResultadoCultura(clienteId){
   const respostas = db.diagnosticosCultura.filter(d=>d.clienteId===clienteId);
-  const somas = {cla:0, adhocracia:0, mercado:0, hierarquia:0};
-  let totalItens = 0;
+  const tipos = ['cla','adhocracia','mercado','hierarquia'];
+  const somasAtual = {cla:0, adhocracia:0, mercado:0, hierarquia:0};
+  const somasDesejado = {cla:0, adhocracia:0, mercado:0, hierarquia:0};
+
   respostas.forEach(r=>{
     DIMENSOES_CULTURA.forEach(dim=>{
       const resp = r.respostas[dim.chave];
       if(!resp) return;
-      ['cla','adhocracia','mercado','hierarquia'].forEach(tipo=>{
-        if(resp[tipo]!==undefined){ somas[tipo]+=parseFloat(resp[tipo])||0; totalItens++; }
+      tipos.forEach(tipo=>{
+        const valor = resp[tipo];
+        if(valor===undefined || valor===null) return;
+        // Compatível com respostas antigas (só "atual", valor numérico direto) e novas ({atual, desejado}).
+        if(typeof valor === 'object'){
+          if(valor.atual!==undefined) somasAtual[tipo] += parseFloat(valor.atual)||0;
+          if(valor.desejado!==undefined) somasDesejado[tipo] += parseFloat(valor.desejado)||0;
+        } else {
+          somasAtual[tipo] += parseFloat(valor)||0;
+        }
       });
     });
   });
-  const mediaPorTipo = {};
+
   const itensPorTipo = respostas.length * DIMENSOES_CULTURA.length;
-  ['cla','adhocracia','mercado','hierarquia'].forEach(tipo=>{
-    mediaPorTipo[tipo] = itensPorTipo>0 ? Math.round((somas[tipo]/itensPorTipo)*10)/10 : 0;
+  const mediaAtual = {}, mediaDesejado = {}, gap = {};
+  tipos.forEach(tipo=>{
+    mediaAtual[tipo] = itensPorTipo>0 ? Math.round((somasAtual[tipo]/itensPorTipo)*10)/10 : 0;
+    mediaDesejado[tipo] = itensPorTipo>0 ? Math.round((somasDesejado[tipo]/itensPorTipo)*10)/10 : 0;
+    gap[tipo] = Math.round((mediaDesejado[tipo]-mediaAtual[tipo])*10)/10;
   });
-  let dominante = 'cla';
-  ['adhocracia','mercado','hierarquia'].forEach(t=>{ if(mediaPorTipo[t]>mediaPorTipo[dominante]) dominante = t; });
-  return { totalRespostas: respostas.length, mediaPorTipo, dominante: respostas.length>0 ? dominante : null };
+
+  let dominanteAtual = 'cla', dominanteDesejado = 'cla';
+  tipos.forEach(t=>{
+    if(mediaAtual[t]>mediaAtual[dominanteAtual]) dominanteAtual = t;
+    if(mediaDesejado[t]>mediaDesejado[dominanteDesejado]) dominanteDesejado = t;
+  });
+
+  return {
+    totalRespostas: respostas.length,
+    mediaPorTipo: mediaAtual, // mantém compatibilidade com quem já usa esse nome
+    mediaAtual, mediaDesejado, gap,
+    dominante: respostas.length>0 ? dominanteAtual : null,
+    dominanteDesejado: respostas.length>0 ? dominanteDesejado : null
+  };
 }
 
 
@@ -3623,7 +3824,7 @@ async function renderDiagnosticoCultura(clienteId){
       </div>
       <div style="padding:32px;">
         <h1 style="font-size:22px;margin-bottom:6px;">Diagnóstico de Cultura Organizacional</h1>
-        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 20px 0;">${esc(info.nome)} — Sua opinião é importante! Em cada grupo abaixo, avalie de <strong>1 (discordo totalmente)</strong> a <strong>5 (concordo totalmente)</strong> o quanto cada frase representa a empresa hoje. Não existe resposta certa ou errada. Leva cerca de 5 minutos. Suas respostas não identificam você a menos que queira se identificar.</p>
+        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 20px 0;">${esc(info.nome)} — Sua opinião é importante! Em cada afirmação abaixo, avalie de <strong>1 (discordo totalmente)</strong> a <strong>5 (concordo totalmente)</strong> duas vezes: como a empresa é <strong>hoje</strong>, e como você <strong>gostaria que ela fosse</strong>. Não existe resposta certa ou errada. Leva cerca de 8 minutos. Suas respostas não identificam você a menos que queira se identificar.</p>
 
         <form id="form-cultura">
           <div class="field full"><label>Seu nome (opcional)</label><input name="nomeRespondente" placeholder="Pode deixar em branco se preferir não se identificar"></div>
@@ -3635,11 +3836,22 @@ async function renderDiagnosticoCultura(clienteId){
             <div style="border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:12px;">
               <div class="hint" style="margin-bottom:10px;">Grupo ${i+1} de ${DIMENSOES_CULTURA.length} — ${esc(dim.nome)}</div>
               ${ordem.map(tipo=>`
-                <div style="margin-bottom:12px;">
-                  <p style="font-size:13.5px;margin:0 0 6px 0;">${esc(dim.afirmacoes[tipo])}</p>
+                <div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px dashed var(--border);">
+                  <p style="font-size:13.5px;margin:0 0 8px 0;">${esc(dim.afirmacoes[tipo])}</p>
+                  <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--ink-soft);margin-bottom:3px;">
+                    <span>Como é <strong>hoje</strong></span>
+                  </div>
+                  <div style="display:flex;gap:14px;align-items:center;margin-bottom:10px;">
+                    ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;">
+                      <input type="radio" name="dim_${dim.chave}_${tipo}_atual" value="${n}" ${n===3?'checked':''} required>${n}
+                    </label>`).join('')}
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--ink-soft);margin-bottom:3px;">
+                    <span>Como eu <strong>gostaria que fosse</strong></span>
+                  </div>
                   <div style="display:flex;gap:14px;align-items:center;">
                     ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;">
-                      <input type="radio" name="dim_${dim.chave}_${tipo}" value="${n}" ${n===3?'checked':''} required>${n}
+                      <input type="radio" name="dim_${dim.chave}_${tipo}_desejado" value="${n}" ${n===3?'checked':''} required>${n}
                     </label>`).join('')}
                   </div>
                 </div>
@@ -3663,10 +3875,10 @@ async function renderDiagnosticoCultura(clienteId){
     const respostas = {};
     DIMENSOES_CULTURA.forEach(dim=>{
       respostas[dim.chave] = {
-        cla: f.get('dim_'+dim.chave+'_cla'),
-        adhocracia: f.get('dim_'+dim.chave+'_adhocracia'),
-        mercado: f.get('dim_'+dim.chave+'_mercado'),
-        hierarquia: f.get('dim_'+dim.chave+'_hierarquia')
+        cla: { atual: f.get('dim_'+dim.chave+'_cla_atual'), desejado: f.get('dim_'+dim.chave+'_cla_desejado') },
+        adhocracia: { atual: f.get('dim_'+dim.chave+'_adhocracia_atual'), desejado: f.get('dim_'+dim.chave+'_adhocracia_desejado') },
+        mercado: { atual: f.get('dim_'+dim.chave+'_mercado_atual'), desejado: f.get('dim_'+dim.chave+'_mercado_desejado') },
+        hierarquia: { atual: f.get('dim_'+dim.chave+'_hierarquia_atual'), desejado: f.get('dim_'+dim.chave+'_hierarquia_desejado') }
       };
     });
     const btn = document.getElementById('btn-enviar-cultura');
@@ -3683,6 +3895,141 @@ async function renderDiagnosticoCultura(clienteId){
       btn.disabled = false; btn.textContent = 'Enviar respostas';
     }
   });
+}
+
+async function renderCanalDenuncia(clienteId){
+  document.title = 'Canal de Denúncia · Caroline Peixoto DHO';
+  document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando… isso pode levar alguns segundos na primeira vez.</div></div><div id="toast-slot"></div>';
+  const root = document.getElementById('public-root');
+
+  if(!appsScriptConfigurado()){
+    root.innerHTML = paginaPublicaIndisponivel('A integração desta página ainda não foi concluída por quem administra o painel.');
+    return;
+  }
+
+  let info;
+  try{
+    info = await chamarAppsScriptGet('action=clienteInfoPublico&id=' + encodeURIComponent(clienteId));
+  }catch(err){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Não foi possível carregar</h2>
+      <p class="hint" style="margin-bottom:16px;">${esc(err.message || 'Ocorreu um erro ao carregar a página.')}</p>
+      <span class="btn btn-primary" id="btn-tentar-novamente-denuncia">Tentar novamente</span>
+    </div>`;
+    const btn = document.getElementById('btn-tentar-novamente-denuncia');
+    if(btn) btn.addEventListener('click', ()=> renderCanalDenuncia(clienteId));
+    return;
+  }
+
+  if(!info || !info.nome){
+    root.innerHTML = paginaPublicaIndisponivel('Empresa não encontrada. Confira o link recebido.');
+    return;
+  }
+
+  function telaFormulario(){
+    root.innerHTML = `
+      <div class="card" style="max-width:680px;margin:32px auto;padding:0;overflow:hidden;">
+        <div style="background:var(--spine);padding:26px 32px;text-align:center;">
+          <img src="data:image/png;base64,${LOGO_CLARO_B64}" alt="Caroline Peixoto DHO" style="max-width:260px;width:100%;height:auto;display:inline-block;">
+        </div>
+        <div style="padding:32px;">
+          <h1 style="font-size:22px;margin-bottom:6px;">Canal de Denúncia</h1>
+          <p style="color:var(--ink-soft);font-size:14px;margin:0 0 20px 0;">${esc(info.nome)} — Este canal é <strong>confidencial</strong>. Você pode denunciar de forma totalmente anônima, sem precisar se identificar. Ao final, você recebe um número de protocolo para acompanhar o andamento.</p>
+
+          <form id="form-denuncia">
+            <div class="form-grid">
+              <div class="field full"><label>Categoria *</label><select required name="categoria">${CATEGORIAS_DENUNCIA.map(c=>'<option>'+c+'</option>').join('')}</select></div>
+              <div class="field full"><label>Descreva o ocorrido *</label><textarea required name="descricao" style="min-height:160px;" placeholder="Conte o que aconteceu, quando, quem esteve envolvido e qualquer detalhe que ajude na apuração."></textarea></div>
+            </div>
+
+            <div class="checkbox-row"><input type="checkbox" id="chk-identificar"><label for="chk-identificar">Quero me identificar (opcional)</label></div>
+            <div class="form-grid" id="denuncia-identificacao-wrap" style="display:none;margin-top:8px;">
+              <div class="field"><label>Seu nome</label><input name="nome"></div>
+              <div class="field"><label>Contato (telefone ou e-mail)</label><input name="contato"></div>
+            </div>
+
+            <p class="hint" id="erro-denuncia" style="color:var(--red);display:none;"></p>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;" id="btn-enviar-denuncia">Enviar denúncia</button>
+          </form>
+
+          <p class="hint" style="text-align:center;margin-top:16px;"><span data-role="ir-consultar-protocolo" style="text-decoration:underline;cursor:pointer;">Já denunciei antes e quero consultar o andamento</span></p>
+        </div>
+      </div>
+      <p style="text-align:center;color:var(--ink-soft);font-size:12px;margin-top:16px;">Caroline Peixoto DHO · Desenvolvimento Humano e Organizacional</p>
+    `;
+
+    document.getElementById('chk-identificar').addEventListener('change', e=>{
+      document.getElementById('denuncia-identificacao-wrap').style.display = e.target.checked ? 'grid' : 'none';
+    });
+    document.querySelector('[data-role="ir-consultar-protocolo"]').addEventListener('click', telaConsulta);
+
+    document.getElementById('form-denuncia').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const erroEl = document.getElementById('erro-denuncia');
+      erroEl.style.display = 'none';
+      const f = new FormData(e.target);
+      const identificado = document.getElementById('chk-identificar').checked;
+      const btn = document.getElementById('btn-enviar-denuncia');
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      try{
+        const resp = await chamarAppsScriptPost('salvarDenuncia', {
+          clienteId: clienteId,
+          categoria: f.get('categoria'),
+          descricao: f.get('descricao').trim(),
+          identificado: identificado,
+          nome: identificado ? f.get('nome').trim() : '',
+          contato: identificado ? f.get('contato').trim() : ''
+        });
+        root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+          <h2 style="margin-bottom:10px;">Denúncia enviada 🎉</h2>
+          <p class="hint" style="margin-bottom:16px;">Sua denúncia foi recebida e será apurada. Guarde este número de protocolo para acompanhar o andamento — <strong>ele não pode ser recuperado depois</strong>.</p>
+          <div style="font-size:28px;font-weight:700;letter-spacing:.08em;background:var(--accent-soft);border-radius:8px;padding:16px;margin-bottom:16px;">${esc(resp.protocolo)}</div>
+          <p class="hint">Anote ou tire um print desta tela.</p>
+        </div>`;
+      }catch(err){
+        erroEl.textContent = err.message || 'Não foi possível enviar agora. Verifique sua conexão e tente novamente.';
+        erroEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Enviar denúncia';
+      }
+    });
+  }
+
+  function telaConsulta(){
+    root.innerHTML = `
+      <div class="card" style="max-width:520px;margin:60px auto;padding:36px;">
+        <h2 style="margin-bottom:10px;">Consultar denúncia</h2>
+        <p class="hint" style="margin-bottom:16px;">${esc(info.nome)} — Informe o número de protocolo recebido ao enviar sua denúncia.</p>
+        <form id="form-consulta-protocolo">
+          <div class="field full"><label>Número de protocolo</label><input required name="protocolo" style="text-transform:uppercase;" placeholder="Ex.: AB12CD34"></div>
+          <p class="hint" id="erro-consulta" style="color:var(--red);display:none;"></p>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;">Consultar</button>
+        </form>
+        <p class="hint" style="text-align:center;margin-top:16px;"><span data-role="ir-formulario" style="text-decoration:underline;cursor:pointer;">Voltar e fazer uma nova denúncia</span></p>
+      </div>
+    `;
+    document.querySelector('[data-role="ir-formulario"]').addEventListener('click', telaFormulario);
+    document.getElementById('form-consulta-protocolo').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const erroEl = document.getElementById('erro-consulta');
+      erroEl.style.display = 'none';
+      const f = new FormData(e.target);
+      try{
+        const resp = await chamarAppsScriptGet('action=consultarDenuncia&clienteId='+encodeURIComponent(clienteId)+'&protocolo='+encodeURIComponent(f.get('protocolo').trim()));
+        root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;">
+          <h2 style="margin-bottom:10px;">Andamento da denúncia</h2>
+          <p class="hint">Categoria: ${esc(resp.categoria)}</p>
+          <p class="hint">Recebida em: ${formatDate(resp.data)}</p>
+          <p class="hint" style="margin-bottom:16px;">Status: <strong>${esc(STATUS_DENUNCIA[resp.status]?STATUS_DENUNCIA[resp.status].nome:resp.status)}</strong></p>
+          ${resp.respostaEmpresa ? '<div class="section-title">Resposta</div><p style="font-size:13.5px;white-space:pre-line;">'+esc(resp.respostaEmpresa)+'</p>' : '<p class="hint">Ainda não há uma resposta registrada.</p>'}
+        </div>`;
+      }catch(err){
+        erroEl.textContent = err.message || 'Protocolo não encontrado.';
+        erroEl.style.display = 'block';
+      }
+    });
+  }
+
+  telaFormulario();
 }
 
 function modalCliente(cliente){
@@ -4123,6 +4470,115 @@ function modalLinkVaga(cargo){
       </div>
     </div>
   `);
+}
+
+function modalConfigCanalDenuncia(cliente){
+  const cd = cliente.canalDenuncia || {ativo:false, emails:[], valorMensalidade:''};
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Configurar Canal de Denúncia</h2>
+    <div class="modal-sub">${esc(cliente.nome)}</div>
+    <form id="form-config-denuncia">
+      <div class="checkbox-row"><input type="checkbox" id="chk-canal-ativo" ${cd.ativo?'checked':''}><label for="chk-canal-ativo">Canal ativo para este cliente</label></div>
+      <div class="form-grid" style="margin-top:10px;">
+        <div class="field full">
+          <label>E-mails para notificação (um por linha)</label>
+          <textarea name="emails" placeholder="rh@empresa.com&#10;diretoria@empresa.com">${esc((cd.emails||[]).join('\n'))}</textarea>
+          <div class="hint">Toda nova denúncia é enviada automaticamente para esses e-mails.</div>
+        </div>
+        <div class="field"><label>Valor da mensalidade (R$)</label><input type="number" step="0.01" min="0" name="valorMensalidade" value="${esc(cd.valorMensalidade)}" placeholder="Ex.: 300.00"></div>
+      </div>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar configuração</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-config-denuncia').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const emails = f.get('emails').split('\n').map(s=>s.trim()).filter(Boolean);
+    cliente.canalDenuncia = {
+      ativo: document.getElementById('chk-canal-ativo').checked,
+      emails: emails,
+      valorMensalidade: f.get('valorMensalidade') || ''
+    };
+    closeModal(); saveDB(); renderView();
+    showToast('Configuração salva.');
+  });
+}
+
+function modalLinkCanalDenuncia(cliente){
+  const link = linkCanalDenuncia(cliente.id);
+  const mensagem = 'Olá! A '+cliente.nome+' disponibilizou um canal de denúncia confidencial e anônimo para todos os colaboradores. Se precisar relatar algo (assédio, discriminação, irregularidades, etc.), acesse: '+link;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Link do Canal de Denúncia</h2>
+    <div class="modal-sub">${esc(cliente.nome)}</div>
+    <p class="hint" style="margin-bottom:10px;">Divulgue este link amplamente entre os colaboradores (mural, WhatsApp, e-mail, intranet). A Lei 14.457/2022 exige ampla divulgação do canal.</p>
+    <div class="field full">
+      <label>Link público</label>
+      <input type="text" readonly value="${esc(link)}" id="link-denuncia-input" onclick="this.select()">
+    </div>
+    <div class="field full">
+      <label>Mensagem sugerida para divulgação</label>
+      <textarea id="texto-denuncia-mensagem" style="min-height:90px;">${esc(mensagem)}</textarea>
+    </div>
+    <div class="modal-footer">
+      <span><span class="btn btn-secondary btn-sm" data-action="copiar-link-denuncia" data-id="${cliente.id}">Copiar link</span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="copiar-mensagem-denuncia">Copiar mensagem</span>
+      </div>
+    </div>
+  `);
+}
+
+function modalVerDenuncia(denuncia){
+  const cliente = getCliente(denuncia.clienteId);
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Denúncia — Protocolo ${esc(denuncia.protocolo)}</h2>
+    <div class="modal-sub">${esc(cliente?.nome||'')} · ${formatDate(denuncia.data)}</div>
+
+    <div class="section-title">Detalhes</div>
+    <p class="hint"><strong>Categoria:</strong> ${esc(denuncia.categoria)}</p>
+    <p class="hint"><strong>Identificado(a):</strong> ${denuncia.identificado ? esc(denuncia.nome)+(denuncia.contato?' — '+esc(denuncia.contato):'') : 'Não (anônimo)'}</p>
+    <p style="font-size:13.5px;white-space:pre-line;margin-top:8px;padding:12px;background:var(--gray-soft);border-radius:6px;">${esc(denuncia.descricao)}</p>
+
+    <form id="form-resposta-denuncia">
+      <div class="section-title">Apuração</div>
+      <div class="form-grid">
+        <div class="field"><label>Status</label>
+          <select name="status">
+            <option value="recebida" ${denuncia.status==='recebida'?'selected':''}>Recebida</option>
+            <option value="em_analise" ${denuncia.status==='em_analise'?'selected':''}>Em análise</option>
+            <option value="concluida" ${denuncia.status==='concluida'?'selected':''}>Concluída</option>
+          </select>
+        </div>
+        <div class="field full"><label>Resposta / andamento (visível para quem consultar o protocolo)</label><textarea name="respostaEmpresa">${esc(denuncia.respostaEmpresa||'')}</textarea></div>
+      </div>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-resposta-denuncia').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    denuncia.status = f.get('status');
+    denuncia.respostaEmpresa = f.get('respostaEmpresa').trim();
+    denuncia.dataResposta = todayISO();
+    closeModal(); saveDB(); renderView();
+    showToast('Denúncia atualizada.');
+  });
 }
 
 function modalLinkCultura(cliente){
@@ -4584,6 +5040,26 @@ function onGlobalClick(e){
     showToast(n>0 ? n+' mensalidade(s) gerada(s) para '+formatMesRef(mesAlvo)+'.' : 'Todos os clientes BPO já tinham mensalidade gerada para '+formatMesRef(mesAlvo)+'.');
     return;
   }
+  if(action === 'gerar-mensalidades-denuncia-mes'){
+    const mesAlvo = state.denMensMes || mesAtualRef();
+    const n = gerarMensalidadesCanalDenunciaDoMes(mesAlvo);
+    state.denMensMes = mesAlvo;
+    saveDB(); renderView();
+    showToast(n>0 ? n+' mensalidade(s) gerada(s) para '+formatMesRef(mesAlvo)+'.' : 'Todos os clientes com canal ativo já tinham mensalidade gerada para '+formatMesRef(mesAlvo)+'.');
+    return;
+  }
+  if(action === 'marcar-mensalidade-denuncia-paga'){
+    const m = db.mensalidadesCanalDenuncia.find(x=>x.id===id);
+    if(m){ m.statusPagamento='pago'; if(!m.dataPagamento) m.dataPagamento = todayISO(); saveDB(); renderView(); showToast('Mensalidade marcada como paga.'); }
+    return;
+  }
+  if(action === 'excluir-mensalidade-denuncia'){
+    if(confirm('Excluir esta mensalidade? Esta ação não pode ser desfeita.')){
+      db.mensalidadesCanalDenuncia = db.mensalidadesCanalDenuncia.filter(m=>m.id!==id);
+      saveDB(); renderView();
+    }
+    return;
+  }
   if(action === 'novo-servico-avulso'){ modalServicoAvulso(null); return; }
   if(action === 'editar-servico-avulso'){ modalServicoAvulso(db.servicosAvulsos.find(s=>s.id===id)); return; }
   if(action === 'marcar-servico-avulso-pago'){
@@ -4616,6 +5092,8 @@ function onGlobalClick(e){
       db.servicosAvulsos = db.servicosAvulsos.filter(s=>s.clienteId!==id);
       db.absenteismo = db.absenteismo.filter(a=>a.clienteId!==id);
       db.diagnosticosCultura = db.diagnosticosCultura.filter(d=>d.clienteId!==id);
+      db.denuncias = db.denuncias.filter(d=>d.clienteId!==id);
+      db.mensalidadesCanalDenuncia = db.mensalidadesCanalDenuncia.filter(m=>m.clienteId!==id);
       db.agenda.forEach(e=>{ if(e.clienteId===id) e.clienteId=''; });
       db.clientes = db.clientes.filter(c=>c.id!==id);
       candidatosDoClienteExcluido.forEach(c=>{ if(c.temCurriculo) removerCurriculoStorage(c.id); });
@@ -4668,6 +5146,30 @@ function onGlobalClick(e){
     return;
   }
   if(action === 'link-cultura'){ modalLinkCultura(getCliente(id)); return; }
+  if(action === 'config-canal-denuncia'){ modalConfigCanalDenuncia(getCliente(id)); return; }
+  if(action === 'link-canal-denuncia'){ modalLinkCanalDenuncia(getCliente(id)); return; }
+  if(action === 'ver-denuncia'){ modalVerDenuncia(db.denuncias.find(d=>d.id===id)); return; }
+  if(action === 'copiar-link-denuncia'){
+    const link = linkCanalDenuncia(id);
+    const finalizar = ()=> showToast('Link copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(finalizar).catch(()=>{
+        const inp = document.getElementById('link-denuncia-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+      });
+    } else {
+      const inp = document.getElementById('link-denuncia-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+    }
+    return;
+  }
+  if(action === 'copiar-mensagem-denuncia'){
+    const campo = document.getElementById('texto-denuncia-mensagem');
+    if(!campo) return;
+    const finalizar = ()=> showToast('Mensagem copiada!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(campo.value).then(finalizar).catch(()=>{ campo.select(); document.execCommand('copy'); finalizar(); });
+    } else { campo.select(); document.execCommand('copy'); finalizar(); }
+    return;
+  }
   if(action === 'copiar-link-cultura'){
     const link = linkDiagnosticoCultura(id);
     const finalizar = ()=> showToast('Link copiado!');
@@ -4871,6 +5373,7 @@ function onGlobalChange(e){
   if(t.dataset.role === 'serv-tipo'){ state.servTipo = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-status'){ state.servStatus = t.value; renderView(); return; }
   if(t.dataset.role === 'ind-cliente'){ state.indClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'den-cliente'){ state.denClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'ind-mes-inicio'){ state.indMesInicio = t.value; renderView(); return; }
   if(t.dataset.role === 'ind-mes-fim'){ state.indMesFim = t.value; renderView(); return; }
   if(t.dataset.role === 'dash-status-vaga'){ state.dashStatusVaga = t.value; renderView(); return; }
@@ -4919,12 +5422,15 @@ function onGlobalInput(e){
   const cargoIdPublico = getHashCargoId();
   const candidatoIdAvaliacao = getHashAvaliacaoId();
   const clienteIdCultura = getHashCulturaId();
+  const clienteIdDenuncia = getHashDenunciaId();
   if(cargoIdPublico){
     await renderPublicApplication(cargoIdPublico);
   } else if(candidatoIdAvaliacao){
     await renderAvaliacaoComportamental(candidatoIdAvaliacao);
   } else if(clienteIdCultura){
     await renderDiagnosticoCultura(clienteIdCultura);
+  } else if(clienteIdDenuncia){
+    await renderCanalDenuncia(clienteIdDenuncia);
   } else {
     db = await loadDB();
     garantirConfiguracoes();
