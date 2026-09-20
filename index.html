@@ -229,8 +229,9 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyCrtWqclwQbWMp
 
 function appsScriptConfigurado(){ return !!APPS_SCRIPT_URL; }
 
-async function chamarAppsScriptPost(action, payload, timeoutMs){
+async function chamarAppsScriptPost(action, payload, timeoutMs, tentativa){
   if(!appsScriptConfigurado()) throw new Error('Integração com o Google ainda não foi configurada.');
+  tentativa = tentativa || 1;
   const controller = new AbortController();
   const timer = setTimeout(()=>controller.abort(), timeoutMs || 25000);
   let res;
@@ -242,30 +243,52 @@ async function chamarAppsScriptPost(action, payload, timeoutMs){
       signal: controller.signal
     });
   }catch(err){
+    clearTimeout(timer);
     if(err.name === 'AbortError') throw new Error('A conexão demorou demais para responder. Verifique sua internet e tente novamente.');
     throw err;
-  }finally{
-    clearTimeout(timer);
   }
-  const data = await res.json();
+  clearTimeout(timer);
+  const textoResposta = await res.text();
+  let data;
+  try{
+    data = JSON.parse(textoResposta);
+  }catch(errParse){
+    // O Google às vezes devolve uma página de verificação em vez da resposta, principalmente na primeira tentativa de um navegador. Tenta de novo automaticamente.
+    if(tentativa < 3){
+      await new Promise(r=>setTimeout(r, 1200));
+      return chamarAppsScriptPost(action, payload, timeoutMs, tentativa+1);
+    }
+    throw new Error('O Google não respondeu corretamente depois de algumas tentativas. Tente novamente em instantes, ou peça para tentar em outro navegador (Chrome, de preferência).');
+  }
   if(!data.ok) throw new Error(data.error || 'Falha na integração.');
   return data;
 }
 
-async function chamarAppsScriptGet(query, timeoutMs){
+async function chamarAppsScriptGet(query, timeoutMs, tentativa){
   if(!appsScriptConfigurado()) throw new Error('Integração com o Google ainda não foi configurada.');
+  tentativa = tentativa || 1;
   const controller = new AbortController();
   const timer = setTimeout(()=>controller.abort(), timeoutMs || 25000);
   let res;
   try{
     res = await fetch(APPS_SCRIPT_URL + '?' + query, { signal: controller.signal });
   }catch(err){
+    clearTimeout(timer);
     if(err.name === 'AbortError') throw new Error('A conexão demorou demais para responder. Verifique sua internet e tente novamente.');
     throw err;
-  }finally{
-    clearTimeout(timer);
   }
-  const data = await res.json();
+  clearTimeout(timer);
+  const textoResposta = await res.text();
+  let data;
+  try{
+    data = JSON.parse(textoResposta);
+  }catch(errParse){
+    if(tentativa < 3){
+      await new Promise(r=>setTimeout(r, 1200));
+      return chamarAppsScriptGet(query, timeoutMs, tentativa+1);
+    }
+    throw new Error('O Google não respondeu corretamente depois de algumas tentativas. Tente novamente em instantes, ou peça para tentar em outro navegador (Chrome, de preferência).');
+  }
   if(!data.ok) throw new Error(data.error || 'Falha na integração.');
   return data;
 }
@@ -550,6 +573,26 @@ function gerarMensalidadesCanalDenunciaDoMes(mesRef){
   return criadas;
 }
 
+function mesesDisponiveisMensalidadesClima(){
+  const set = new Set(db.mensalidadesPesquisaClima.map(m=>m.mesReferencia));
+  set.add(mesAtualRef());
+  return Array.from(set).sort().reverse();
+}
+function gerarMensalidadesClimaDoMes(mesRef){
+  const clientesAtivos = db.clientes.filter(cl=>cl.pesquisaClima && cl.pesquisaClima.ativo);
+  let criadas = 0;
+  clientesAtivos.forEach(cl=>{
+    const jaExiste = db.mensalidadesPesquisaClima.some(m=>m.clienteId===cl.id && m.mesReferencia===mesRef);
+    if(jaExiste) return;
+    db.mensalidadesPesquisaClima.push({
+      id: uid('mensclima'), clienteId: cl.id, mesReferencia: mesRef,
+      valor: cl.pesquisaClima.valorMensalidade || '', statusPagamento: 'pendente', dataPagamento: ''
+    });
+    criadas++;
+  });
+  return criadas;
+}
+
 function esc(s){ return (s===undefined||s===null) ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ---- Currículos anexados (armazenados separadamente do banco principal) ---- */
@@ -754,17 +797,22 @@ function garantirConfiguracoes(){
   if(!Array.isArray(db.mensalidadesBPO)) db.mensalidadesBPO = [];
   if(!Array.isArray(db.servicosAvulsos)) db.servicosAvulsos = [];
   if(!Array.isArray(db.absenteismo)) db.absenteismo = [];
+  if(!Array.isArray(db.treinamentos)) db.treinamentos = [];
   if(!Array.isArray(db.agenda)) db.agenda = [];
   db.agenda.forEach(e=>{ if(!e.ata) e.ata = {participantes:'', decisoes:'', proximosPassos:''}; });
   if(!Array.isArray(db.diagnosticosCultura)) db.diagnosticosCultura = [];
   if(!Array.isArray(db.denuncias)) db.denuncias = [];
   if(!Array.isArray(db.mensalidadesCanalDenuncia)) db.mensalidadesCanalDenuncia = [];
+  if(!Array.isArray(db.pesquisasClima)) db.pesquisasClima = [];
+  if(!Array.isArray(db.mensalidadesPesquisaClima)) db.mensalidadesPesquisaClima = [];
+  if(!Array.isArray(db.materiais)) db.materiais = [];
   db.clientes.forEach(cl=>{
     if(!cl.tipoServico) cl.tipoServico = 'rs';
     if(cl.valorMensalidadeBPO===undefined) cl.valorMensalidadeBPO = '';
     if(!cl.beneficios){ cl.beneficios = beneficiosVazios(); }
     else { BENEFICIOS_PADRAO.forEach(b=>{ if(!cl.beneficios[b.chave]) cl.beneficios[b.chave] = {ativo:false, valor:''}; }); }
     if(!cl.canalDenuncia) cl.canalDenuncia = {ativo:false, emails:[], valorMensalidade:''};
+    if(!cl.pesquisaClima) cl.pesquisaClima = {ativo:false, dataInicio:'', dataFim:'', areas:[], valorMensalidade:''};
   });
   db.colaboradores.forEach(c=>{
     if(c.salarioAdmissao===undefined) c.salarioAdmissao = '';
@@ -914,7 +962,14 @@ let state = {
   denClienteId: '',
   denMensClienteId: '',
   denMensMes: '',
-  denMensStatus: ''
+  denMensStatus: '',
+  climaClienteId: '',
+  climaAreaFiltro: '',
+  climaMensClienteId: '',
+  climaMensMes: '',
+  climaMensStatus: '',
+  driveClienteId: '',
+  driveCategoria: ''
 };
 
 
@@ -949,6 +1004,9 @@ function renderShell(){
 
         <div class="nav-section-label">Canal de denúncia</div>
         <div class="nav-item" data-action="nav" data-tab="denuncia"><span class="nav-dot"></span>Canal de denúncia</div>
+
+        <div class="nav-section-label">Pesquisa de Clima</div>
+        <div class="nav-item" data-action="nav" data-tab="clima"><span class="nav-dot"></span>Pesquisa de Clima</div>
       </div>
       <div class="global-search-wrap">
         <input type="search" id="busca-global" placeholder="🔍 Buscar (Ctrl+K)" autocomplete="off">
@@ -1034,8 +1092,9 @@ function renderView(){
   else if(state.tab === 'faturamento') view.innerHTML = viewFaturamento();
   else if(state.tab === 'colaboradores') view.innerHTML = viewColaboradores();
   else if(state.tab === 'indicadores') view.innerHTML = viewIndicadores();
-  else if(state.tab === 'drive') view.innerHTML = viewEmConstrucao('Drive — Materiais e documentos', 'Aqui você vai poder guardar, por empresa, políticas, regimentos, códigos de conduta e outros materiais construídos. Ainda estamos construindo essa parte.');
+  else if(state.tab === 'drive') view.innerHTML = viewDriveAdmin();
   else if(state.tab === 'denuncia') view.innerHTML = viewCanalDenunciaAdmin();
+  else if(state.tab === 'clima') view.innerHTML = viewPesquisaClimaAdmin();
   else if(state.tab === 'relatorio') view.innerHTML = viewRelatorio();
   afterRenderView();
 }
@@ -1043,6 +1102,9 @@ function renderView(){
 function afterRenderView(){
   if(state.tab === 'indicadores'){
     requestAnimationFrame(()=>{ requestAnimationFrame(drawIndicadoresCharts); });
+  }
+  if(state.tab === 'clima'){
+    requestAnimationFrame(()=>{ requestAnimationFrame(drawClimaCharts); });
   }
 }
 
@@ -1656,6 +1718,7 @@ function viewFaturamento(){
     ${viewMensalidadesBPO()}
     ${viewServicosAvulsos()}
     ${viewMensalidadesCanalDenuncia()}
+    ${viewMensalidadesPesquisaClima()}
   `;
 }
 
@@ -1853,6 +1916,67 @@ function viewMensalidadesCanalDenuncia(){
   `;
 }
 
+function viewMensalidadesPesquisaClima(){
+  const clientesAtivos = db.clientes.filter(cl=>cl.pesquisaClima && cl.pesquisaClima.ativo);
+  if(clientesAtivos.length===0) return '';
+
+  const clientesOpts = clientesAtivos.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.climaMensClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  const mesesOpts = mesesDisponiveisMensalidadesClima().map(m=>'<option value="'+m+'" '+(state.climaMensMes===m?'selected':'')+'>'+formatMesRef(m)+'</option>').join('');
+
+  let lista = db.mensalidadesPesquisaClima.filter(m=>clientesAtivos.some(cl=>cl.id===m.clienteId));
+  if(state.climaMensClienteId) lista = lista.filter(m=>m.clienteId===state.climaMensClienteId);
+  if(state.climaMensMes) lista = lista.filter(m=>m.mesReferencia===state.climaMensMes);
+  if(state.climaMensStatus) lista = lista.filter(m=>m.statusPagamento===state.climaMensStatus);
+  lista = lista.slice().sort((a,b)=> b.mesReferencia.localeCompare(a.mesReferencia) || getCliente(a.clienteId)?.nome.localeCompare(getCliente(b.clienteId)?.nome||'')||0);
+
+  const totalPrevisto = lista.reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const totalRecebido = lista.filter(m=>m.statusPagamento==='pago').reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+  const totalPendente = lista.filter(m=>m.statusPagamento==='pendente').reduce((s,m)=>s+(parseFloat(m.valor)||0),0);
+
+  const linhas = lista.map(m=>{
+    const cl = getCliente(m.clienteId);
+    return `<tr>
+      <td>${esc(cl?.nome||'—')}</td>
+      <td>${formatMesRef(m.mesReferencia)}</td>
+      <td>${formatMoeda(parseFloat(m.valor)||0)}</td>
+      <td>${m.statusPagamento==='pago' ? '<span class="badge badge-green">Pago</span>' : '<span class="badge badge-amber">Pendente</span>'}</td>
+      <td>${m.dataPagamento ? formatDate(m.dataPagamento) : '—'}</td>
+      <td class="no-print" style="white-space:nowrap;">
+        ${m.statusPagamento==='pendente' ? '<span class="btn btn-ghost btn-sm" data-action="marcar-mensalidade-clima-paga" data-id="'+m.id+'">Marcar pago</span>' : ''}
+        <span class="btn btn-ghost btn-sm" data-action="excluir-mensalidade-clima" data-id="${m.id}">Excluir</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="topbar" style="margin-top:28px;">
+      <div><h1 style="font-size:19px;">Pesquisa de Clima — Mensalidades</h1><p>Cobrança recorrente do produto Pesquisa de Clima</p></div>
+      <span class="btn btn-secondary" data-action="gerar-mensalidades-clima-mes">Gerar mensalidades do mês</span>
+    </div>
+    <div class="filters-row">
+      <select data-role="clima-mens-cliente"><option value="">Todos os clientes</option>${clientesOpts}</select>
+      <select data-role="clima-mens-mes"><option value="">Todos os meses</option>${mesesOpts}</select>
+      <select data-role="clima-mens-status">
+        <option value="">Todos os status</option>
+        <option value="pendente" ${state.climaMensStatus==='pendente'?'selected':''}>Pendente</option>
+        <option value="pago" ${state.climaMensStatus==='pago'?'selected':''}>Pago</option>
+      </select>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">Total previsto no filtro</div><div class="value" style="font-size:22px;">${formatMoeda(totalPrevisto)}</div><div class="sub">${lista.length} mensalidade(s)</div></div>
+      <div class="kpi c-green"><div class="label">Total recebido</div><div class="value" style="font-size:22px;">${formatMoeda(totalRecebido)}</div></div>
+      <div class="kpi c-red"><div class="label">Total pendente</div><div class="value" style="font-size:22px;">${formatMoeda(totalPendente)}</div></div>
+    </div>
+    <div class="card">
+      ${lista.length===0 ? '<p class="hint">Nenhuma mensalidade encontrada. Use "Gerar mensalidades do mês" para criar automaticamente.</p>' : `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Cliente</th><th>Mês</th><th>Valor</th><th>Status</th><th>Data pagto.</th><th></th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table></div>`}
+    </div>
+  `;
+}
+
 function modalServicoAvulso(servico){
   const editando = !!servico;
   servico = servico || {id:'', clienteId:'', tipoServico:TIPOS_SERVICO_AVULSO[0], descricao:'', dataServico:todayISO(), valor:'', statusPagamento:'pendente', dataPagamento:'', observacoes:''};
@@ -2014,6 +2138,7 @@ function viewColaboradores(){
       <span class="btn ${state.colabAba==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="colaboradores">Colaboradores</span>
       <span class="btn ${state.colabAba==='funcoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="funcoes">Funções e cargos</span>
       <span class="btn ${state.colabAba==='absenteismo'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="absenteismo">Absenteísmo</span>
+      <span class="btn ${state.colabAba==='treinamentos'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="treinamentos">Treinamentos</span>
       <span class="btn ${state.colabAba==='cultura'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="cultura">Cultura Organizacional</span>
     </div>
 
@@ -2039,7 +2164,7 @@ function viewColaboradores(){
     </div>
     ${funcoes.length===0 ? '<div class="card empty-state"><h3>Nenhuma função cadastrada</h3><p>Clique em "+ Nova função" para começar.</p></div>' : `
     <div class="card table-wrap"><table><thead><tr><th>Título do cargo</th><th>Subordinado a</th><th>Área</th><th>Ocupação</th><th>Descritivo</th><th></th></tr></thead><tbody>${linhasFuncoes}</tbody></table></div>`}
-    ` : state.colabAba==='absenteismo' ? viewAbsenteismo(cl) : viewDiagnosticoCulturaAdmin(cl)}
+    ` : state.colabAba==='absenteismo' ? viewAbsenteismo(cl) : state.colabAba==='treinamentos' ? viewTreinamentos(cl) : viewDiagnosticoCulturaAdmin(cl)}
   `;
 }
 
@@ -2082,6 +2207,95 @@ function viewDiagnosticoCulturaAdmin(cliente){
     </div>
     `}
   `;
+}
+
+function horasHomemTreinamento(treinamento){
+  return (parseFloat(treinamento.cargaHoraria)||0) * (treinamento.participantes||[]).length;
+}
+
+function viewTreinamentos(cliente){
+  const treinamentos = db.treinamentos.filter(t=>t.clienteId===cliente.id).slice().sort((a,b)=>b.data.localeCompare(a.data));
+  const totalHorasHomem = treinamentos.reduce((s,t)=>s+horasHomemTreinamento(t), 0);
+  const ativosAtuais = colaboradoresDoCliente(cliente.id).filter(c=>statusColaborador(c)!=='desligado').length;
+  const mediaHorasPorColaborador = ativosAtuais>0 ? Math.round((totalHorasHomem/ativosAtuais)*10)/10 : null;
+
+  const linhas = treinamentos.map(t=>`<tr>
+    <td><strong>${esc(t.titulo)}</strong>${t.instrutor?'<div class="hint">Instrutor(a): '+esc(t.instrutor)+'</div>':''}</td>
+    <td>${formatDate(t.data)}</td>
+    <td>${esc(t.cargaHoraria)}h</td>
+    <td>${(t.participantes||[]).length}</td>
+    <td>${horasHomemTreinamento(t)}h</td>
+    <td class="no-print" style="white-space:nowrap;">
+      <span class="btn btn-ghost btn-sm" data-action="editar-treinamento" data-id="${t.id}">Editar</span>
+      <span class="btn btn-ghost btn-sm" data-action="excluir-treinamento" data-id="${t.id}">Excluir</span>
+    </td>
+  </tr>`).join('');
+
+  return `
+    <div class="topbar" style="margin-bottom:10px;">
+      <div><p class="hint">${treinamentos.length} treinamento(s) registrado(s)</p></div>
+      <button class="btn btn-primary btn-sm" data-action="novo-treinamento" data-cliente-id="${cliente.id}">+ Novo treinamento</button>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">Treinamentos realizados</div><div class="value">${treinamentos.length}</div></div>
+      <div class="kpi c-green"><div class="label">Total horas-homem (volume)</div><div class="value">${totalHorasHomem}h</div><div class="sub">Carga horária × participantes, somado</div></div>
+      <div class="kpi"><div class="label">Média de horas por colaborador</div><div class="value">${mediaHorasPorColaborador!==null ? mediaHorasPorColaborador+'h' : '—'}</div><div class="sub">Total horas-homem ÷ ${ativosAtuais} colaborador(es) ativo(s)</div></div>
+    </div>
+    ${treinamentos.length===0 ? '<div class="card empty-state"><h3>Nenhum treinamento registrado</h3><p>Clique em "+ Novo treinamento" para começar.</p></div>' : `
+    <div class="card table-wrap"><table><thead><tr><th>Treinamento</th><th>Data</th><th>Carga horária</th><th>Participantes</th><th>Horas-homem</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
+  `;
+}
+
+function modalTreinamento(treinamento, clienteId){
+  const editando = !!treinamento;
+  treinamento = treinamento || {id:'', clienteId:clienteId, titulo:'', data:todayISO(), cargaHoraria:'', instrutor:'', descricao:'', participantes:[]};
+  const colaboradoresCliente = colaboradoresDoCliente(treinamento.clienteId).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${editando ? 'Editar treinamento' : 'Novo treinamento'}</h2>
+    <div class="modal-sub">${esc(getCliente(treinamento.clienteId)?.nome||'')}</div>
+    <form id="form-treinamento">
+      <div class="form-grid">
+        <div class="field full"><label>Título *</label><input required name="titulo" value="${esc(treinamento.titulo)}"></div>
+        <div class="field"><label>Data *</label><input required type="date" name="data" value="${treinamento.data}"></div>
+        <div class="field"><label>Carga horária (horas) *</label><input required type="number" step="0.5" min="0" name="cargaHoraria" value="${esc(treinamento.cargaHoraria)}"></div>
+        <div class="field full"><label>Instrutor(a) / Fornecedor</label><input name="instrutor" value="${esc(treinamento.instrutor||'')}"></div>
+        <div class="field full"><label>Descrição (opcional)</label><textarea name="descricao">${esc(treinamento.descricao||'')}</textarea></div>
+      </div>
+
+      <div class="section-title">Participantes</div>
+      ${colaboradoresCliente.length===0 ? '<p class="hint">Nenhum colaborador cadastrado para este cliente ainda.</p>' : `
+      <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px 12px;">
+        ${colaboradoresCliente.map(c=>`<div class="checkbox-row"><input type="checkbox" class="chk-participante" value="${c.id}" ${treinamento.participantes.includes(c.id)?'checked':''}><label>${esc(c.nome)}</label></div>`).join('')}
+      </div>`}
+
+      <div class="modal-footer">
+        <span>${editando ? '<span class="btn btn-danger btn-sm" data-action=\"excluir-treinamento\" data-id=\"'+treinamento.id+'\">Excluir</span>' : ''}</span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar treinamento</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-treinamento').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const participantes = Array.from(document.querySelectorAll('.chk-participante:checked')).map(chk=>chk.value);
+    const dados = {
+      clienteId: treinamento.clienteId,
+      titulo: f.get('titulo').trim(),
+      data: f.get('data'),
+      cargaHoraria: f.get('cargaHoraria'),
+      instrutor: f.get('instrutor').trim(),
+      descricao: f.get('descricao').trim(),
+      participantes: participantes
+    };
+    if(editando){ Object.assign(treinamento, dados); }
+    else { db.treinamentos.push(Object.assign({id:uid('trein')}, dados)); }
+    closeModal(); saveDB(); renderView();
+  });
 }
 
 function viewAbsenteismo(cliente){
@@ -2153,10 +2367,221 @@ function calcularIndicadoresCompletos(clienteId, mesIni, mesFim){
     const horasPrevistasTotal = registrosAbsenteismo.reduce((s,a)=>s+(parseFloat(a.horasPrevistas)||0),0);
     const horasPerdidasTotal = registrosAbsenteismo.reduce((s,a)=>s+(parseFloat(a.horasPerdidas)||0),0);
     const absenteismoPct = horasPrevistasTotal>0 ? Math.round((horasPerdidasTotal/horasPrevistasTotal)*1000)/10 : 0;
-    bpo = { turnoverMedio, taxaAcumulada: acumulado.taxa, indiceRetencao, admitidosPeriodo, desligadosPeriodo, ativosAtuais, horasPrevistasTotal, horasPerdidasTotal, absenteismoPct, temRegistrosAbsenteismo: registrosAbsenteismo.length>0 };
+    const treinamentosPeriodo = db.treinamentos.filter(t=>t.clienteId===clienteId && t.data>=de && t.data<=ate);
+    const horasHomemTreinamentoPeriodo = treinamentosPeriodo.reduce((s,t)=>s+horasHomemTreinamento(t), 0);
+    const mediaHorasTreinamentoPorColaborador = ativosAtuais>0 ? Math.round((horasHomemTreinamentoPeriodo/ativosAtuais)*10)/10 : null;
+    bpo = { turnoverMedio, taxaAcumulada: acumulado.taxa, indiceRetencao, admitidosPeriodo, desligadosPeriodo, ativosAtuais, horasPrevistasTotal, horasPerdidasTotal, absenteismoPct, temRegistrosAbsenteismo: registrosAbsenteismo.length>0, treinamentosPeriodo: treinamentosPeriodo.length, horasHomemTreinamentoPeriodo, mediaHorasTreinamentoPorColaborador };
   }
 
   return { vagasAbertasPeriodo, vagasFechadasPeriodo, tempoMedioContratacao, candidatosInscritosPeriodo: candidatosPeriodo.length, taxaConversao, candidatosPorVagaFechada, bpo };
+}
+
+function viewPesquisaClimaAdmin(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.climaClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+(cl.pesquisaClima&&cl.pesquisaClima.ativo?' ✓':'')+'</option>').join('');
+  const cliente = state.climaClienteId ? getCliente(state.climaClienteId) : null;
+
+  if(!cliente){
+    return `
+      <div class="topbar"><div><h1>Pesquisa de Clima</h1><p>Selecione um cliente para configurar ou ver resultados.</p></div></div>
+      <div class="filters-row"><select data-role="clima-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+      <div class="card empty-state"><h3>Selecione um cliente acima</h3><p>Marcado com "✓" na lista os clientes que já têm a pesquisa ativa.</p></div>
+    `;
+  }
+
+  const pc = cliente.pesquisaClima || {ativo:false, dataInicio:'', dataFim:'', areas:[]};
+  const resultado = calcularResultadoPesquisaClima(cliente.id, state.climaAreaFiltro);
+  const hoje = todayISO();
+  const prazoStatus = !pc.dataInicio && !pc.dataFim ? 'sem prazo definido' : (pc.dataFim && hoje>pc.dataFim ? 'encerrada em '+formatDate(pc.dataFim) : (pc.dataInicio && hoje<pc.dataInicio ? 'abre em '+formatDate(pc.dataInicio) : 'aberta'+(pc.dataFim?' até '+formatDate(pc.dataFim):'')));
+
+  return `
+    <div class="topbar"><div><h1>Pesquisa de Clima</h1><p>${esc(cliente.nome)}</p></div></div>
+    <div class="filters-row"><select data-role="clima-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+
+    <div class="card" style="margin-bottom:22px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${pc.ativo?'14px':'0'};">
+        <h3 style="font-size:15px;margin:0;">Configuração</h3>
+        <span class="btn btn-secondary btn-sm" data-action="config-pesquisa-clima" data-id="${cliente.id}">⚙️ Configurar</span>
+      </div>
+      ${pc.ativo ? `
+      <p class="hint">Pesquisa <strong style="color:var(--green);">ativa</strong> — ${esc(prazoStatus)}. Áreas cadastradas: ${pc.areas&&pc.areas.length?esc(pc.areas.join(', ')):'nenhuma (pesquisa não pedirá área)'}.</p>
+      <span class="btn btn-primary btn-sm" data-action="link-pesquisa-clima" data-id="${cliente.id}" style="margin-top:8px;">🔗 Enviar link da pesquisa</span>
+      ` : '<p class="hint">Pesquisa ainda não ativada para este cliente. Clique em "Configurar" para ativar.</p>'}
+    </div>
+
+    ${pc.ativo ? `
+    <div class="filters-row">
+      <select data-role="clima-area-filtro">
+        <option value="">Todas as áreas</option>
+        ${(pc.areas||[]).map(a=>'<option value="'+esc(a)+'" '+(state.climaAreaFiltro===a?'selected':'')+'>'+esc(a)+'</option>').join('')}
+      </select>
+    </div>
+
+    ${resultado.totalRespostas===0 ? '<div class="card empty-state"><h3>Nenhuma resposta ainda</h3><p>Envie o link para os colaboradores desta empresa responderem.</p></div>' : `
+    <div class="kpi-grid">
+      <div class="kpi c-green"><div class="label">Satisfação geral</div><div class="value" style="font-size:28px;">${resultado.satisfacaoGeral}%</div></div>
+      <div class="kpi"><div class="label">Respostas recebidas</div><div class="value">${resultado.totalRespostas}</div></div>
+    </div>
+
+    <div class="charts-row">
+      <div class="card chart-card"><h3>Favorabilidade por bloco</h3><div class="chart-wrap"><canvas id="chart-clima-blocos"></canvas></div></div>
+      <div class="card chart-card"><h3>Favorabilidade por pergunta</h3><div class="chart-wrap" style="height:520px;"><canvas id="chart-clima-perguntas"></canvas></div></div>
+    </div>
+    `}
+    ` : ''}
+  `;
+}
+
+let chartsClima = {};
+function destruirChartClima(id){
+  if(chartsClima[id]){ try{ chartsClima[id].destroy(); }catch(e){} delete chartsClima[id]; }
+}
+function drawClimaCharts(){
+  if(!window.Chart || !state.climaClienteId) return;
+  const cliente = getCliente(state.climaClienteId);
+  if(!cliente || !cliente.pesquisaClima || !cliente.pesquisaClima.ativo) return;
+  const resultado = calcularResultadoPesquisaClima(cliente.id, state.climaAreaFiltro);
+  if(resultado.totalRespostas===0) return;
+
+  const ctxBlocos = document.getElementById('chart-clima-blocos');
+  destruirChartClima('chart-clima-blocos');
+  if(ctxBlocos){
+    chartsClima['chart-clima-blocos'] = new Chart(ctxBlocos, {
+      type: 'bar',
+      data: {
+        labels: GRUPOS_PESQUISA_CLIMA.map(g=>g.nome),
+        datasets: [{ data: GRUPOS_PESQUISA_CLIMA.map(g=>resultado.porGrupo[g.chave].favoravel), backgroundColor: '#B2573D' }]
+      },
+      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, max:100}} }
+    });
+  }
+
+  const ctxPerguntas = document.getElementById('chart-clima-perguntas');
+  destruirChartClima('chart-clima-perguntas');
+  if(ctxPerguntas){
+    const todasPerguntas = [];
+    GRUPOS_PESQUISA_CLIMA.forEach(g=> g.perguntas.forEach(p=> todasPerguntas.push(p)));
+    chartsClima['chart-clima-perguntas'] = new Chart(ctxPerguntas, {
+      type: 'bar',
+      data: {
+        labels: todasPerguntas.map(p=>p.texto.length>50?p.texto.slice(0,50)+'…':p.texto),
+        datasets: [{ data: todasPerguntas.map(p=>resultado.porPergunta[p.chave].favoravel), backgroundColor: '#8C6A4B' }]
+      },
+      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, max:100}} }
+    });
+  }
+}
+
+const CATEGORIAS_MATERIAL = ['Política', 'Regimento Interno', 'Código de Conduta', 'Contrato', 'Comunicado', 'Manual', 'Outro'];
+const TAMANHO_MAX_MATERIAL = 10 * 1024 * 1024; // 10MB
+
+function formatTamanhoArquivo(bytes){
+  if(!bytes) return '—';
+  if(bytes < 1024*1024) return Math.round(bytes/1024) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function viewDriveAdmin(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.driveClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  const cliente = state.driveClienteId ? getCliente(state.driveClienteId) : null;
+
+  if(!cliente){
+    return `
+      <div class="topbar"><div><h1>Drive</h1><p>Materiais e documentos por empresa: políticas, regimentos, códigos de conduta, contratos.</p></div></div>
+      <div class="filters-row"><select data-role="drive-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+      <div class="card empty-state"><h3>Selecione um cliente acima</h3></div>
+    `;
+  }
+
+  if(!appsScriptConfigurado()){
+    return `
+      <div class="topbar"><div><h1>Drive</h1><p>${esc(cliente.nome)}</p></div></div>
+      <div class="filters-row"><select data-role="drive-cliente"><option value="">Selecione um cliente...</option>${clientesOpts}</select></div>
+      <div class="card empty-state"><h3>Integração com o Google ainda não configurada</h3><p>O Drive depende da integração ativa para guardar os arquivos.</p></div>
+    `;
+  }
+
+  let materiais = db.materiais.filter(m=>m.clienteId===cliente.id);
+  if(state.driveCategoria) materiais = materiais.filter(m=>m.categoria===state.driveCategoria);
+  materiais = materiais.slice().sort((a,b)=>b.dataUpload.localeCompare(a.dataUpload));
+
+  const linhas = materiais.map(m=>`<tr>
+    <td><a href="${esc(m.url)}" target="_blank">${esc(m.nome)}</a></td>
+    <td>${esc(m.categoria)}</td>
+    <td>${formatTamanhoArquivo(m.tamanho)}</td>
+    <td>${formatDate(m.dataUpload)}</td>
+    <td class="no-print" style="white-space:nowrap;">
+      <a class="btn btn-ghost btn-sm" href="${esc(m.url)}" target="_blank">Abrir</a>
+      <span class="btn btn-ghost btn-sm" data-action="excluir-material" data-id="${m.id}">Excluir</span>
+    </td>
+  </tr>`).join('');
+
+  return `
+    <div class="topbar">
+      <div><h1>Drive</h1><p>${esc(cliente.nome)}</p></div>
+      <button class="btn btn-primary" data-action="upload-material" data-cliente-id="${cliente.id}">+ Enviar material</button>
+    </div>
+    <div class="filters-row">
+      <select data-role="drive-cliente"><option value="">Selecione um cliente...</option>${clientesOpts}</select>
+      <select data-role="drive-categoria">
+        <option value="">Todas as categorias</option>
+        ${CATEGORIAS_MATERIAL.map(c=>'<option value="'+c+'" '+(state.driveCategoria===c?'selected':'')+'>'+c+'</option>').join('')}
+      </select>
+    </div>
+    ${materiais.length===0 ? '<div class="card empty-state"><h3>Nenhum material enviado ainda</h3><p>Clique em "+ Enviar material" para começar.</p></div>' : `
+    <div class="card table-wrap"><table><thead><tr><th>Arquivo</th><th>Categoria</th><th>Tamanho</th><th>Enviado em</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
+  `;
+}
+
+function modalUploadMaterial(clienteId){
+  const cliente = getCliente(clienteId);
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Enviar material</h2>
+    <div class="modal-sub">${esc(cliente.nome)}</div>
+    <form id="form-upload-material">
+      <div class="form-grid">
+        <div class="field full"><label>Arquivo *</label><input required type="file" id="input-material"></div>
+        <div class="field full"><label>Nome de exibição</label><input name="nome" placeholder="Deixe em branco para usar o nome do arquivo"></div>
+        <div class="field full"><label>Categoria</label><select name="categoria">${CATEGORIAS_MATERIAL.map(c=>'<option>'+c+'</option>').join('')}</select></div>
+      </div>
+      <p class="hint">Tamanho máximo: 10MB.</p>
+      <p class="hint" id="erro-upload-material" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary" id="btn-enviar-material">Enviar</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-upload-material').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-upload-material');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const arquivo = document.getElementById('input-material').files[0];
+    if(!arquivo){ erroEl.textContent = 'Selecione um arquivo.'; erroEl.style.display='block'; return; }
+    if(arquivo.size > TAMANHO_MAX_MATERIAL){ erroEl.textContent = 'Arquivo muito grande (máximo 10MB).'; erroEl.style.display='block'; return; }
+    const btn = document.getElementById('btn-enviar-material');
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try{
+      const dataUrl = await lerArquivoBase64(arquivo);
+      const resp = await chamarAppsScriptPost('uploadMaterial', {
+        arquivoBase64: dataUrl, nomeArquivo: arquivo.name, tipoArquivo: arquivo.type, nomeCliente: cliente.nome
+      });
+      db.materiais.push({
+        id: uid('mat'), clienteId: clienteId, nome: f.get('nome').trim() || arquivo.name,
+        categoria: f.get('categoria'), url: resp.url, tipo: arquivo.type, tamanho: arquivo.size, dataUpload: todayISO()
+      });
+      closeModal(); saveDB(); renderView();
+      showToast('Material enviado.');
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível enviar agora.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Enviar';
+    }
+  });
 }
 
 function viewCanalDenunciaAdmin(){
@@ -2277,6 +2702,8 @@ function viewIndicadores(){
       <div class="kpi c-amber"><div class="label">Taxa acumulada</div><div class="value">${ind.bpo.taxaAcumulada}%</div><div class="sub">Calculada sobre o período inteiro</div></div>
       <div class="kpi c-green"><div class="label">Índice médio de retenção</div><div class="value">${ind.bpo.indiceRetencao}%</div><div class="sub">(1 − turnover médio) × 100</div></div>
       <div class="kpi"><div class="label">Horas perdidas no período</div><div class="value">${ind.bpo.horasPerdidasTotal}h</div></div>
+      <div class="kpi"><div class="label">Horas-homem de treinamento (volume)</div><div class="value">${ind.bpo.horasHomemTreinamentoPeriodo}h</div><div class="sub">${ind.bpo.treinamentosPeriodo} treinamento(s) no período</div></div>
+      <div class="kpi"><div class="label">Média de horas de treinamento/colaborador</div><div class="value">${ind.bpo.mediaHorasTreinamentoPorColaborador!==null ? ind.bpo.mediaHorasTreinamentoPorColaborador+'h' : '—'}</div><div class="sub">No período, ÷ colaboradores ativos</div></div>
       <div class="kpi ${ind.bpo.absenteismoPct>5?'c-red':'c-green'}"><div class="label">Absenteísmo</div><div class="value">${ind.bpo.temRegistrosAbsenteismo ? ind.bpo.absenteismoPct+'%' : '—'}</div><div class="sub">${ind.bpo.temRegistrosAbsenteismo ? 'Horas perdidas ÷ previstas' : 'Sem registros no período — lance em Acompanhamento BPO'}</div></div>
     </div>
     ` : ''}
@@ -2494,6 +2921,12 @@ function getHashDenunciaId(){
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+function getHashClimaId(){
+  const h = window.location.hash || '';
+  const m = h.match(/^#clima-(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 function paginaPublicaIndisponivel(mensagem){
   return `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
     <h2 style="margin-bottom:10px;">Vaga não disponível</h2>
@@ -2651,6 +3084,78 @@ const STATUS_DENUNCIA = {
   em_analise: {nome:'Em análise', cor:'badge-amber'},
   concluida: {nome:'Concluída', cor:'badge-green'}
 };
+
+const GRUPOS_PESQUISA_CLIMA = [
+  {chave:'percepcaoGeral', nome:'Percepção Geral da Empresa', perguntas:[
+    {chave:'boaEmpresa', texto:'Considero esta uma boa empresa para trabalhar'},
+    {chave:'organizada', texto:'Considero esta uma empresa organizada'},
+    {chave:'comunicacaoAdequada', texto:'A empresa possui comunicação adequada'},
+    {chave:'infraestrutura', texto:'A infraestrutura interna é adequada (sanitários, uniformes, condições gerais)'},
+    {chave:'indicaria', texto:'Eu indicaria um amigo ou familiar para trabalhar aqui'},
+    {chave:'preocupaClima', texto:'A empresa se preocupa com o clima organizacional'},
+    {chave:'fatoresSociais', texto:'O ambiente social da empresa é bom (não discriminatório, calmo, não confrontante)'}
+  ]},
+  {chave:'trabalhoAmbiente', nome:'Trabalho e Ambiente', perguntas:[
+    {chave:'fatoresPsicologicos', texto:'Os fatores psicológicos do ambiente de trabalho são adequados'},
+    {chave:'fatoresFisicos', texto:'Os fatores físicos do ambiente são adequados (temperatura, luz, ventilação, higiene)'},
+    {chave:'ferramentas', texto:'Tenho as ferramentas adequadas para executar meu trabalho'},
+    {chave:'trabalhoDesafiador', texto:'Considero meu trabalho desafiador'},
+    {chave:'trabalhoImportante', texto:'Considero que meu trabalho é importante para a empresa'},
+    {chave:'satisfeitoTrabalho', texto:'Estou satisfeito(a) com meu trabalho'},
+    {chave:'conhecimentosSuficientes', texto:'Meus conhecimentos técnicos são suficientes para desenvolver plenamente meu trabalho'}
+  ]},
+  {chave:'equipeBeneficios', nome:'Equipe, Benefícios e Crescimento', perguntas:[
+    {chave:'colegasColaboram', texto:'Meus colegas de trabalho colaboram comigo'},
+    {chave:'satisfeitoBeneficios', texto:'Estou satisfeito(a) com os benefícios da empresa'},
+    {chave:'oportunidadeTreinamento', texto:'A empresa oferece oportunidades de treinamento'},
+    {chave:'oportunidadeCrescimento', texto:'A empresa oferece oportunidades de crescimento'},
+    {chave:'salarioCompativel', texto:'Considero meu salário compatível com minha função'},
+    {chave:'comunicacaoSetor', texto:'Estou satisfeito(a) com a comunicação dentro do meu setor'},
+    {chave:'gestorConhecimento', texto:'Meu gestor direto possui conhecimento técnico para gerir a área plenamente'}
+  ]},
+  {chave:'lideranca', nome:'Liderança e Gestão', perguntas:[
+    {chave:'ambienteGestor', texto:'O ambiente de trabalho criado pelo meu gestor é bom'},
+    {chave:'confiaGestor', texto:'Eu confio no meu superior imediato'},
+    {chave:'recebeElogios', texto:'Recebo elogios por um trabalho bem feito'},
+    {chave:'reconhecimentoDesempenho', texto:'Meu gestor atribui adequadamente reconhecimento pelo meu desempenho'},
+    {chave:'comunicacaoClaraGestor', texto:'Meu gestor se comunica de maneira clara e transparente'},
+    {chave:'informacoesNecessarias', texto:'Meu gestor transmite as informações que preciso para fazer bem meu trabalho'},
+    {chave:'aberturaGestor', texto:'Tenho abertura para tratar assuntos diversos com meu gestor'}
+  ]}
+];
+
+function linkPesquisaClima(clienteId){
+  return window.location.origin + window.location.pathname + '#clima-' + clienteId;
+}
+
+function calcularResultadoPesquisaClima(clienteId, areaFiltro){
+  let respostas = db.pesquisasClima.filter(p=>p.clienteId===clienteId);
+  if(areaFiltro) respostas = respostas.filter(p=>p.area===areaFiltro);
+
+  const porGrupo = {};
+  const porPergunta = {};
+  let somaGeral = 0, itensGeral = 0;
+
+  GRUPOS_PESQUISA_CLIMA.forEach(grupo=>{
+    let somaGrupo = 0, itensGrupo = 0;
+    grupo.perguntas.forEach(p=>{
+      let somaP = 0, favoraveisP = 0, itensP = 0;
+      respostas.forEach(r=>{
+        const nota = parseFloat(r.respostas[p.chave]);
+        if(!nota) return;
+        somaP += nota; itensP++;
+        if(nota>=4) favoraveisP++;
+        somaGrupo += nota; itensGrupo++;
+        somaGeral += nota; itensGeral++;
+      });
+      porPergunta[p.chave] = { media: itensP? Math.round((somaP/itensP)*10)/10 : 0, favoravel: itensP? Math.round((favoraveisP/itensP)*1000)/10 : 0, respostas: itensP };
+    });
+    porGrupo[grupo.chave] = { media: itensGrupo? Math.round((somaGrupo/itensGrupo)*10)/10 : 0, favoravel: itensGrupo? Math.round((somaGrupo/itensGrupo/5)*1000)/10 : 0 };
+  });
+
+  const satisfacaoGeral = itensGeral? Math.round((somaGeral/itensGeral/5)*1000)/10 : 0;
+  return { totalRespostas: respostas.length, satisfacaoGeral, porGrupo, porPergunta };
+}
 
 function linkCanalDenuncia(clienteId){
   return window.location.origin + window.location.pathname + '#denuncia-' + clienteId;
@@ -4032,6 +4537,109 @@ async function renderCanalDenuncia(clienteId){
   telaFormulario();
 }
 
+async function renderPesquisaClima(clienteId){
+  document.title = 'Pesquisa de Clima · Caroline Peixoto DHO';
+  document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando… isso pode levar alguns segundos na primeira vez.</div></div><div id="toast-slot"></div>';
+  const root = document.getElementById('public-root');
+
+  if(!appsScriptConfigurado()){
+    root.innerHTML = paginaPublicaIndisponivel('A integração desta página ainda não foi concluída por quem administra o painel.');
+    return;
+  }
+
+  let info;
+  try{
+    info = await chamarAppsScriptGet('action=climaInfoPublico&id=' + encodeURIComponent(clienteId));
+  }catch(err){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Não foi possível carregar</h2>
+      <p class="hint" style="margin-bottom:16px;">${esc(err.message || 'Ocorreu um erro ao carregar a página.')}</p>
+      <span class="btn btn-primary" id="btn-tentar-novamente-clima">Tentar novamente</span>
+    </div>`;
+    const btn = document.getElementById('btn-tentar-novamente-clima');
+    if(btn) btn.addEventListener('click', ()=> renderPesquisaClima(clienteId));
+    return;
+  }
+
+  if(!info || !info.nome){
+    root.innerHTML = paginaPublicaIndisponivel('Empresa não encontrada. Confira o link recebido.');
+    return;
+  }
+
+  const hoje = todayISO();
+  if(!info.ativo){
+    root.innerHTML = paginaPublicaIndisponivel('A pesquisa de clima desta empresa não está disponível no momento.');
+    return;
+  }
+  if(info.dataInicio && hoje < info.dataInicio){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;"><h2 style="margin-bottom:10px;">Ainda não abriu</h2><p class="hint">Esta pesquisa abre em ${formatDate(info.dataInicio)}. Volte a este link depois dessa data.</p></div>`;
+    return;
+  }
+  if(info.dataFim && hoje > info.dataFim){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;"><h2 style="margin-bottom:10px;">Prazo encerrado</h2><p class="hint">Esta pesquisa foi encerrada em ${formatDate(info.dataFim)}. Obrigado pelo interesse.</p></div>`;
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card" style="max-width:680px;margin:32px auto;padding:0;overflow:hidden;">
+      <div style="background:var(--spine);padding:26px 32px;text-align:center;">
+        <img src="data:image/png;base64,${LOGO_CLARO_B64}" alt="Caroline Peixoto DHO" style="max-width:260px;width:100%;height:auto;display:inline-block;">
+      </div>
+      <div style="padding:32px;">
+        <h1 style="font-size:22px;margin-bottom:6px;">Pesquisa de Clima Organizacional</h1>
+        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 20px 0;">${esc(info.nome)} — Esta pesquisa é <strong>totalmente anônima</strong>. Suas respostas não identificam você de forma alguma. Avalie de <strong>1 (discordo totalmente)</strong> a <strong>5 (concordo totalmente)</strong> cada afirmação. Leva cerca de 8 minutos.</p>
+
+        <form id="form-clima">
+          ${info.areas && info.areas.length ? `<div class="field full"><label>Sua área/setor *</label><select required name="area"><option value="">Selecione…</option>${info.areas.map(a=>'<option>'+esc(a)+'</option>').join('')}</select></div>` : ''}
+
+          ${GRUPOS_PESQUISA_CLIMA.map((grupo,gi)=>`
+            <div style="border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:12px;">
+              <div class="hint" style="margin-bottom:10px;">Bloco ${gi+1} de ${GRUPOS_PESQUISA_CLIMA.length} — ${esc(grupo.nome)}</div>
+              ${grupo.perguntas.map(p=>`
+                <div style="margin-bottom:12px;">
+                  <p style="font-size:13.5px;margin:0 0 6px 0;">${esc(p.texto)}</p>
+                  <div style="display:flex;gap:14px;align-items:center;">
+                    ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;">
+                      <input type="radio" name="p_${p.chave}" value="${n}" ${n===3?'checked':''} required>${n}
+                    </label>`).join('')}
+                  </div>
+                </div>
+              `).join('')}
+            </div>`).join('')}
+
+          <p class="hint" id="erro-clima" style="color:var(--red);display:none;"></p>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;" id="btn-enviar-clima">Enviar respostas</button>
+        </form>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--ink-soft);font-size:12px;margin-top:16px;">Caroline Peixoto DHO · Desenvolvimento Humano e Organizacional</p>
+  `;
+
+  document.getElementById('form-clima').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-clima');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const respostas = {};
+    GRUPOS_PESQUISA_CLIMA.forEach(grupo=>{
+      grupo.perguntas.forEach(p=>{ respostas[p.chave] = f.get('p_'+p.chave); });
+    });
+    const btn = document.getElementById('btn-enviar-clima');
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try{
+      await chamarAppsScriptPost('salvarPesquisaClima', {clienteId: clienteId, area: f.get('area')||'', respostas: respostas});
+      root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+        <h2 style="margin-bottom:10px;">Respostas enviadas! 🎉</h2>
+        <p class="hint">Muito obrigado pela sua participação. Suas respostas são anônimas e ajudam a empresa a melhorar o ambiente de trabalho.</p>
+      </div>`;
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível enviar agora. Verifique sua conexão e tente novamente.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Enviar respostas';
+    }
+  });
+}
+
 function modalCliente(cliente){
   const editando = !!cliente;
   cliente = cliente || {id:'', nome:'', nomeContato:'', telefoneContato:'', emailContato:'', observacoes:'', temLogo:false, logoNome:'', logoUrlPublica:'', tipoServico:'rs', beneficios:beneficiosVazios()};
@@ -4467,6 +5075,75 @@ function modalLinkVaga(cargo){
       <div class="right">
         <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
         <span class="btn btn-primary" data-action="copiar-link-vaga" data-id="${cargo.id}">Copiar link</span>
+      </div>
+    </div>
+  `);
+}
+
+function modalConfigPesquisaClima(cliente){
+  const pc = cliente.pesquisaClima || {ativo:false, dataInicio:'', dataFim:'', areas:[], valorMensalidade:''};
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Configurar Pesquisa de Clima</h2>
+    <div class="modal-sub">${esc(cliente.nome)}</div>
+    <form id="form-config-clima">
+      <div class="checkbox-row"><input type="checkbox" id="chk-clima-ativo" ${pc.ativo?'checked':''}><label for="chk-clima-ativo">Pesquisa ativa para este cliente</label></div>
+      <div class="form-grid" style="margin-top:10px;">
+        <div class="field"><label>Data de início (opcional)</label><input type="date" name="dataInicio" value="${pc.dataInicio||''}"></div>
+        <div class="field"><label>Data de encerramento (opcional)</label><input type="date" name="dataFim" value="${pc.dataFim||''}"></div>
+        <div class="field full">
+          <label>Áreas/setores (um por linha, opcional)</label>
+          <textarea name="areas" placeholder="Administrativo&#10;Comercial&#10;Operações">${esc((pc.areas||[]).join('\n'))}</textarea>
+          <div class="hint">Se preencher, a pesquisa pede pra pessoa escolher a área dela — assim dá pra ver o resultado por setor, além do geral. Deixe em branco se não quiser esse filtro.</div>
+        </div>
+        <div class="field"><label>Valor da mensalidade (R$)</label><input type="number" step="0.01" min="0" name="valorMensalidade" value="${esc(pc.valorMensalidade)}" placeholder="Ex.: 400.00"></div>
+      </div>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar configuração</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-config-clima').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const areas = f.get('areas').split('\n').map(s=>s.trim()).filter(Boolean);
+    cliente.pesquisaClima = {
+      ativo: document.getElementById('chk-clima-ativo').checked,
+      dataInicio: f.get('dataInicio') || '',
+      dataFim: f.get('dataFim') || '',
+      areas: areas,
+      valorMensalidade: f.get('valorMensalidade') || ''
+    };
+    closeModal(); saveDB(); renderView();
+    showToast('Configuração salva.');
+  });
+}
+
+function modalLinkPesquisaClima(cliente){
+  const link = linkPesquisaClima(cliente.id);
+  const mensagem = 'Olá! A '+cliente.nome+' está realizando uma pesquisa de clima organizacional, totalmente anônima. Sua opinião é muito importante para melhorarmos o ambiente de trabalho. Leva uns 8 minutinhos: '+link;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Link da Pesquisa de Clima</h2>
+    <div class="modal-sub">${esc(cliente.nome)}</div>
+    <p class="hint" style="margin-bottom:10px;">Divulgue este link amplamente entre os colaboradores (mural, WhatsApp, e-mail, intranet).</p>
+    <div class="field full">
+      <label>Link público</label>
+      <input type="text" readonly value="${esc(link)}" id="link-clima-input" onclick="this.select()">
+    </div>
+    <div class="field full">
+      <label>Mensagem sugerida para divulgação</label>
+      <textarea id="texto-clima-mensagem" style="min-height:90px;">${esc(mensagem)}</textarea>
+    </div>
+    <div class="modal-footer">
+      <span><span class="btn btn-secondary btn-sm" data-action="copiar-link-clima" data-id="${cliente.id}">Copiar link</span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="copiar-mensagem-clima">Copiar mensagem</span>
       </div>
     </div>
   `);
@@ -4993,6 +5670,15 @@ function onGlobalClick(e){
     }
     return;
   }
+  if(action === 'novo-treinamento'){ modalTreinamento(null, el.dataset.clienteId); return; }
+  if(action === 'editar-treinamento'){ modalTreinamento(db.treinamentos.find(t=>t.id===id)); return; }
+  if(action === 'excluir-treinamento'){
+    if(confirm('Excluir este treinamento? Esta ação não pode ser desfeita.')){
+      db.treinamentos = db.treinamentos.filter(t=>t.id!==id);
+      closeModal(); saveDB(); renderView();
+    }
+    return;
+  }
   if(action === 'novo-colaborador'){ modalColaborador(null, el.dataset.clienteId); return; }
   if(action === 'editar-colaborador'){ modalColaborador(getColaborador(id)); return; }
   if(action === 'abrir-prontuario'){ abrirProntuario(id); return; }
@@ -5060,6 +5746,26 @@ function onGlobalClick(e){
     }
     return;
   }
+  if(action === 'gerar-mensalidades-clima-mes'){
+    const mesAlvo = state.climaMensMes || mesAtualRef();
+    const n = gerarMensalidadesClimaDoMes(mesAlvo);
+    state.climaMensMes = mesAlvo;
+    saveDB(); renderView();
+    showToast(n>0 ? n+' mensalidade(s) gerada(s) para '+formatMesRef(mesAlvo)+'.' : 'Todos os clientes com pesquisa ativa já tinham mensalidade gerada para '+formatMesRef(mesAlvo)+'.');
+    return;
+  }
+  if(action === 'marcar-mensalidade-clima-paga'){
+    const m = db.mensalidadesPesquisaClima.find(x=>x.id===id);
+    if(m){ m.statusPagamento='pago'; if(!m.dataPagamento) m.dataPagamento = todayISO(); saveDB(); renderView(); showToast('Mensalidade marcada como paga.'); }
+    return;
+  }
+  if(action === 'excluir-mensalidade-clima'){
+    if(confirm('Excluir esta mensalidade? Esta ação não pode ser desfeita.')){
+      db.mensalidadesPesquisaClima = db.mensalidadesPesquisaClima.filter(m=>m.id!==id);
+      saveDB(); renderView();
+    }
+    return;
+  }
   if(action === 'novo-servico-avulso'){ modalServicoAvulso(null); return; }
   if(action === 'editar-servico-avulso'){ modalServicoAvulso(db.servicosAvulsos.find(s=>s.id===id)); return; }
   if(action === 'marcar-servico-avulso-pago'){
@@ -5094,6 +5800,10 @@ function onGlobalClick(e){
       db.diagnosticosCultura = db.diagnosticosCultura.filter(d=>d.clienteId!==id);
       db.denuncias = db.denuncias.filter(d=>d.clienteId!==id);
       db.mensalidadesCanalDenuncia = db.mensalidadesCanalDenuncia.filter(m=>m.clienteId!==id);
+      db.pesquisasClima = db.pesquisasClima.filter(p=>p.clienteId!==id);
+      db.mensalidadesPesquisaClima = db.mensalidadesPesquisaClima.filter(m=>m.clienteId!==id);
+      db.materiais = db.materiais.filter(m=>m.clienteId!==id);
+      db.treinamentos = db.treinamentos.filter(t=>t.clienteId!==id);
       db.agenda.forEach(e=>{ if(e.clienteId===id) e.clienteId=''; });
       db.clientes = db.clientes.filter(c=>c.id!==id);
       candidatosDoClienteExcluido.forEach(c=>{ if(c.temCurriculo) removerCurriculoStorage(c.id); });
@@ -5148,6 +5858,37 @@ function onGlobalClick(e){
   if(action === 'link-cultura'){ modalLinkCultura(getCliente(id)); return; }
   if(action === 'config-canal-denuncia'){ modalConfigCanalDenuncia(getCliente(id)); return; }
   if(action === 'link-canal-denuncia'){ modalLinkCanalDenuncia(getCliente(id)); return; }
+  if(action === 'config-pesquisa-clima'){ modalConfigPesquisaClima(getCliente(id)); return; }
+  if(action === 'upload-material'){ modalUploadMaterial(el.dataset.clienteId); return; }
+  if(action === 'excluir-material'){
+    if(confirm('Excluir este material da lista? O arquivo continua no Google Drive, só some daqui do painel.')){
+      db.materiais = db.materiais.filter(m=>m.id!==id);
+      saveDB(); renderView();
+    }
+    return;
+  }
+  if(action === 'link-pesquisa-clima'){ modalLinkPesquisaClima(getCliente(id)); return; }
+  if(action === 'copiar-link-clima'){
+    const link = linkPesquisaClima(id);
+    const finalizar = ()=> showToast('Link copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(finalizar).catch(()=>{
+        const inp = document.getElementById('link-clima-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+      });
+    } else {
+      const inp = document.getElementById('link-clima-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+    }
+    return;
+  }
+  if(action === 'copiar-mensagem-clima'){
+    const campo = document.getElementById('texto-clima-mensagem');
+    if(!campo) return;
+    const finalizar = ()=> showToast('Mensagem copiada!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(campo.value).then(finalizar).catch(()=>{ campo.select(); document.execCommand('copy'); finalizar(); });
+    } else { campo.select(); document.execCommand('copy'); finalizar(); }
+    return;
+  }
   if(action === 'ver-denuncia'){ modalVerDenuncia(db.denuncias.find(d=>d.id===id)); return; }
   if(action === 'copiar-link-denuncia'){
     const link = linkCanalDenuncia(id);
@@ -5374,6 +6115,13 @@ function onGlobalChange(e){
   if(t.dataset.role === 'serv-status'){ state.servStatus = t.value; renderView(); return; }
   if(t.dataset.role === 'ind-cliente'){ state.indClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'den-cliente'){ state.denClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'clima-cliente'){ state.climaClienteId = t.value; state.climaAreaFiltro=''; renderView(); return; }
+  if(t.dataset.role === 'clima-area-filtro'){ state.climaAreaFiltro = t.value; renderView(); return; }
+  if(t.dataset.role === 'clima-mens-cliente'){ state.climaMensClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'clima-mens-mes'){ state.climaMensMes = t.value; renderView(); return; }
+  if(t.dataset.role === 'clima-mens-status'){ state.climaMensStatus = t.value; renderView(); return; }
+  if(t.dataset.role === 'drive-cliente'){ state.driveClienteId = t.value; state.driveCategoria=''; renderView(); return; }
+  if(t.dataset.role === 'drive-categoria'){ state.driveCategoria = t.value; renderView(); return; }
   if(t.dataset.role === 'ind-mes-inicio'){ state.indMesInicio = t.value; renderView(); return; }
   if(t.dataset.role === 'ind-mes-fim'){ state.indMesFim = t.value; renderView(); return; }
   if(t.dataset.role === 'dash-status-vaga'){ state.dashStatusVaga = t.value; renderView(); return; }
@@ -5423,6 +6171,7 @@ function onGlobalInput(e){
   const candidatoIdAvaliacao = getHashAvaliacaoId();
   const clienteIdCultura = getHashCulturaId();
   const clienteIdDenuncia = getHashDenunciaId();
+  const clienteIdClima = getHashClimaId();
   if(cargoIdPublico){
     await renderPublicApplication(cargoIdPublico);
   } else if(candidatoIdAvaliacao){
@@ -5431,6 +6180,8 @@ function onGlobalInput(e){
     await renderDiagnosticoCultura(clienteIdCultura);
   } else if(clienteIdDenuncia){
     await renderCanalDenuncia(clienteIdDenuncia);
+  } else if(clienteIdClima){
+    await renderPesquisaClima(clienteIdClima);
   } else {
     db = await loadDB();
     garantirConfiguracoes();
