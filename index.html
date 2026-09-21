@@ -58,6 +58,24 @@
   .nav-item-expansivel{justify-content:space-between;}
   .nav-seta{margin-left:auto;font-size:11px;opacity:.7;}
   .nav-sub{padding-left:30px;font-size:13px;}
+  .org-tree, .org-tree ul{list-style:none;margin:0;padding:0;text-align:center;}
+  .org-tree{display:flex;justify-content:center;}
+  .org-tree ul{padding-top:24px;position:relative;display:flex;justify-content:center;}
+  .org-tree li{display:inline-flex;flex-direction:column;align-items:center;list-style:none;position:relative;padding:24px 10px 0 10px;}
+  .org-tree li::before, .org-tree li::after{content:'';position:absolute;top:0;right:50%;border-top:1.5px solid var(--border-strong,#c9c2b6);width:50%;height:24px;}
+  .org-tree li::after{right:auto;left:50%;border-left:1.5px solid var(--border-strong,#c9c2b6);}
+  .org-tree li:only-child{padding-top:0;}
+  .org-tree li:only-child::before, .org-tree li:only-child::after{display:none;}
+  .org-tree li:first-child::before, .org-tree li:last-child::after{border:0 none;}
+  .org-tree li:last-child::before{border-right:1.5px solid var(--border-strong,#c9c2b6);border-radius:0 4px 0 0;}
+  .org-tree li:first-child::after{border-radius:4px 0 0 0;}
+  .org-tree ul::before{content:'';position:absolute;top:0;left:50%;border-left:1.5px solid var(--border-strong,#c9c2b6);width:0;height:24px;}
+  .org-tree > li{padding-top:0;}
+  .org-tree > li::before, .org-tree > li::after{display:none;}
+  .org-node{display:inline-block;border:1px solid var(--border);border-radius:6px;padding:8px 14px;background:#fff;cursor:pointer;min-width:130px;transition:border-color .1s;}
+  .org-node:hover{border-color:var(--accent);}
+  .org-node-titulo{font-weight:600;font-size:13px;}
+  .org-node-sub{font-size:11.5px;color:var(--ink-soft);margin-top:2px;max-width:180px;}
   .nav-section-label:first-child{padding-top:4px;}
   .nav-item:hover{background:var(--spine-soft);color:#fff;}
   .nav-item.active{background:var(--spine-soft);color:#fff;border-left:3px solid var(--accent);}
@@ -809,6 +827,8 @@ function garantirConfiguracoes(){
   if(!Array.isArray(db.pesquisasClima)) db.pesquisasClima = [];
   if(!Array.isArray(db.mensalidadesPesquisaClima)) db.mensalidadesPesquisaClima = [];
   if(!Array.isArray(db.materiais)) db.materiais = [];
+  if(!Array.isArray(db.pesquisasRapidas)) db.pesquisasRapidas = [];
+  if(!Array.isArray(db.respostasPesquisaRapida)) db.respostasPesquisaRapida = [];
   db.clientes.forEach(cl=>{
     if(!cl.tipoServico) cl.tipoServico = 'rs';
     if(cl.valorMensalidadeBPO===undefined) cl.valorMensalidadeBPO = '';
@@ -972,7 +992,9 @@ let state = {
   climaMensMes: '',
   climaMensStatus: '',
   driveClienteId: '',
-  driveCategoria: ''
+  driveCategoria: '',
+  culturaStandaloneClienteId: '',
+  rapidaClienteId: ''
 };
 
 
@@ -989,7 +1011,7 @@ function renderShell(){
         <div class="nav-item" data-action="nav" data-tab="agenda"><span class="nav-dot"></span>Agenda</div>
         <div class="nav-item" data-action="nav" data-tab="dashboard"><span class="nav-dot"></span>Visão geral</div>
         <div class="nav-item" data-action="nav" data-tab="clientes"><span class="nav-dot"></span>Cadastro de clientes e vagas</div>
-        <div class="nav-item" data-action="nav" data-tab="colaboradores"><span class="nav-dot"></span>Colaboradores cadastrados</div>
+        <div class="nav-item" data-action="nav" data-tab="colaboradores"><span class="nav-dot"></span>Acompanhamento BPO</div>
         <div class="nav-item" data-action="nav" data-tab="drive"><span class="nav-dot"></span>Materiais e documentos</div>
 
         <div class="nav-item nav-item-expansivel" data-action="toggle-nav-rs">
@@ -1004,6 +1026,8 @@ function renderShell(){
 
         <div class="nav-item" data-action="nav" data-tab="indicadores"><span class="nav-dot"></span>Indicadores</div>
         <div class="nav-item" data-action="nav" data-tab="clima"><span class="nav-dot"></span>Pesquisa de Clima</div>
+        <div class="nav-item" data-action="nav" data-tab="cultura"><span class="nav-dot"></span>Diagnóstico de Cultura Organizacional</div>
+        <div class="nav-item" data-action="nav" data-tab="rapidas"><span class="nav-dot"></span>Pesquisas Rápidas e NPS</div>
         <div class="nav-item" data-action="nav" data-tab="denuncia"><span class="nav-dot"></span>Canal de denúncias</div>
         <div class="nav-item" data-action="nav" data-tab="faturamento"><span class="nav-dot"></span>Faturamento</div>
       </div>
@@ -1105,6 +1129,8 @@ function renderView(){
   else if(state.tab === 'drive') view.innerHTML = viewDriveAdmin();
   else if(state.tab === 'denuncia') view.innerHTML = viewCanalDenunciaAdmin();
   else if(state.tab === 'clima') view.innerHTML = viewPesquisaClimaAdmin();
+  else if(state.tab === 'cultura') view.innerHTML = viewCulturaStandalone();
+  else if(state.tab === 'rapidas') view.innerHTML = viewPesquisasRapidasAdmin();
   else if(state.tab === 'relatorio') view.innerHTML = viewRelatorio();
   afterRenderView();
 }
@@ -2145,11 +2171,10 @@ function viewColaboradores(){
     ${viewResumoBeneficios(cl)}
 
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
-      <span class="btn ${state.colabAba==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="colaboradores">Colaboradores</span>
+      <span class="btn ${state.colabAba==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="colaboradores">Colaboradores cadastrados</span>
       <span class="btn ${state.colabAba==='funcoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="funcoes">Funções e cargos</span>
       <span class="btn ${state.colabAba==='absenteismo'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="absenteismo">Absenteísmo</span>
       <span class="btn ${state.colabAba==='treinamentos'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="treinamentos">Treinamentos</span>
-      <span class="btn ${state.colabAba==='cultura'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="cultura">Cultura Organizacional</span>
     </div>
 
     ${state.colabAba==='colaboradores' ? `
@@ -2177,7 +2202,7 @@ function viewColaboradores(){
     </div>
     ${funcoes.length===0 ? '<div class="card empty-state"><h3>Nenhuma função cadastrada</h3><p>Clique em "+ Nova função" para começar.</p></div>' : `
     <div class="card table-wrap"><table><thead><tr><th>Título do cargo</th><th>Subordinado a</th><th>Área</th><th>Ocupação</th><th>Descritivo</th><th></th></tr></thead><tbody>${linhasFuncoes}</tbody></table></div>`}
-    ` : state.colabAba==='absenteismo' ? viewAbsenteismo(cl) : state.colabAba==='treinamentos' ? viewTreinamentos(cl) : viewDiagnosticoCulturaAdmin(cl)}
+    ` : state.colabAba==='absenteismo' ? viewAbsenteismo(cl) : viewTreinamentos(cl)}
   `;
 }
 
@@ -2311,6 +2336,61 @@ function modalTreinamento(treinamento, clienteId){
   });
 }
 
+function construirHierarquiaFuncoes(clienteId){
+  const funcoes = funcoesDoCliente(clienteId);
+  const porNomeNormalizado = {};
+  funcoes.forEach(f => { porNomeNormalizado[f.nome.trim().toLowerCase()] = f; });
+
+  const nos = {};
+  funcoes.forEach(f => {
+    nos[f.id] = { funcao: f, filhos: [], colaboradores: colaboradoresAtivosNaFuncao(f.id) };
+  });
+
+  const raizes = [];
+  const jaAlocados = new Set();
+  funcoes.forEach(f => {
+    const nomeSuperior = (f.subordinadoA||'').trim().toLowerCase();
+    const superior = nomeSuperior ? porNomeNormalizado[nomeSuperior] : null;
+    if(superior && superior.id !== f.id){
+      nos[superior.id].filhos.push(nos[f.id]);
+      jaAlocados.add(f.id);
+    }
+  });
+  funcoes.forEach(f => { if(!jaAlocados.has(f.id)) raizes.push(nos[f.id]); });
+
+  return raizes;
+}
+
+function renderNoOrganograma(no){
+  const nomesColaboradores = no.colaboradores.map(c=>c.nome).join(', ');
+  const subtitulo = no.colaboradores.length===0
+    ? '<span style="color:var(--red);">vaga em aberto</span>'
+    : (no.colaboradores.length===1 ? esc(nomesColaboradores) : no.colaboradores.length+' pessoas: '+esc(nomesColaboradores));
+  const filhosHtml = no.filhos.length ? `<ul>${no.filhos.map(f=>renderNoOrganograma(f)).join('')}</ul>` : '';
+  return `<li>
+    <div class="org-node" data-action="editar-funcao" data-id="${no.funcao.id}">
+      <div class="org-node-titulo">${esc(no.funcao.nome)}</div>
+      <div class="org-node-sub">${subtitulo}</div>
+    </div>
+    ${filhosHtml}
+  </li>`;
+}
+
+function viewOrganograma(cliente){
+  const raizes = construirHierarquiaFuncoes(cliente.id);
+  if(raizes.length===0){
+    return '<div class="card empty-state"><h3>Nenhuma função cadastrada</h3><p>Cadastre funções em "Funções e cargos" (preenchendo "Subordinado a" quando houver hierarquia) para o organograma aparecer aqui automaticamente.</p></div>';
+  }
+  return `
+    <p class="hint" style="margin-bottom:14px;">Gerado automaticamente a partir das funções cadastradas e de quem está ativo em cada uma. Clique numa caixa para editar a função. Ajuste o campo "Subordinado a" em "Funções e cargos" para corrigir a hierarquia.</p>
+    <div class="card" style="overflow-x:auto;padding:28px 20px;">
+      <ul class="org-tree">
+        ${raizes.map(r=>renderNoOrganograma(r)).join('')}
+      </ul>
+    </div>
+  `;
+}
+
 function viewAbsenteismo(cliente){
   const registros = db.absenteismo.filter(a=>a.clienteId===cliente.id).slice().sort((a,b)=>b.mesReferencia.localeCompare(a.mesReferencia));
   const linhas = registros.map(a=>{
@@ -2389,6 +2469,251 @@ function calcularIndicadoresCompletos(clienteId, mesIni, mesFim){
   return { vagasAbertasPeriodo, vagasFechadasPeriodo, tempoMedioContratacao, candidatosInscritosPeriodo: candidatosPeriodo.length, taxaConversao, candidatosPorVagaFechada, bpo };
 }
 
+function viewPesquisasRapidasAdmin(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.rapidaClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  const cliente = state.rapidaClienteId ? getCliente(state.rapidaClienteId) : null;
+
+  if(!cliente){
+    return `
+      <div class="topbar"><div><h1>Pesquisas Rápidas e NPS</h1><p>Percepção de liderança, NPS e pesquisas pontuais com perguntas sob medida.</p></div></div>
+      <div class="filters-row"><select data-role="rapida-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+      <div class="card empty-state"><h3>Selecione um cliente acima</h3></div>
+    `;
+  }
+
+  const pesquisas = db.pesquisasRapidas.filter(p=>p.clienteId===cliente.id).slice().sort((a,b)=>(b.dataCriacao||'').localeCompare(a.dataCriacao||''));
+
+  const linhas = pesquisas.map(p=>{
+    const totalRespostas = db.respostasPesquisaRapida.filter(r=>r.pesquisaId===p.id).length;
+    return `<tr>
+      <td><strong>${esc(p.titulo)}</strong></td>
+      <td>${p.perguntas.length} pergunta(s)</td>
+      <td>${totalRespostas}</td>
+      <td>${p.ativo ? '<span class="badge badge-green">Ativa</span>' : '<span class="badge badge-gray">Inativa</span>'}</td>
+      <td class="no-print" style="white-space:nowrap;">
+        <span class="btn btn-ghost btn-sm" data-action="ver-resultado-rapida" data-id="${p.id}">Ver resultados</span>
+        <span class="btn btn-ghost btn-sm" data-action="link-pesquisa-rapida" data-id="${p.id}">🔗 Link</span>
+        <span class="btn btn-ghost btn-sm" data-action="editar-pesquisa-rapida" data-id="${p.id}">Editar</span>
+        <span class="btn btn-ghost btn-sm" data-action="excluir-pesquisa-rapida" data-id="${p.id}">Excluir</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="topbar"><div><h1>Pesquisas Rápidas e NPS</h1><p>${esc(cliente.nome)}</p></div></div>
+    <div class="filters-row"><select data-role="rapida-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+
+    <div class="topbar" style="margin-bottom:10px;">
+      <div></div>
+      <span class="btn btn-primary btn-sm" data-action="nova-pesquisa-rapida" data-cliente-id="${cliente.id}">+ Nova pesquisa</span>
+    </div>
+
+    ${pesquisas.length===0 ? '<div class="card empty-state"><h3>Nenhuma pesquisa criada ainda</h3><p>Clique em "+ Nova pesquisa" para começar — escolha o modelo de Percepção de Liderança ou monte uma pesquisa personalizada (inclusive só com NPS).</p></div>' : `
+    <div class="card table-wrap"><table><thead><tr><th>Título</th><th>Perguntas</th><th>Respostas</th><th>Status</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
+  `;
+}
+
+function linhaPerguntaRapida(pergunta){
+  pergunta = pergunta || {chave:'', texto:'', tipo:'simnao', inverso:false};
+  const chave = pergunta.chave || uid('perg');
+  return `<div class="card" data-linha-pergunta-rapida data-chave="${chave}" style="padding:10px 14px;margin-bottom:8px;">
+    <div class="form-grid" style="grid-template-columns:1fr 200px 36px;align-items:end;">
+      <div class="field full" style="margin:0;"><label>Pergunta</label><input class="input-pergunta-texto" value="${esc(pergunta.texto)}" placeholder="Digite a pergunta..."></div>
+      <div class="field" style="margin:0;"><label>Tipo</label><select class="input-pergunta-tipo">${Object.keys(TIPOS_PERGUNTA_RAPIDA).map(t=>'<option value="'+t+'" '+(pergunta.tipo===t?'selected':'')+'>'+TIPOS_PERGUNTA_RAPIDA[t].nome+'</option>').join('')}</select></div>
+      <button type="button" class="btn btn-danger btn-sm" data-remover-pergunta-rapida style="padding:6px;">✕</button>
+    </div>
+    <label class="checkbox-row" style="margin-top:6px;${pergunta.tipo==='simnao'?'':'display:none;'}" data-inverso-wrap><input type="checkbox" class="input-pergunta-inverso" ${pergunta.inverso?'checked':''}><span style="font-size:12.5px;">Pergunta invertida (ex.: "há favoritismo?" — responder "Não" é o resultado favorável)</span></label>
+  </div>`;
+}
+
+function modalNovaPesquisaRapida(clienteId){
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Nova pesquisa</h2>
+    <div class="modal-sub">${esc(getCliente(clienteId)?.nome||'')}</div>
+    <p class="hint" style="margin-bottom:14px;">Escolha um ponto de partida — depois você pode editar tudo livremente.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <span class="btn btn-secondary" data-action="criar-pesquisa-modelo-lideranca" data-cliente-id="${clienteId}" style="text-align:left;padding:14px;">
+        <strong>📋 Modelo: Percepção de Liderança</strong><br><span class="hint">17 perguntas prontas (reuniões, comunicação, reconhecimento, NPS de 0-10, comentários)</span>
+      </span>
+      <span class="btn btn-secondary" data-action="criar-pesquisa-personalizada" data-cliente-id="${clienteId}" style="text-align:left;padding:14px;">
+        <strong>✏️ Personalizada (do zero)</strong><br><span class="hint">Monte suas próprias perguntas — inclusive uma pesquisa só com NPS, ou um "sim/não" rápido</span>
+      </span>
+    </div>
+    <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span></div></div>
+  `);
+}
+
+function modalConfigPesquisaRapida(pesquisa){
+  const editando = !!pesquisa.id;
+  if(!pesquisa.id) pesquisa.id = '';
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${editando ? 'Editar pesquisa' : 'Nova pesquisa'}</h2>
+    <div class="modal-sub">${esc(getCliente(pesquisa.clienteId)?.nome||'')}</div>
+    <form id="form-pesquisa-rapida">
+      <div class="form-grid">
+        <div class="field full"><label>Título *</label><input required name="titulo" value="${esc(pesquisa.titulo)}"></div>
+        <div class="field"><label>Data de início (opcional)</label><input type="date" name="dataInicio" value="${pesquisa.dataInicio||''}"></div>
+        <div class="field"><label>Data de encerramento (opcional)</label><input type="date" name="dataFim" value="${pesquisa.dataFim||''}"></div>
+      </div>
+      <div class="checkbox-row"><input type="checkbox" id="chk-rapida-ativa" ${pesquisa.ativo?'checked':''}><label for="chk-rapida-ativa">Pesquisa ativa (aceita respostas)</label></div>
+
+      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Perguntas</span>
+        <span class="btn btn-secondary btn-sm" id="btn-add-pergunta-rapida" type="button">+ Adicionar pergunta</span>
+      </div>
+      <div id="lista-perguntas-rapida">${(pesquisa.perguntas.length?pesquisa.perguntas:[null]).map(p=>linhaPerguntaRapida(p)).join('')}</div>
+
+      <p class="hint" id="erro-pesquisa-rapida" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span>${editando ? '<span class="btn btn-danger btn-sm" data-action=\"excluir-pesquisa-rapida\" data-id=\"'+pesquisa.id+'\">Excluir</span>' : ''}</span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar pesquisa</button>
+        </div>
+      </div>
+    </form>
+  `);
+
+  function religarLinhasPerguntas(){
+    document.querySelectorAll('#lista-perguntas-rapida [data-linha-pergunta-rapida]').forEach(linha=>{
+      const selectTipo = linha.querySelector('.input-pergunta-tipo');
+      const wrapInverso = linha.querySelector('[data-inverso-wrap]');
+      selectTipo.onchange = ()=>{ wrapInverso.style.display = selectTipo.value==='simnao' ? 'flex' : 'none'; };
+      linha.querySelector('[data-remover-pergunta-rapida]').onclick = ()=>{
+        if(document.querySelectorAll('#lista-perguntas-rapida [data-linha-pergunta-rapida]').length > 1) linha.remove();
+        else { linha.querySelector('.input-pergunta-texto').value=''; }
+      };
+    });
+  }
+  religarLinhasPerguntas();
+
+  document.getElementById('btn-add-pergunta-rapida').addEventListener('click', ()=>{
+    document.getElementById('lista-perguntas-rapida').insertAdjacentHTML('beforeend', linhaPerguntaRapida(null));
+    religarLinhasPerguntas();
+  });
+
+  document.getElementById('form-pesquisa-rapida').addEventListener('submit', e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-pesquisa-rapida');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const linhas = Array.from(document.querySelectorAll('#lista-perguntas-rapida [data-linha-pergunta-rapida]'));
+    const perguntas = linhas.map(linha => ({
+      chave: linha.dataset.chave,
+      texto: linha.querySelector('.input-pergunta-texto').value.trim(),
+      tipo: linha.querySelector('.input-pergunta-tipo').value,
+      inverso: linha.querySelector('.input-pergunta-inverso').checked
+    })).filter(p => p.texto);
+
+    if(perguntas.length===0){ erroEl.textContent = 'Adicione ao menos uma pergunta com texto preenchido.'; erroEl.style.display='block'; return; }
+
+    pesquisa.titulo = f.get('titulo').trim();
+    pesquisa.dataInicio = f.get('dataInicio') || '';
+    pesquisa.dataFim = f.get('dataFim') || '';
+    pesquisa.ativo = document.getElementById('chk-rapida-ativa').checked;
+    pesquisa.perguntas = perguntas;
+
+    if(!editando){
+      pesquisa.dataCriacao = todayISO();
+      db.pesquisasRapidas.push(pesquisa);
+    }
+    closeModal(); saveDB(); renderView();
+    showToast('Pesquisa salva.');
+  });
+}
+
+function modalLinkPesquisaRapida(pesquisa){
+  const link = linkPesquisaRapida(pesquisa.id);
+  const mensagem = 'Olá! Gostaríamos da sua participação em uma pesquisa rápida: "'+pesquisa.titulo+'". Leva poucos minutos: '+link;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Link da pesquisa</h2>
+    <div class="modal-sub">${esc(pesquisa.titulo)}</div>
+    <div class="field full">
+      <label>Link público</label>
+      <input type="text" readonly value="${esc(link)}" id="link-rapida-input" onclick="this.select()">
+    </div>
+    <div class="field full">
+      <label>Mensagem sugerida</label>
+      <textarea id="texto-rapida-mensagem" style="min-height:90px;">${esc(mensagem)}</textarea>
+    </div>
+    <div class="modal-footer">
+      <span><span class="btn btn-secondary btn-sm" data-action="copiar-link-rapida" data-id="${pesquisa.id}">Copiar link</span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="copiar-mensagem-rapida">Copiar mensagem</span>
+      </div>
+    </div>
+  `);
+}
+
+function modalResultadoPesquisaRapida(pesquisaId){
+  const r = calcularResultadoPesquisaRapida(pesquisaId);
+  if(!r) return;
+
+  function renderResultadoConjunto(resultado, tituloBloco){
+    const linhasPerguntas = r.pesquisa.perguntas.filter(p=>p.tipo!=='identificacao').map(p=>{
+      const dado = resultado.porPergunta[p.chave];
+      if(!dado) return '';
+      if(dado.tipo==='simnao' || dado.tipo==='escala4'){
+        return `<div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>${esc(p.texto)}</span><strong>${dado.favoravel}%</strong></div>
+          <div class="funnel-bar-bg"><div class="funnel-bar" style="width:${dado.favoravel}%;"></div></div>
+        </div>`;
+      }
+      if(dado.tipo==='nps'){
+        return `<div style="margin-bottom:10px;padding:10px;background:var(--gray-soft);border-radius:6px;">
+          <div style="font-size:13px;margin-bottom:4px;">${esc(p.texto)}</div>
+          <div style="font-size:22px;font-weight:700;">NPS ${dado.nps}</div>
+          <div class="hint">Média ${dado.media} · ${dado.promotores} promotor(es) · ${dado.neutros} neutro(s) · ${dado.detratores} detrator(es)</div>
+        </div>`;
+      }
+      if(dado.tipo==='texto'){
+        if(dado.textos.length===0) return '';
+        return `<div style="margin-bottom:10px;">
+          <div class="hint" style="margin-bottom:4px;font-weight:600;">${esc(p.texto)}</div>
+          ${dado.textos.map(t=>'<p style="font-size:13px;background:var(--gray-soft);padding:8px 10px;border-radius:6px;margin-bottom:4px;">'+esc(t)+'</p>').join('')}
+        </div>`;
+      }
+      return '';
+    }).join('');
+    return `<div class="card" style="margin-bottom:14px;"><h3 style="font-size:14px;margin-bottom:10px;">${esc(tituloBloco)} — ${resultado.totalRespostas} resposta(s)</h3>${linhasPerguntas}</div>`;
+  }
+
+  const blocoGeral = renderResultadoConjunto(r.geral, 'Resultado geral');
+  const blocosSegmento = r.porSegmento ? r.porSegmento.map(seg=>renderResultadoConjunto(seg.resultado, seg.nome)).join('') : '';
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${esc(r.pesquisa.titulo)}</h2>
+    <div style="max-height:65vh;overflow-y:auto;padding-right:4px;">
+      ${r.geral.totalRespostas===0 ? '<p class="hint">Nenhuma resposta recebida ainda.</p>' : blocoGeral + (blocosSegmento ? '<div class="section-title">Por '+esc(r.perguntaIdentificacao.texto)+'</div>'+blocosSegmento : '')}
+    </div>
+    <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div></div>
+  `);
+}
+
+function viewCulturaStandalone(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.culturaStandaloneClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  const cliente = state.culturaStandaloneClienteId ? getCliente(state.culturaStandaloneClienteId) : null;
+
+  if(!cliente){
+    return `
+      <div class="topbar"><div><h1>Diagnóstico de Cultura Organizacional</h1><p>Selecione um cliente para configurar ou ver resultados.</p></div></div>
+      <div class="filters-row"><select data-role="cultura-standalone-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+      <div class="card empty-state"><h3>Selecione um cliente acima</h3></div>
+    `;
+  }
+
+  return `
+    <div class="topbar"><div><h1>Diagnóstico de Cultura Organizacional</h1><p>${esc(cliente.nome)}</p></div></div>
+    <div class="filters-row"><select data-role="cultura-standalone-cliente"><option value="">Selecione um cliente…</option>${clientesOpts}</select></div>
+    ${viewDiagnosticoCulturaAdmin(cliente)}
+  `;
+}
+
 function viewPesquisaClimaAdmin(){
   const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.climaClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+(cl.pesquisaClima&&cl.pesquisaClima.ativo?' ✓':'')+'</option>').join('');
   const cliente = state.climaClienteId ? getCliente(state.climaClienteId) : null;
@@ -2435,8 +2760,9 @@ function viewPesquisaClimaAdmin(){
       <span class="btn btn-secondary btn-sm" data-action="imprimir-relatorio">🖨️ Imprimir / Exportar relatório</span>
     </div>
     <div class="kpi-grid">
-      <div class="kpi c-green"><div class="label">Satisfação geral</div><div class="value" style="font-size:28px;">${resultado.satisfacaoGeral}%</div></div>
+      <div class="kpi c-green"><div class="label">Satisfação geral</div><div class="value" style="font-size:28px;">${resultado.satisfacaoGeral}%</div><div class="sub">Média das 27 perguntas em escala 1-5</div></div>
       <div class="kpi"><div class="label">Respostas recebidas</div><div class="value">${resultado.totalRespostas}</div></div>
+      <div class="kpi ${resultado.eNPS.score>=50?'c-green':(resultado.eNPS.score>=0?'c-amber':'c-red')}"><div class="label">eNPS (indicariam a empresa)</div><div class="value" style="font-size:28px;">${resultado.eNPS.score}</div><div class="sub">${resultado.eNPS.promotores} promotor(es) · ${resultado.eNPS.neutros} neutro(s) · ${resultado.eNPS.detratores} detrator(es)</div></div>
     </div>
 
     <div class="charts-row">
@@ -2476,7 +2802,7 @@ function drawClimaCharts(){
   destruirChartClima('chart-clima-perguntas');
   if(ctxPerguntas){
     const todasPerguntas = [];
-    GRUPOS_PESQUISA_CLIMA.forEach(g=> g.perguntas.forEach(p=> todasPerguntas.push(p)));
+    GRUPOS_PESQUISA_CLIMA.forEach(g=> g.perguntas.forEach(p=> { if(p.tipo!=='nps') todasPerguntas.push(p); }));
     chartsClima['chart-clima-perguntas'] = new Chart(ctxPerguntas, {
       type: 'bar',
       data: {
@@ -2944,6 +3270,12 @@ function getHashClimaId(){
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+function getHashRapidaId(){
+  const h = window.location.hash || '';
+  const m = h.match(/^#rapida-(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 function paginaPublicaIndisponivel(mensagem){
   return `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
     <h2 style="margin-bottom:10px;">Vaga não disponível</h2>
@@ -3108,7 +3440,7 @@ const GRUPOS_PESQUISA_CLIMA = [
     {chave:'organizada', texto:'Considero esta uma empresa organizada'},
     {chave:'comunicacaoAdequada', texto:'A empresa possui comunicação adequada'},
     {chave:'infraestrutura', texto:'A infraestrutura interna é adequada (sanitários, uniformes, condições gerais)'},
-    {chave:'indicaria', texto:'Eu indicaria um amigo ou familiar para trabalhar aqui'},
+    {chave:'indicaria', texto:'De 0 a 10, o quanto você indicaria esta empresa como um bom lugar para trabalhar?', tipo:'nps'},
     {chave:'preocupaClima', texto:'A empresa se preocupa com o clima organizacional'},
     {chave:'fatoresSociais', texto:'O ambiente social da empresa é bom (não discriminatório, calmo, não confrontante)'}
   ]},
@@ -3152,10 +3484,21 @@ function calcularResultadoPesquisaClima(clienteId, areaFiltro){
   const porGrupo = {};
   const porPergunta = {};
   let somaGeral = 0, itensGeral = 0;
+  let somaNps = 0, promotores = 0, neutros = 0, detratores = 0, itensNps = 0;
 
   GRUPOS_PESQUISA_CLIMA.forEach(grupo=>{
     let somaGrupo = 0, itensGrupo = 0;
     grupo.perguntas.forEach(p=>{
+      if(p.tipo==='nps'){
+        respostas.forEach(r=>{
+          const nota = parseFloat(r.respostas[p.chave]);
+          if(isNaN(nota)) return;
+          itensNps++; somaNps += nota;
+          if(nota>=9) promotores++; else if(nota>=7) neutros++; else detratores++;
+        });
+        porPergunta[p.chave] = { tipo:'nps', respostas: itensNps };
+        return;
+      }
       let somaP = 0, favoraveisP = 0, itensP = 0;
       respostas.forEach(r=>{
         const nota = parseFloat(r.respostas[p.chave]);
@@ -3171,7 +3514,111 @@ function calcularResultadoPesquisaClima(clienteId, areaFiltro){
   });
 
   const satisfacaoGeral = itensGeral? Math.round((somaGeral/itensGeral/5)*1000)/10 : 0;
-  return { totalRespostas: respostas.length, satisfacaoGeral, porGrupo, porPergunta };
+  const eNPS = {
+    score: itensNps? Math.round(((promotores-detratores)/itensNps)*1000)/10 : 0,
+    media: itensNps? Math.round((somaNps/itensNps)*10)/10 : 0,
+    promotores, neutros, detratores, total: itensNps
+  };
+  return { totalRespostas: respostas.length, satisfacaoGeral, porGrupo, porPergunta, eNPS };
+}
+
+const TIPOS_PERGUNTA_RAPIDA = {
+  simnao: {nome:'Sim / Não'},
+  escala4: {nome:'Escala (Ótimo/Bom/Regular/Ruim)'},
+  nps: {nome:'Nota de 0 a 10 (NPS)'},
+  identificacao: {nome:'Identificação (texto curto — usado para segmentar resultados)'},
+  textocurto: {nome:'Texto curto'},
+  textolongo: {nome:'Texto longo'}
+};
+
+const MODELO_PESQUISA_LIDERANCA = {
+  titulo: 'Pesquisa de Percepção de Liderança',
+  perguntas: [
+    {chave:'lider', texto:'Quem é seu/sua líder?', tipo:'identificacao'},
+    {chave:'reunioes', texto:'Sua liderança faz reuniões individuais pelo menos uma vez por mês com você?', tipo:'simnao'},
+    {chave:'expectativas', texto:'Você sabe o que sua liderança espera de você (performance e comportamento)?', tipo:'simnao'},
+    {chave:'comunicacao', texto:'Como você avalia a comunicação da sua liderança?', tipo:'escala4'},
+    {chave:'inspira', texto:'Sua liderança te inspira?', tipo:'simnao'},
+    {chave:'sugestoes', texto:'Sua liderança aceita sugestões e as considera?', tipo:'simnao'},
+    {chave:'reconheceIndividual', texto:'Sua liderança reconhece quando você faz um trabalho diferenciado?', tipo:'simnao'},
+    {chave:'reconheceEquipe', texto:'Sua liderança reconhece o trabalho da equipe?', tipo:'simnao'},
+    {chave:'priorizaProblemas', texto:'Sua liderança sabe identificar e priorizar os problemas que atingem a sua equipe?', tipo:'simnao'},
+    {chave:'favoritismo', texto:'Você acredita que há favoritismo da sua liderança em relação a pessoas específicas da equipe?', tipo:'simnao', inverso:true},
+    {chave:'visaoEstrategica', texto:'Sua liderança entende e consegue explicar onde a empresa quer chegar e qual caminho seguirá para atingir esse objetivo?', tipo:'simnao'},
+    {chave:'desenvolve', texto:'Você sente que sua liderança te desenvolve profissionalmente?', tipo:'simnao'},
+    {chave:'seImporta', texto:'Você sente que sua liderança se importa com você?', tipo:'simnao'},
+    {chave:'demaisLiderancas', texto:'Como você avalia as demais lideranças da empresa?', tipo:'escala4'},
+    {chave:'nota', texto:'De 0 a 10, qual nota você daria para sua liderança?', tipo:'nps'},
+    {chave:'motivoNota', texto:'Por que você deu essa nota?', tipo:'textocurto'},
+    {chave:'mensagem', texto:'Deixe aqui uma mensagem de melhoria, dica ou elogio para sua liderança.', tipo:'textolongo'}
+  ]
+};
+
+function linkPesquisaRapida(pesquisaId){
+  return window.location.origin + window.location.pathname + '#rapida-' + pesquisaId;
+}
+
+function calcularResultadoPesquisaRapida(pesquisaId){
+  const pesquisa = db.pesquisasRapidas.find(p=>p.id===pesquisaId);
+  if(!pesquisa) return null;
+  const respostas = db.respostasPesquisaRapida.filter(r=>r.pesquisaId===pesquisaId);
+  const perguntaIdentificacao = pesquisa.perguntas.find(p=>p.tipo==='identificacao');
+
+  function calcularParaConjunto(conjuntoRespostas){
+    const porPergunta = {};
+    pesquisa.perguntas.forEach(p=>{
+      if(p.tipo==='simnao'){
+        let favoraveis = 0, total = 0;
+        conjuntoRespostas.forEach(r=>{
+          const v = r.respostas[p.chave];
+          if(v===undefined || v==='') return;
+          total++;
+          const ehFavoravel = p.inverso ? v==='nao' : v==='sim';
+          if(ehFavoravel) favoraveis++;
+        });
+        porPergunta[p.chave] = { tipo:'simnao', favoravel: total? Math.round((favoraveis/total)*1000)/10 : 0, total };
+      } else if(p.tipo==='escala4'){
+        let favoraveis = 0, total = 0;
+        conjuntoRespostas.forEach(r=>{
+          const v = r.respostas[p.chave];
+          if(!v) return;
+          total++;
+          if(v==='Ótimo' || v==='Bom') favoraveis++;
+        });
+        porPergunta[p.chave] = { tipo:'escala4', favoravel: total? Math.round((favoraveis/total)*1000)/10 : 0, total };
+      } else if(p.tipo==='nps'){
+        let promotores=0, neutros=0, detratores=0, soma=0, total=0;
+        conjuntoRespostas.forEach(r=>{
+          const v = parseFloat(r.respostas[p.chave]);
+          if(isNaN(v)) return;
+          total++; soma+=v;
+          if(v>=9) promotores++; else if(v>=7) neutros++; else detratores++;
+        });
+        const nps = total? Math.round(((promotores-detratores)/total)*1000)/10 : 0;
+        const media = total? Math.round((soma/total)*10)/10 : 0;
+        porPergunta[p.chave] = { tipo:'nps', nps, media, promotores, neutros, detratores, total };
+      } else if(p.tipo==='textocurto' || p.tipo==='textolongo'){
+        const textos = conjuntoRespostas.map(r=>r.respostas[p.chave]).filter(Boolean);
+        porPergunta[p.chave] = { tipo:'texto', textos };
+      }
+    });
+    return { totalRespostas: conjuntoRespostas.length, porPergunta };
+  }
+
+  const geral = calcularParaConjunto(respostas);
+
+  let porSegmento = null;
+  if(perguntaIdentificacao){
+    const segmentos = {};
+    respostas.forEach(r=>{
+      const seg = (r.respostas[perguntaIdentificacao.chave]||'Não informado').trim() || 'Não informado';
+      if(!segmentos[seg]) segmentos[seg] = [];
+      segmentos[seg].push(r);
+    });
+    porSegmento = Object.keys(segmentos).sort().map(nome=>({ nome, resultado: calcularParaConjunto(segmentos[nome]) }));
+  }
+
+  return { pesquisa, geral, porSegmento, perguntaIdentificacao };
 }
 
 function linkCanalDenuncia(clienteId){
@@ -4687,9 +5134,9 @@ async function renderPesquisaClima(clienteId){
               ${grupo.perguntas.map(p=>`
                 <div style="margin-bottom:12px;">
                   <p style="font-size:13.5px;margin:0 0 6px 0;">${esc(p.texto)}</p>
-                  <div style="display:flex;gap:14px;align-items:center;">
-                    ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;">
-                      <input type="radio" name="p_${p.chave}" value="${n}" ${n===3?'checked':''} required>${n}
+                  <div style="display:flex;gap:${p.tipo==='nps'?'4px':'14px'};align-items:center;flex-wrap:wrap;">
+                    ${(p.tipo==='nps' ? Array.from({length:11},(_,n)=>n) : [1,2,3,4,5]).map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;">
+                      <input type="radio" name="p_${p.chave}" value="${n}" ${p.tipo==='nps' ? '' : (n===3?'checked':'')} required>${n}
                     </label>`).join('')}
                   </div>
                 </div>
@@ -4720,6 +5167,125 @@ async function renderPesquisaClima(clienteId){
       root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
         <h2 style="margin-bottom:10px;">Respostas enviadas! 🎉</h2>
         <p class="hint">Muito obrigado pela sua participação. Suas respostas são anônimas e ajudam a empresa a melhorar o ambiente de trabalho.</p>
+      </div>`;
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível enviar agora. Verifique sua conexão e tente novamente.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Enviar respostas';
+    }
+  });
+}
+
+async function renderPesquisaRapidaPublica(pesquisaId){
+  document.title = 'Pesquisa · Caroline Peixoto DHO';
+  document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando… isso pode levar alguns segundos na primeira vez.</div></div><div id="toast-slot"></div>';
+  const root = document.getElementById('public-root');
+
+  if(!appsScriptConfigurado()){
+    root.innerHTML = paginaPublicaIndisponivel('A integração desta página ainda não foi concluída por quem administra o painel.');
+    return;
+  }
+
+  let info;
+  try{
+    info = await chamarAppsScriptGet('action=pesquisaRapidaInfoPublico&id=' + encodeURIComponent(pesquisaId));
+  }catch(err){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Não foi possível carregar</h2>
+      <p class="hint" style="margin-bottom:16px;">${esc(err.message || 'Ocorreu um erro ao carregar a página.')}</p>
+      <span class="btn btn-primary" id="btn-tentar-novamente-rapida">Tentar novamente</span>
+    </div>`;
+    const btn = document.getElementById('btn-tentar-novamente-rapida');
+    if(btn) btn.addEventListener('click', ()=> renderPesquisaRapidaPublica(pesquisaId));
+    return;
+  }
+
+  if(!info || !info.titulo){
+    root.innerHTML = paginaPublicaIndisponivel('Pesquisa não encontrada. Confira o link recebido.');
+    return;
+  }
+
+  const hoje = todayISO();
+  if(!info.ativo){
+    root.innerHTML = paginaPublicaIndisponivel('Esta pesquisa não está disponível no momento.');
+    return;
+  }
+  if(info.dataInicio && hoje < info.dataInicio){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;"><h2 style="margin-bottom:10px;">Ainda não abriu</h2><p class="hint">Esta pesquisa abre em ${formatDate(info.dataInicio)}.</p></div>`;
+    return;
+  }
+  if(info.dataFim && hoje > info.dataFim){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;"><h2 style="margin-bottom:10px;">Prazo encerrado</h2><p class="hint">Esta pesquisa foi encerrada em ${formatDate(info.dataFim)}. Obrigado pelo interesse.</p></div>`;
+    return;
+  }
+
+  function renderCampoPergunta(p){
+    if(p.tipo==='identificacao'){
+      return `<div class="field full"><label>${esc(p.texto)} *</label><input required name="p_${p.chave}"></div>`;
+    }
+    if(p.tipo==='simnao'){
+      return `<div style="margin-bottom:18px;">
+        <p style="font-size:14px;margin:0 0 8px;">${esc(p.texto)} *</p>
+        <div style="display:flex;gap:8px;">
+          <label style="flex:1;"><input type="radio" name="p_${p.chave}" value="sim" required style="margin-right:6px;">Sim</label>
+          <label style="flex:1;"><input type="radio" name="p_${p.chave}" value="nao" style="margin-right:6px;">Não</label>
+        </div>
+      </div>`;
+    }
+    if(p.tipo==='escala4'){
+      return `<div style="margin-bottom:18px;">
+        <p style="font-size:14px;margin:0 0 8px;">${esc(p.texto)} *</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${['Ótimo','Bom','Regular','Ruim'].map(n=>`<label style="flex:1;min-width:80px;"><input type="radio" name="p_${p.chave}" value="${n}" required style="margin-right:6px;">${n}</label>`).join('')}
+        </div>
+      </div>`;
+    }
+    if(p.tipo==='nps'){
+      return `<div style="margin-bottom:18px;">
+        <p style="font-size:14px;margin:0 0 8px;">${esc(p.texto)} *</p>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${Array.from({length:11},(_,n)=>n).map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;gap:2px;"><input type="radio" name="p_${p.chave}" value="${n}" required>${n}</label>`).join('')}
+        </div>
+      </div>`;
+    }
+    if(p.tipo==='textocurto'){
+      return `<div class="field full"><label>${esc(p.texto)}</label><input name="p_${p.chave}"></div>`;
+    }
+    return `<div class="field full"><label>${esc(p.texto)}</label><textarea name="p_${p.chave}"></textarea></div>`;
+  }
+
+  root.innerHTML = `
+    <div class="card" style="max-width:680px;margin:32px auto;padding:0;overflow:hidden;">
+      <div style="background:var(--spine);padding:26px 32px;text-align:center;">
+        <img src="data:image/png;base64,${LOGO_CLARO_B64}" alt="Caroline Peixoto DHO" style="max-width:260px;width:100%;height:auto;display:inline-block;">
+      </div>
+      <div style="padding:32px;">
+        <h1 style="font-size:22px;margin-bottom:6px;">${esc(info.titulo)}</h1>
+        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 20px 0;">${esc(info.nomeCliente)} — Sua opinião é importante. Leva poucos minutos.</p>
+        <form id="form-rapida">
+          ${info.perguntas.map(p=>renderCampoPergunta(p)).join('')}
+          <p class="hint" id="erro-rapida" style="color:var(--red);display:none;"></p>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;" id="btn-enviar-rapida">Enviar respostas</button>
+        </form>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--ink-soft);font-size:12px;margin-top:16px;">Caroline Peixoto DHO · Desenvolvimento Humano e Organizacional</p>
+  `;
+
+  document.getElementById('form-rapida').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-rapida');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const respostas = {};
+    info.perguntas.forEach(p=>{ respostas[p.chave] = (f.get('p_'+p.chave)||'').toString().trim(); });
+    const btn = document.getElementById('btn-enviar-rapida');
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try{
+      await chamarAppsScriptPost('salvarRespostaPesquisaRapida', {pesquisaId: pesquisaId, clienteId: null, respostas: respostas});
+      root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+        <h2 style="margin-bottom:10px;">Respostas enviadas! 🎉</h2>
+        <p class="hint">Muito obrigado pela sua participação.</p>
       </div>`;
     }catch(err){
       erroEl.textContent = err.message || 'Não foi possível enviar agora. Verifique sua conexão e tente novamente.';
@@ -5893,6 +6459,9 @@ function onGlobalClick(e){
       db.mensalidadesCanalDenuncia = db.mensalidadesCanalDenuncia.filter(m=>m.clienteId!==id);
       db.pesquisasClima = db.pesquisasClima.filter(p=>p.clienteId!==id);
       db.mensalidadesPesquisaClima = db.mensalidadesPesquisaClima.filter(m=>m.clienteId!==id);
+      { const idsPesquisasRapidas = db.pesquisasRapidas.filter(p=>p.clienteId===id).map(p=>p.id);
+        db.pesquisasRapidas = db.pesquisasRapidas.filter(p=>p.clienteId!==id);
+        db.respostasPesquisaRapida = db.respostasPesquisaRapida.filter(r=>!idsPesquisasRapidas.includes(r.pesquisaId)); }
       db.materiais = db.materiais.filter(m=>m.clienteId!==id);
       db.treinamentos = db.treinamentos.filter(t=>t.clienteId!==id);
       db.agenda.forEach(e=>{ if(e.clienteId===id) e.clienteId=''; });
@@ -5950,6 +6519,47 @@ function onGlobalClick(e){
   if(action === 'config-canal-denuncia'){ modalConfigCanalDenuncia(getCliente(id)); return; }
   if(action === 'link-canal-denuncia'){ modalLinkCanalDenuncia(getCliente(id)); return; }
   if(action === 'config-pesquisa-clima'){ modalConfigPesquisaClima(getCliente(id)); return; }
+  if(action === 'nova-pesquisa-rapida'){ modalNovaPesquisaRapida(el.dataset.clienteId); return; }
+  if(action === 'criar-pesquisa-modelo-lideranca'){
+    modalConfigPesquisaRapida({ id:'', clienteId: el.dataset.clienteId, titulo: MODELO_PESQUISA_LIDERANCA.titulo, dataInicio:'', dataFim:'', ativo:false, perguntas: MODELO_PESQUISA_LIDERANCA.perguntas.map(p=>Object.assign({},p)) });
+    return;
+  }
+  if(action === 'criar-pesquisa-personalizada'){
+    modalConfigPesquisaRapida({ id:'', clienteId: el.dataset.clienteId, titulo:'', dataInicio:'', dataFim:'', ativo:false, perguntas: [] });
+    return;
+  }
+  if(action === 'editar-pesquisa-rapida'){ modalConfigPesquisaRapida(db.pesquisasRapidas.find(p=>p.id===id)); return; }
+  if(action === 'excluir-pesquisa-rapida'){
+    if(confirm('Excluir esta pesquisa e todas as respostas recebidas? Esta ação não pode ser desfeita.')){
+      db.pesquisasRapidas = db.pesquisasRapidas.filter(p=>p.id!==id);
+      db.respostasPesquisaRapida = db.respostasPesquisaRapida.filter(r=>r.pesquisaId!==id);
+      closeModal(); saveDB(); renderView();
+    }
+    return;
+  }
+  if(action === 'ver-resultado-rapida'){ modalResultadoPesquisaRapida(id); return; }
+  if(action === 'link-pesquisa-rapida'){ modalLinkPesquisaRapida(db.pesquisasRapidas.find(p=>p.id===id)); return; }
+  if(action === 'copiar-link-rapida'){
+    const link = linkPesquisaRapida(id);
+    const finalizar = ()=> showToast('Link copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(finalizar).catch(()=>{
+        const inp = document.getElementById('link-rapida-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+      });
+    } else {
+      const inp = document.getElementById('link-rapida-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+    }
+    return;
+  }
+  if(action === 'copiar-mensagem-rapida'){
+    const campo = document.getElementById('texto-rapida-mensagem');
+    if(!campo) return;
+    const finalizar = ()=> showToast('Mensagem copiada!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(campo.value).then(finalizar).catch(()=>{ campo.select(); document.execCommand('copy'); finalizar(); });
+    } else { campo.select(); document.execCommand('copy'); finalizar(); }
+    return;
+  }
   if(action === 'upload-material'){ modalUploadMaterial(el.dataset.clienteId); return; }
   if(action === 'excluir-material'){
     if(confirm('Excluir este material da lista? O arquivo continua no Google Drive, só some daqui do painel.')){
@@ -6207,6 +6817,8 @@ function onGlobalChange(e){
   if(t.dataset.role === 'ind-cliente'){ state.indClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'den-cliente'){ state.denClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'clima-cliente'){ state.climaClienteId = t.value; state.climaAreaFiltro=''; renderView(); return; }
+  if(t.dataset.role === 'cultura-standalone-cliente'){ state.culturaStandaloneClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'rapida-cliente'){ state.rapidaClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'clima-area-filtro'){ state.climaAreaFiltro = t.value; renderView(); return; }
   if(t.dataset.role === 'clima-mens-cliente'){ state.climaMensClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'clima-mens-mes'){ state.climaMensMes = t.value; renderView(); return; }
@@ -6263,6 +6875,7 @@ function onGlobalInput(e){
   const clienteIdCultura = getHashCulturaId();
   const clienteIdDenuncia = getHashDenunciaId();
   const clienteIdClima = getHashClimaId();
+  const pesquisaIdRapida = getHashRapidaId();
   if(cargoIdPublico){
     await renderPublicApplication(cargoIdPublico);
   } else if(candidatoIdAvaliacao){
@@ -6273,6 +6886,8 @@ function onGlobalInput(e){
     await renderCanalDenuncia(clienteIdDenuncia);
   } else if(clienteIdClima){
     await renderPesquisaClima(clienteIdClima);
+  } else if(pesquisaIdRapida){
+    await renderPesquisaRapidaPublica(pesquisaIdRapida);
   } else {
     db = await loadDB();
     garantirConfiguracoes();
