@@ -795,6 +795,16 @@ const MENSAGEM_APROVADO_PADRAO = 'Olá {nome}! Temos uma ótima notícia: você 
 const MENSAGEM_REPROVADO_PADRAO = 'Olá {nome}, obrigado(a) por participar do nosso processo seletivo para a vaga de {vaga}. Neste momento optamos por seguir com outro(a) candidato(a), mas vamos manter seu currículo em nosso banco de talentos para futuras oportunidades. Agradecemos muito sua participação!';
 const MENSAGEM_AVALIACAO_PADRAO = 'Olá {nome}! Tudo bem? Você segue no nosso processo seletivo para a vaga de {vaga}. A próxima etapa é uma avaliação comportamental rápida (leva uns 8 a 10 minutinhos). Por favor, responda por este link: {link}';
 
+const PRODUTOS_CONTRATAVEIS = [
+  {chave:'canalDenuncia', nome:'Canal de Denúncia'},
+  {chave:'pesquisaClima', nome:'Pesquisa de Clima Organizacional'},
+  {chave:'diagnosticoCultura', nome:'Diagnóstico de Cultura Organizacional'},
+  {chave:'pesquisasRapidas', nome:'Pesquisas Rápidas / NPS'},
+  {chave:'percepcaoLideranca', nome:'Pesquisa de Percepção de Liderança'},
+  {chave:'riscosPsicossociais', nome:'Mapeamento de Riscos Psicossociais'},
+  {chave:'treinamentos', nome:'Treinamentos corporativos'}
+];
+
 const BENEFICIOS_PADRAO = [
   {chave:'va_vr', nome:'VA/VR (Vale Alimentação/Refeição)', placeholder:'Ex.: R$ 15,00 por dia trabalhado'},
   {chave:'vt', nome:'VT (Vale Transporte)', placeholder:'Ex.: R$ 11,00 por dia trabalhado'},
@@ -843,6 +853,8 @@ function garantirConfiguracoes(){
     if(!cl.canalDenuncia) cl.canalDenuncia = {ativo:false, emails:[], valorMensalidade:''};
     if(!cl.pesquisaClima) cl.pesquisaClima = {ativo:false, dataInicio:'', dataFim:'', areas:[], valorMensalidade:''};
     if(!cl.portalAcesso) cl.portalAcesso = {ativo:false, usuario:'', senha:''};
+    if(cl.dataDescontinuacaoBPO===undefined) cl.dataDescontinuacaoBPO = '';
+    if(!cl.produtosContratados) cl.produtosContratados = [];
   });
   db.colaboradores.forEach(c=>{
     if(c.salarioAdmissao===undefined) c.salarioAdmissao = '';
@@ -5427,7 +5439,10 @@ function renderPortalView(){
   if(!view) return;
   if(state.portalTab==='colaboradores') view.innerHTML = viewPortalColaboradores();
   else if(state.portalTab==='materiais') view.innerHTML = viewPortalMateriais();
-  else view.innerHTML = viewPortalIndicadores();
+  else {
+    view.innerHTML = viewPortalIndicadores();
+    requestAnimationFrame(()=>{ requestAnimationFrame(drawPortalIndicadoresCharts); });
+  }
 }
 
 function viewPortalColaboradores(){
@@ -5562,6 +5577,8 @@ function viewPortalIndicadores(){
   const cliente = db.clientes[0];
   const [mesIni, mesFim] = [mesAtualRef().slice(0,4)+'-01', mesAtualRef()];
   const ind = calcularIndicadoresCompletos(cliente.id, mesIni, mesFim);
+  const temVagas = cargosDoCliente(cliente.id).length > 0;
+  const temMensalidades = db.mensalidadesBPO.some(m=>m.clienteId===cliente.id);
   return `
     <p class="hint" style="margin-bottom:14px;">Período: ${formatMesRef(mesIni)} até ${formatMesRef(mesFim)}.</p>
     <div class="kpi-grid">
@@ -5575,7 +5592,104 @@ function viewPortalIndicadores(){
       ${ind.bpo.temRegistrosAbsenteismo ? '<div class="kpi ' + (ind.bpo.absenteismoPct>5?'c-red':'c-green') + '"><div class="label">Absenteísmo</div><div class="value">'+ind.bpo.absenteismoPct+'%</div></div>' : ''}
       ` : '<div class="card empty-state"><h3>Sem indicadores de acompanhamento BPO no momento</h3></div>'}
     </div>
+
+    ${temVagas ? `
+    <div class="charts-row">
+      <div class="card chart-card"><h3>Funil de candidatos</h3><div class="chart-wrap"><canvas id="chart-portal-funil"></canvas></div></div>
+      <div class="card chart-card"><h3>Status dos candidatos</h3><div class="chart-wrap"><canvas id="chart-portal-status"></canvas></div></div>
+    </div>` : ''}
+
+    ${ind.bpo ? `
+    <div class="card chart-card" style="margin-bottom:22px;"><h3>Turnover mês a mês</h3><div class="chart-wrap"><canvas id="chart-portal-turnover"></canvas></div></div>
+    <div class="card chart-card" style="margin-bottom:22px;"><h3>Absenteísmo mês a mês</h3><div class="chart-wrap"><canvas id="chart-portal-absenteismo"></canvas></div></div>
+    ${temMensalidades ? `<div class="card chart-card"><h3>Mensalidades — recebido x pendente por mês</h3><div class="chart-wrap"><canvas id="chart-portal-fatmens"></canvas></div></div>` : ''}
+    ` : ''}
   `;
+}
+
+let chartsPortal = {};
+function destruirChartPortal(id){
+  if(chartsPortal[id]){ try{ chartsPortal[id].destroy(); }catch(e){} delete chartsPortal[id]; }
+}
+function drawPortalIndicadoresCharts(){
+  if(!window.Chart || state.portalTab!=='indicadores') return;
+  const cliente = db.clientes[0];
+  if(!cliente) return;
+
+  const [mesIni, mesFim] = [mesAtualRef().slice(0,4)+'-01', mesAtualRef()];
+  const de = primeiroDiaDoMes(mesIni), ate = ultimoDiaDoMes(mesFim);
+  const cargos = cargosDoCliente(cliente.id);
+  const candidatosCliente = db.candidatos.filter(c=>c.clienteId===cliente.id && c.dataRecebimento && c.dataRecebimento>=de && c.dataRecebimento<=ate);
+
+  const ctxFunil = document.getElementById('chart-portal-funil');
+  destruirChartPortal('chart-portal-funil');
+  if(ctxFunil && cargos.length>0){
+    const m = metricsForCandidatos(candidatosCliente);
+    chartsPortal['chart-portal-funil'] = new Chart(ctxFunil, {
+      type: 'bar',
+      data: { labels: ['Cadastrados','Chamados','Avaliação','Gestor','Proposta','Contratados'], datasets: [{ data: [m.recebidos, m.chamados, m.avaliacao, m.gestor, m.propostas, m.contratados], backgroundColor: '#B2573D' }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:true, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:11}}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}} }
+    });
+  }
+
+  const ctxStatus = document.getElementById('chart-portal-status');
+  destruirChartPortal('chart-portal-status');
+  if(ctxStatus && cargos.length>0){
+    const counts = {em_processo:0, contratado:0, nao_avancou:0, declinou:0};
+    candidatosCliente.forEach(c=>{ const s = statusCandidato(c); if(counts[s]!==undefined) counts[s]++; });
+    chartsPortal['chart-portal-status'] = new Chart(ctxStatus, {
+      type: 'doughnut',
+      data: { labels: ['Em processo','Contratado','Não avançou','Declinou'], datasets: [{ data: [counts.em_processo, counts.contratado, counts.nao_avancou, counts.declinou], backgroundColor: ['#C9A24B','#4C8C6B','#B23A3A','#8C8C8C'] }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{datalabels:{display:true, color:'#fff', font:{weight:'600', size:11}, formatter:(v)=> v>0?v:''}} }
+    });
+  }
+
+  const mesesPeriodo = mesesEntre(mesIni, mesFim);
+
+  const ctxTurnover = document.getElementById('chart-portal-turnover');
+  destruirChartPortal('chart-portal-turnover');
+  if(ctxTurnover){
+    const historico = mesesPeriodo.map(mm=>Object.assign({mes:mm}, turnoverPorMes(cliente.id, mm)));
+    chartsPortal['chart-portal-turnover'] = new Chart(ctxTurnover, {
+      type: 'line',
+      data: { labels: historico.map(h=>formatMesRef(h.mes)), datasets: [{ label:'Turnover %', data: historico.map(h=>h.taxa), borderColor:'#B2573D', backgroundColor:'rgba(178,87,61,0.15)', fill:true, tension:0.3 }] },
+      options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}}, plugins:{datalabels:{display:true, align:'top', color:'#3A2E22', font:{weight:'600', size:11}, formatter:(v)=>v+'%'}} }
+    });
+  }
+
+  const ctxAbsenteismo = document.getElementById('chart-portal-absenteismo');
+  destruirChartPortal('chart-portal-absenteismo');
+  if(ctxAbsenteismo){
+    const registrosPeriodo = mesesPeriodo.map(mm=> db.absenteismo.find(a=>a.clienteId===cliente.id && a.mesReferencia===mm));
+    chartsPortal['chart-portal-absenteismo'] = new Chart(ctxAbsenteismo, {
+      type: 'line',
+      data: { labels: mesesPeriodo.map(formatMesRef), datasets: [{ label:'Absenteísmo %', data: registrosPeriodo.map(r=>{
+        if(!r) return null;
+        const prev = parseFloat(r.horasPrevistas)||0, perd = parseFloat(r.horasPerdidas)||0;
+        return prev>0 ? Math.round((perd/prev)*1000)/10 : 0;
+      }), borderColor:'#963A2C', backgroundColor:'rgba(150,58,44,0.15)', fill:true, tension:0.3, spanGaps:true }] },
+      options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}}, plugins:{datalabels:{display:true, align:'top', color:'#3A2E22', font:{weight:'600', size:11}, formatter:(v)=>v===null||v===undefined?'':v+'%'}} }
+    });
+  }
+
+  const ctxFat = document.getElementById('chart-portal-fatmens');
+  destruirChartPortal('chart-portal-fatmens');
+  if(ctxFat){
+    let mesesMens = Array.from(new Set(db.mensalidadesBPO.filter(m=>m.clienteId===cliente.id).map(m=>m.mesReferencia))).sort();
+    if(mesesMens.length) mesesMens = mesesMens.filter(mm=> mm>=mesIni && mm<=mesFim);
+    if(mesesMens.length>0){
+      const recebidoPorMes = mesesMens.map(mm => db.mensalidadesBPO.filter(m=>m.clienteId===cliente.id && m.mesReferencia===mm && m.statusPagamento==='pago').reduce((s,m)=>s+(parseFloat(m.valor)||0),0));
+      const pendentePorMes = mesesMens.map(mm => db.mensalidadesBPO.filter(m=>m.clienteId===cliente.id && m.mesReferencia===mm && m.statusPagamento==='pendente').reduce((s,m)=>s+(parseFloat(m.valor)||0),0));
+      chartsPortal['chart-portal-fatmens'] = new Chart(ctxFat, {
+        type: 'bar',
+        data: { labels: mesesMens.map(formatMesRef), datasets: [
+          { label:'Recebido', data: recebidoPorMes, backgroundColor:'#4C8C6B' },
+          { label:'Pendente', data: pendentePorMes, backgroundColor:'#C9A24B' }
+        ] },
+        options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}}, plugins:{datalabels:{display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:10}, formatter:(v)=>formatMoeda(v)}} }
+      });
+    }
+  }
 }
 
 let onPortalClickAtivo = true;
@@ -5595,8 +5709,9 @@ function onPortalChange(e){ /* reservado para futuros filtros do portal */ }
 
 function modalCliente(cliente){
   const editando = !!cliente;
-  cliente = cliente || {id:'', nome:'', nomeContato:'', telefoneContato:'', emailContato:'', observacoes:'', temLogo:false, logoNome:'', logoUrlPublica:'', tipoServico:'rs', beneficios:beneficiosVazios()};
+  cliente = cliente || {id:'', nome:'', nomeContato:'', telefoneContato:'', emailContato:'', observacoes:'', temLogo:false, logoNome:'', logoUrlPublica:'', tipoServico:'rs', beneficios:beneficiosVazios(), dataDescontinuacaoBPO:'', produtosContratados:[]};
   if(!cliente.beneficios) cliente.beneficios = beneficiosVazios();
+  if(!cliente.produtosContratados) cliente.produtosContratados = [];
   let arquivoLogoSelecionado = null;
   openModal(`
     <button class="modal-close" data-action="fechar-modal">&times;</button>
@@ -5617,9 +5732,15 @@ function modalCliente(cliente){
           <div class="hint">Clientes de BPO ganham acesso ao módulo de Colaboradores (turnover, cargos, etc). Clientes de R&S continuam só com vagas e candidatos.</div>
         </div>
         <div class="field"><label>Valor da mensalidade BPO (R$)</label><input type="number" step="0.01" min="0" name="valorMensalidadeBPO" value="${esc(cliente.valorMensalidadeBPO)}" placeholder="Ex.: 2500.00"></div>
+        <div class="field"><label>Data de descontinuação do BPO (opcional)</label><input type="date" name="dataDescontinuacaoBPO" value="${cliente.dataDescontinuacaoBPO||''}"><div class="hint">Preencha se este cliente já foi BPO e o contrato foi encerrado/rebaixado para R&S avulso.</div></div>
         <div class="field full"><label>Observações</label><textarea name="observacoes">${esc(cliente.observacoes)}</textarea></div>
       </div>
 
+      <div class="section-title">Outros produtos e serviços contratados</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Marque aqui só para referência/relatório — a ativação técnica de cada ferramenta (link público, datas, etc.) continua sendo feita na tela específica de cada uma.</p>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+        ${PRODUTOS_CONTRATAVEIS.map(p=>`<div class="checkbox-row"><input type="checkbox" class="chk-produto-contratado" value="${p.chave}" ${(cliente.produtosContratados||[]).includes(p.chave)?'checked':''}><label>${esc(p.nome)}</label></div>`).join('')}
+      </div>
       <div class="section-title">Benefícios oferecidos</div>
       <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Marque os benefícios que esta empresa oferece e descreva o valor/condição de cada um.</p>
       ${BENEFICIOS_PADRAO.map(b=>{
@@ -5685,7 +5806,8 @@ function modalCliente(cliente){
       const valorInput = document.querySelector('[data-beneficio-valor="'+b.chave+'"]');
       beneficios[b.chave] = { ativo: !!(chk&&chk.checked), valor: valorInput?valorInput.value.trim():'' };
     });
-    const dados = {nome:f.get('nome').trim(), nomeContato:f.get('nomeContato').trim(), telefoneContato:f.get('telefoneContato').trim(), emailContato:f.get('emailContato').trim(), observacoes:f.get('observacoes').trim(), tipoServico:f.get('tipoServico')||'rs', valorMensalidadeBPO:f.get('valorMensalidadeBPO')||'', beneficios: beneficios, temLogo: cliente.temLogo||false, logoNome: cliente.logoNome||'', logoUrlPublica: cliente.logoUrlPublica||''};
+    const produtosContratados = Array.from(document.querySelectorAll('.chk-produto-contratado:checked')).map(chk=>chk.value);
+    const dados = {nome:f.get('nome').trim(), nomeContato:f.get('nomeContato').trim(), telefoneContato:f.get('telefoneContato').trim(), emailContato:f.get('emailContato').trim(), observacoes:f.get('observacoes').trim(), tipoServico:f.get('tipoServico')||'rs', valorMensalidadeBPO:f.get('valorMensalidadeBPO')||'', dataDescontinuacaoBPO:f.get('dataDescontinuacaoBPO')||'', produtosContratados: produtosContratados, beneficios: beneficios, temLogo: cliente.temLogo||false, logoNome: cliente.logoNome||'', logoUrlPublica: cliente.logoUrlPublica||''};
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = 'Salvando…'; }
