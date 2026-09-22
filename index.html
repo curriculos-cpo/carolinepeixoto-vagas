@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <style>
@@ -239,6 +240,11 @@
 /* ============================= DADOS ============================= */
 let db = { clientes: [], cargos: [], candidatos: [] };
 let lastSaved = null;
+
+if(window.Chart && window.ChartDataLabels){
+  Chart.register(ChartDataLabels);
+  Chart.defaults.set('plugins.datalabels', { display: false });
+}
 
 const STORAGE_KEY = 'rs_database';
 
@@ -836,6 +842,7 @@ function garantirConfiguracoes(){
     else { BENEFICIOS_PADRAO.forEach(b=>{ if(!cl.beneficios[b.chave]) cl.beneficios[b.chave] = {ativo:false, valor:''}; }); }
     if(!cl.canalDenuncia) cl.canalDenuncia = {ativo:false, emails:[], valorMensalidade:''};
     if(!cl.pesquisaClima) cl.pesquisaClima = {ativo:false, dataInicio:'', dataFim:'', areas:[], valorMensalidade:''};
+    if(!cl.portalAcesso) cl.portalAcesso = {ativo:false, usuario:'', senha:''};
   });
   db.colaboradores.forEach(c=>{
     if(c.salarioAdmissao===undefined) c.salarioAdmissao = '';
@@ -2157,6 +2164,7 @@ function viewColaboradores(){
   return `
     <div class="topbar">
       <div><h1>Acompanhamento BPO</h1><p>${esc(cl.nome)}</p></div>
+      <span class="btn btn-secondary btn-sm" data-action="config-portal-cliente" data-id="${cl.id}">🔑 Portal do Cliente</span>
     </div>
     <div class="filters-row"><select data-role="colab-cliente"><option value="">Selecione um cliente de BPO…</option>${opcoesClientes}</select></div>
 
@@ -2794,7 +2802,7 @@ function drawClimaCharts(){
         labels: GRUPOS_PESQUISA_CLIMA.map(g=>g.nome),
         datasets: [{ data: GRUPOS_PESQUISA_CLIMA.map(g=>resultado.porGrupo[g.chave].favoravel), backgroundColor: '#B2573D' }]
       },
-      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, max:100}} }
+      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:true, anchor:'end', align:'end', color:'#3A2E22', font:{weight:'600', size:11}, formatter:(v)=>v+'%'}}, scales:{x:{beginAtZero:true, max:100}} }
     });
   }
 
@@ -2809,7 +2817,7 @@ function drawClimaCharts(){
         labels: todasPerguntas.map(p=>p.texto.length>50?p.texto.slice(0,50)+'…':p.texto),
         datasets: [{ data: todasPerguntas.map(p=>resultado.porPergunta[p.chave].favoravel), backgroundColor: '#8C6A4B' }]
       },
-      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, max:100}} }
+      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:true, anchor:'end', align:'end', color:'#3A2E22', font:{weight:'600', size:10}, formatter:(v)=>v+'%'}}, scales:{x:{beginAtZero:true, max:100}} }
     });
   }
 }
@@ -3059,6 +3067,7 @@ function viewIndicadores(){
 
     ${cliente.tipoServico==='bpo' ? `
     <div class="card chart-card" style="margin-bottom:22px;"><h3>Turnover mês a mês</h3><div class="chart-wrap"><canvas id="chart-turnover-ind"></canvas></div></div>
+    <div class="card chart-card" style="margin-bottom:22px;"><h3>Absenteísmo mês a mês</h3><div class="chart-wrap"><canvas id="chart-absenteismo-ind"></canvas></div></div>
     ${temMensalidades ? `<div class="card chart-card"><h3>Mensalidades BPO — recebido x pendente por mês</h3><div class="chart-wrap"><canvas id="chart-fatmens-ind"></canvas></div></div>` : ''}
     ` : ''}
   `;
@@ -3090,7 +3099,7 @@ function drawIndicadoresCharts(){
         labels: ['Cadastrados','Chamados','Avaliação','Gestor','Proposta','Contratados'],
         datasets: [{ data: [m.recebidos, m.chamados, m.avaliacao, m.gestor, m.propostas, m.contratados], backgroundColor: '#B2573D' }]
       },
-      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}} }
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:true, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:11}}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}} }
     });
   }
 
@@ -3105,7 +3114,7 @@ function drawIndicadoresCharts(){
         labels: ['Em processo','Contratado','Não avançou','Declinou'],
         datasets: [{ data: [counts.em_processo, counts.contratado, counts.nao_avancou, counts.declinou], backgroundColor: ['#C9A24B','#4C8C6B','#B23A3A','#8C8C8C'] }]
       },
-      options: { responsive:true, maintainAspectRatio:false }
+      options: { responsive:true, maintainAspectRatio:false, plugins:{datalabels:{display:true, color:'#fff', font:{weight:'600', size:11}, formatter:(v)=> v>0?v:''}} }
     });
   }
 
@@ -3121,7 +3130,26 @@ function drawIndicadoresCharts(){
           labels: historico.map(h=>formatMesRef(h.mes)),
           datasets: [{ label:'Turnover %', data: historico.map(h=>h.taxa), borderColor:'#B2573D', backgroundColor:'rgba(178,87,61,0.15)', fill:true, tension:0.3 }]
         },
-        options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}} }
+        options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}}, plugins:{datalabels:{display:true, align:'top', color:'#3A2E22', font:{weight:'600', size:11}, formatter:(v)=>v+'%'}} }
+      });
+    }
+
+    const ctxAbsenteismo = document.getElementById('chart-absenteismo-ind');
+    destruirChartIndicador('chart-absenteismo-ind');
+    if(ctxAbsenteismo){
+      const mesesPeriodo = mesesEntre(mesIni, mesFim);
+      const registrosPeriodo = mesesPeriodo.map(mm=> db.absenteismo.find(a=>a.clienteId===cliente.id && a.mesReferencia===mm));
+      chartsIndicadores['chart-absenteismo-ind'] = new Chart(ctxAbsenteismo, {
+        type: 'line',
+        data: {
+          labels: mesesPeriodo.map(formatMesRef),
+          datasets: [{ label:'Absenteísmo %', data: registrosPeriodo.map(r=>{
+            if(!r) return null;
+            const prev = parseFloat(r.horasPrevistas)||0, perd = parseFloat(r.horasPerdidas)||0;
+            return prev>0 ? Math.round((perd/prev)*1000)/10 : 0;
+          }), borderColor:'#963A2C', backgroundColor:'rgba(150,58,44,0.15)', fill:true, tension:0.3, spanGaps:true }]
+        },
+        options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}}, plugins:{datalabels:{display:true, align:'top', color:'#3A2E22', font:{weight:'600', size:11}, formatter:(v)=>v===null||v===undefined?'':v+'%'}} }
       });
     }
 
@@ -3142,7 +3170,7 @@ function drawIndicadoresCharts(){
               { label:'Pendente', data: pendentePorMes, backgroundColor:'#C9A24B' }
             ]
           },
-          options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}} }
+          options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}}, plugins:{datalabels:{display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:10}, formatter:(v)=>formatMoeda(v)}} }
         });
       }
     }
@@ -3274,6 +3302,10 @@ function getHashRapidaId(){
   const h = window.location.hash || '';
   const m = h.match(/^#rapida-(.+)$/);
   return m ? decodeURIComponent(m[1]) : null;
+}
+
+function ehHashPortal(){
+  return (window.location.hash || '') === '#portal';
 }
 
 function paginaPublicaIndisponivel(mensagem){
@@ -5295,6 +5327,272 @@ async function renderPesquisaRapidaPublica(pesquisaId){
   });
 }
 
+let portalClienteId = null;
+
+async function renderPortalCliente(){
+  document.title = 'Portal do Cliente · Caroline Peixoto DHO';
+  renderPortalLogin();
+}
+
+function renderPortalLogin(erro){
+  document.body.innerHTML = `
+    <div id="public-root" style="padding:16px;">
+      <div class="card" style="max-width:420px;margin:60px auto;padding:32px;">
+        <div style="text-align:center;margin-bottom:20px;">
+          <img src="data:image/png;base64,${LOGO_CLARO_B64}" alt="Caroline Peixoto DHO" style="max-width:200px;width:100%;height:auto;background:var(--spine);padding:14px;border-radius:8px;">
+        </div>
+        <h1 style="font-size:20px;margin-bottom:4px;text-align:center;">Portal do Cliente</h1>
+        <p class="hint" style="text-align:center;margin-bottom:20px;">Entre com o usuário e senha fornecidos pela consultoria.</p>
+        <form id="form-portal-login">
+          <div class="field full"><label>Usuário</label><input required name="usuario" autocomplete="username"></div>
+          <div class="field full"><label>Senha</label><input required type="password" name="senha" autocomplete="current-password"></div>
+          <p class="hint" id="erro-portal-login" style="color:var(--red);display:${erro?'block':'none'};">${erro?esc(erro):''}</p>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:10px;" id="btn-portal-login">Entrar</button>
+        </form>
+      </div>
+    </div>
+    <div id="toast-slot"></div>
+  `;
+  document.getElementById('form-portal-login').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const btn = document.getElementById('btn-portal-login');
+    btn.disabled = true; btn.textContent = 'Entrando…';
+    try{
+      const resp = await chamarAppsScriptPost('portalLogin', {usuario: f.get('usuario').trim(), senha: f.get('senha')});
+      portalClienteId = resp.clienteId;
+      await carregarDadosPortal();
+      state.portalTab = 'colaboradores';
+      renderPortalShell();
+    }catch(err){
+      renderPortalLogin(err.message || 'Usuário ou senha incorretos.');
+    }
+  });
+}
+
+async function carregarDadosPortal(){
+  const resp = await chamarAppsScriptGet('action=portalDados&clienteId=' + encodeURIComponent(portalClienteId));
+  db = {
+    clientes: [resp.cliente],
+    colaboradores: resp.colaboradores || [],
+    funcoes: resp.funcoes || [],
+    absenteismo: resp.absenteismo || [],
+    treinamentos: resp.treinamentos || [],
+    descritivosCargo: resp.descritivosCargo || [],
+    materiais: resp.materiais || [],
+    cargos: resp.cargos || [],
+    candidatos: resp.candidatos || [],
+    mensalidadesBPO: resp.mensalidadesBPO || [],
+    agenda: [], diagnosticosCultura: [], denuncias: [], pesquisasClima: [],
+    pesquisasRapidas: [], respostasPesquisaRapida: [], avaliacoesDesempenho: [],
+    mensalidadesCanalDenuncia: [], mensalidadesPesquisaClima: [], servicosAvulsos: [],
+    configuracoes: null
+  };
+  garantirConfiguracoes();
+}
+
+function renderPortalShell(){
+  const cliente = db.clientes[0];
+  document.body.innerHTML = `
+    <div style="min-height:100vh;background:var(--bg);">
+      <div style="background:var(--spine);padding:18px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img src="data:image/png;base64,${LOGO_CLARO_B64}" style="height:30px;">
+          <div style="color:#fff;">
+            <div style="font-weight:600;font-size:14px;">${esc(cliente.nome)}</div>
+            <div style="font-size:11px;opacity:.7;">Portal do Cliente</div>
+          </div>
+        </div>
+        <span class="btn btn-secondary btn-sm" data-action="portal-sair">Sair</span>
+      </div>
+      <div style="padding:20px 24px 60px;max-width:1100px;margin:0 auto;">
+        <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
+          <span class="btn ${state.portalTab==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="colaboradores">Colaboradores cadastrados</span>
+          <span class="btn ${state.portalTab==='materiais'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="materiais">Materiais e documentos</span>
+          <span class="btn ${state.portalTab==='indicadores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="indicadores">Indicadores</span>
+        </div>
+        <div id="portal-view"></div>
+      </div>
+    </div>
+    <div id="toast-slot"></div>
+    <div id="modal-slot"></div>
+  `;
+  document.body.addEventListener('click', onPortalClick);
+  document.body.addEventListener('change', onPortalChange);
+  renderPortalView();
+}
+
+function renderPortalView(){
+  const view = document.getElementById('portal-view');
+  if(!view) return;
+  if(state.portalTab==='colaboradores') view.innerHTML = viewPortalColaboradores();
+  else if(state.portalTab==='materiais') view.innerHTML = viewPortalMateriais();
+  else view.innerHTML = viewPortalIndicadores();
+}
+
+function viewPortalColaboradores(){
+  const cliente = db.clientes[0];
+  const colaboradores = colaboradoresDoCliente(cliente.id).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const linhas = colaboradores.map(c=>{
+    const f = getFuncao(c.funcaoId);
+    return `<tr>
+      <td><strong>${esc(c.nome)}</strong></td>
+      <td>${esc(f?f.nome:'—')}</td>
+      <td>${formatDate(c.dataAdmissao)}</td>
+      <td>${statusColaborador(c)!=='desligado' ? formatMoeda(salarioAtualColaborador(c)) : '—'}</td>
+      <td>${statusColaboradorBadge(c)}</td>
+      <td><span class="btn btn-ghost btn-sm" data-action="portal-editar-colaborador" data-id="${c.id}">Editar</span></td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="topbar" style="margin-bottom:14px;">
+      <div><p class="hint">${colaboradores.length} colaborador(es) cadastrado(s)</p></div>
+      <span class="btn btn-primary btn-sm" data-action="portal-novo-colaborador">+ Novo colaborador</span>
+    </div>
+    ${colaboradores.length===0 ? '<div class="card empty-state"><h3>Nenhum colaborador cadastrado</h3></div>' : `
+    <div class="card table-wrap"><table><thead><tr><th>Nome</th><th>Função</th><th>Admissão</th><th>Salário atual</th><th>Status</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
+  `;
+}
+
+function modalPortalColaborador(colaborador){
+  const cliente = db.clientes[0];
+  const editando = !!colaborador;
+  colaborador = colaborador || {id:'', clienteId:cliente.id, nome:'', funcaoId:'', telefone:'', email:'', dataAdmissao:todayISO(), salarioAdmissao:'', historicoSalarial:[], emAfastamento:false, tipoAfastamento:'', dataInicioAfastamento:'', dataFimAfastamento:'', dataDesligamento:'', tipoDesligamento:'', motivoDesligamento:'', observacoes:'', registros:[], avaliacoesExperiencia:[], duracaoExperiencia1:45, duracaoExperiencia2:45};
+  const funcoesCliente = funcoesDoCliente(cliente.id).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const funcaoAtual = colaborador.funcaoId ? funcoesCliente.find(f=>f.id===colaborador.funcaoId) : null;
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${editando ? 'Editar colaborador' : 'Novo colaborador'}</h2>
+    <form id="form-portal-colaborador">
+      <div class="form-grid">
+        <div class="field full"><label>Nome completo *</label><input required name="nome" value="${esc(colaborador.nome)}"></div>
+        <div class="field full"><label>Função</label><input name="funcaoNome" list="portal-funcoes-datalist" value="${esc(funcaoAtual?funcaoAtual.nome:'')}" autocomplete="off"><datalist id="portal-funcoes-datalist">${funcoesCliente.map(f=>'<option value="'+esc(f.nome)+'">').join('')}</datalist></div>
+        <div class="field"><label>Telefone</label><input name="telefone" value="${esc(colaborador.telefone||'')}"></div>
+        <div class="field"><label>E-mail</label><input type="email" name="email" value="${esc(colaborador.email||'')}"></div>
+        <div class="field"><label>Data de admissão *</label><input required type="date" name="dataAdmissao" value="${colaborador.dataAdmissao||''}"></div>
+        <div class="field"><label>Salário atual (R$)</label><input type="number" step="0.01" min="0" name="salarioAdmissao" value="${esc(salarioAtualColaborador(colaborador)||colaborador.salarioAdmissao)}"></div>
+      </div>
+      <div class="checkbox-row"><input type="checkbox" id="chk-portal-afastamento" ${colaborador.emAfastamento?'checked':''}><label for="chk-portal-afastamento">Colaborador está afastado atualmente</label></div>
+      <div class="form-grid" id="portal-afastamento-wrap" style="display:${colaborador.emAfastamento?'grid':'none'};margin-top:8px;">
+        <div class="field full"><label>Tipo de afastamento</label><select name="tipoAfastamento"><option value="">Não informado</option>${TIPOS_AFASTAMENTO.map(t=>'<option '+(colaborador.tipoAfastamento===t?'selected':'')+'>'+t+'</option>').join('')}</select></div>
+        <div class="field"><label>Início</label><input type="date" name="dataInicioAfastamento" value="${colaborador.dataInicioAfastamento||''}"></div>
+        <div class="field"><label>Previsão de retorno</label><input type="date" name="dataFimAfastamento" value="${colaborador.dataFimAfastamento||''}"></div>
+      </div>
+      <div class="section-title">Desligamento (opcional)</div>
+      <div class="form-grid">
+        <div class="field"><label>Data de desligamento</label><input type="date" name="dataDesligamento" value="${colaborador.dataDesligamento||''}"></div>
+        <div class="field full"><label>Tipo de desligamento</label><select name="tipoDesligamento"><option value="">Não informado</option>${TIPOS_DESLIGAMENTO.map(t=>'<option '+(colaborador.tipoDesligamento===t?'selected':'')+'>'+t+'</option>').join('')}</select></div>
+        <div class="field full"><label>Observações</label><textarea name="observacoes">${esc(colaborador.observacoes||'')}</textarea></div>
+      </div>
+      <p class="hint" id="erro-portal-colaborador" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </div>
+    </form>
+  `);
+
+  document.getElementById('chk-portal-afastamento').addEventListener('change', e=>{
+    document.getElementById('portal-afastamento-wrap').style.display = e.target.checked ? 'grid' : 'none';
+  });
+
+  document.getElementById('form-portal-colaborador').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-portal-colaborador');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const nomeFuncaoDigitado = f.get('funcaoNome').trim();
+    const achado = nomeFuncaoDigitado ? funcoesCliente.find(fc=>fc.nome.toLowerCase()===nomeFuncaoDigitado.toLowerCase()) : null;
+
+    const salarioAtual = f.get('salarioAdmissao') || '';
+    const historicoSalarial = colaborador.historicoSalarial || [];
+    const salarioMudou = String(salarioAtualColaborador(colaborador)) !== String(salarioAtual) && editando;
+
+    const dadosColaborador = Object.assign({}, colaborador, {
+      nome: f.get('nome').trim(),
+      funcaoId: achado ? achado.id : '',
+      telefone: f.get('telefone').trim(),
+      email: f.get('email').trim(),
+      dataAdmissao: f.get('dataAdmissao'),
+      salarioAdmissao: editando ? colaborador.salarioAdmissao : salarioAtual,
+      historicoSalarial: salarioMudou ? historicoSalarial.concat([{data: todayISO(), valor: salarioAtual, motivo:'Atualizado pelo cliente no portal'}]) : historicoSalarial,
+      emAfastamento: document.getElementById('chk-portal-afastamento').checked,
+      tipoAfastamento: f.get('tipoAfastamento') || '',
+      dataInicioAfastamento: f.get('dataInicioAfastamento') || '',
+      dataFimAfastamento: f.get('dataFimAfastamento') || '',
+      dataDesligamento: f.get('dataDesligamento') || '',
+      tipoDesligamento: f.get('tipoDesligamento') || '',
+      observacoes: f.get('observacoes').trim()
+    });
+
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    try{
+      await chamarAppsScriptPost('portalSalvarColaborador', {clienteId: cliente.id, colaborador: dadosColaborador});
+      await carregarDadosPortal();
+      closeModal();
+      renderPortalView();
+      showToast('Colaborador salvo.');
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível salvar agora.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Salvar';
+    }
+  });
+}
+
+function viewPortalMateriais(){
+  const cliente = db.clientes[0];
+  const materiais = db.materiais.filter(m=>m.clienteId===cliente.id).slice().sort((a,b)=>(b.dataUpload||'').localeCompare(a.dataUpload||''));
+  if(materiais.length===0) return '<div class="card empty-state"><h3>Nenhum material disponível ainda</h3></div>';
+  const linhas = materiais.map(m=>`<tr>
+    <td><strong>${esc(m.nome)}</strong></td>
+    <td>${esc(m.categoria||'—')}</td>
+    <td>${formatDate(m.dataUpload)}</td>
+    <td><a href="${esc(m.url)}" target="_blank" class="btn btn-ghost btn-sm">Abrir / Baixar</a></td>
+  </tr>`).join('');
+  return `<div class="card table-wrap"><table><thead><tr><th>Nome</th><th>Categoria</th><th>Data</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+}
+
+function viewPortalIndicadores(){
+  const cliente = db.clientes[0];
+  const [mesIni, mesFim] = [mesAtualRef().slice(0,4)+'-01', mesAtualRef()];
+  const ind = calcularIndicadoresCompletos(cliente.id, mesIni, mesFim);
+  return `
+    <p class="hint" style="margin-bottom:14px;">Período: ${formatMesRef(mesIni)} até ${formatMesRef(mesFim)}.</p>
+    <div class="kpi-grid">
+      ${ind.bpo ? `
+      <div class="kpi c-green"><div class="label">Colaboradores ativos</div><div class="value">${ind.bpo.ativosAtuais}</div></div>
+      <div class="kpi"><div class="label">Admissões no período</div><div class="value">${ind.bpo.admitidosPeriodo}</div></div>
+      <div class="kpi"><div class="label">Desligamentos no período</div><div class="value">${ind.bpo.desligadosPeriodo}</div></div>
+      <div class="kpi c-amber"><div class="label">Turnover médio</div><div class="value">${ind.bpo.turnoverMedio}%</div></div>
+      <div class="kpi c-green"><div class="label">Índice de retenção</div><div class="value">${ind.bpo.indiceRetencao}%</div></div>
+      <div class="kpi"><div class="label">Horas-homem de treinamento</div><div class="value">${ind.bpo.horasHomemTreinamentoPeriodo}h</div></div>
+      ${ind.bpo.temRegistrosAbsenteismo ? '<div class="kpi ' + (ind.bpo.absenteismoPct>5?'c-red':'c-green') + '"><div class="label">Absenteísmo</div><div class="value">'+ind.bpo.absenteismoPct+'%</div></div>' : ''}
+      ` : '<div class="card empty-state"><h3>Sem indicadores de acompanhamento BPO no momento</h3></div>'}
+    </div>
+  `;
+}
+
+let onPortalClickAtivo = true;
+function onPortalClick(e){
+  const el = e.target.closest('[data-action]');
+  if(!el) return;
+  const action = el.dataset.action;
+  const id = el.dataset.id;
+  if(action === 'portal-sair'){ window.location.reload(); return; }
+  if(action === 'portal-tab'){ state.portalTab = el.dataset.tab; renderPortalView(); return; }
+  if(action === 'portal-novo-colaborador'){ modalPortalColaborador(null); return; }
+  if(action === 'portal-editar-colaborador'){ modalPortalColaborador(db.colaboradores.find(c=>c.id===id)); return; }
+  if(action === 'fechar-modal'){ closeModal(); return; }
+  if(action === 'fechar-modal-overlay'){ if(e.target===el) closeModal(); return; }
+}
+function onPortalChange(e){ /* reservado para futuros filtros do portal */ }
+
 function modalCliente(cliente){
   const editando = !!cliente;
   cliente = cliente || {id:'', nome:'', nomeContato:'', telefoneContato:'', emailContato:'', observacoes:'', temLogo:false, logoNome:'', logoUrlPublica:'', tipoServico:'rs', beneficios:beneficiosVazios()};
@@ -5802,6 +6100,46 @@ function modalLinkPesquisaClima(cliente){
       </div>
     </div>
   `);
+}
+
+function modalConfigPortalCliente(cliente){
+  const pa = cliente.portalAcesso || {ativo:false, usuario:'', senha:''};
+  const linkPortal = window.location.origin + window.location.pathname + '#portal';
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Portal do Cliente</h2>
+    <div class="modal-sub">${esc(cliente.nome)}</div>
+    <p class="hint" style="margin-bottom:10px;">O cliente acessa com usuário e senha e vê (e edita) só os dados desta empresa: Colaboradores cadastrados, Materiais (só leitura) e Indicadores (só leitura).</p>
+    <form id="form-config-portal">
+      <div class="checkbox-row"><input type="checkbox" id="chk-portal-ativo" ${pa.ativo?'checked':''}><label for="chk-portal-ativo">Acesso ativo para este cliente</label></div>
+      <div class="form-grid" style="margin-top:10px;">
+        <div class="field"><label>Usuário</label><input name="usuario" value="${esc(pa.usuario)}" autocomplete="off"></div>
+        <div class="field"><label>Senha</label><input name="senha" value="${esc(pa.senha)}" autocomplete="off"></div>
+      </div>
+      <div class="field full">
+        <label>Link do portal (o mesmo para todos os clientes — cada um entra com seu próprio usuário/senha)</label>
+        <input type="text" readonly value="${esc(linkPortal)}" id="link-portal-input" onclick="this.select()">
+      </div>
+      <div class="modal-footer">
+        <span><span class="btn btn-secondary btn-sm" data-action="copiar-link-portal">Copiar link</span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-config-portal').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    cliente.portalAcesso = {
+      ativo: document.getElementById('chk-portal-ativo').checked,
+      usuario: f.get('usuario').trim(),
+      senha: f.get('senha')
+    };
+    closeModal(); saveDB(); renderView();
+    showToast('Configuração do portal salva.');
+  });
 }
 
 function modalConfigCanalDenuncia(cliente){
@@ -6517,6 +6855,18 @@ function onGlobalClick(e){
   }
   if(action === 'link-cultura'){ modalLinkCultura(getCliente(id)); return; }
   if(action === 'config-canal-denuncia'){ modalConfigCanalDenuncia(getCliente(id)); return; }
+  if(action === 'config-portal-cliente'){ modalConfigPortalCliente(getCliente(id)); return; }
+  if(action === 'copiar-link-portal'){
+    const finalizar = ()=> showToast('Link copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(window.location.origin + window.location.pathname + '#portal').then(finalizar).catch(()=>{
+        const inp = document.getElementById('link-portal-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+      });
+    } else {
+      const inp = document.getElementById('link-portal-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+    }
+    return;
+  }
   if(action === 'link-canal-denuncia'){ modalLinkCanalDenuncia(getCliente(id)); return; }
   if(action === 'config-pesquisa-clima'){ modalConfigPesquisaClima(getCliente(id)); return; }
   if(action === 'nova-pesquisa-rapida'){ modalNovaPesquisaRapida(el.dataset.clienteId); return; }
@@ -6888,6 +7238,8 @@ function onGlobalInput(e){
     await renderPesquisaClima(clienteIdClima);
   } else if(pesquisaIdRapida){
     await renderPesquisaRapidaPublica(pesquisaIdRapida);
+  } else if(ehHashPortal()){
+    await renderPortalCliente();
   } else {
     db = await loadDB();
     garantirConfiguracoes();
