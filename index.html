@@ -2483,6 +2483,28 @@ function viewAbsenteismo(cliente){
   `;
 }
 
+function calcularHistoricoMensalCompleto(clienteId, mesIni, mesFim){
+  const meses = mesesEntre(mesIni, mesFim);
+  const cargos = cargosDoCliente(clienteId);
+  const candidatos = db.candidatos.filter(c=>c.clienteId===clienteId);
+
+  return meses.map(mm=>{
+    const de = primeiroDiaDoMes(mm), ate = ultimoDiaDoMes(mm);
+    const vagasAbertas = cargos.filter(v=>v.dataAbertura && v.dataAbertura>=de && v.dataAbertura<=ate).length;
+    const vagasFechadas = cargos.filter(v=>v.status==='fechada' && v.dataFechamentoReal && v.dataFechamentoReal>=de && v.dataFechamentoReal<=ate).length;
+    const candidatosInscritos = candidatos.filter(c=>c.dataRecebimento && c.dataRecebimento>=de && c.dataRecebimento<=ate).length;
+    const tv = turnoverPorMes(clienteId, mm);
+    const treinamentosMes = db.treinamentos.filter(t=>t.clienteId===clienteId && t.data>=de && t.data<=ate);
+    const horasHomemTreinamentoMes = treinamentosMes.reduce((s,t)=>s+horasHomemTreinamento(t), 0);
+    const ativosNoFimDoMes = colaboradoresDoCliente(clienteId).filter(c=>{
+      if(c.dataAdmissao > ate) return false;
+      if(c.dataDesligamento && c.dataDesligamento <= ate) return false;
+      return true;
+    }).length;
+    return { mes: mm, vagasAbertas, vagasFechadas, candidatosInscritos, admitidos: tv.admitidos, desligados: tv.desligados, horasHomemTreinamentoMes, ativosNoFimDoMes };
+  });
+}
+
 function mesesEntre(inicio, fim){
   const meses = [];
   let [y,m] = inicio.split('-').map(Number);
@@ -3122,11 +3144,20 @@ function viewIndicadores(){
     <div class="charts-row">
       <div class="card chart-card"><h3>Funil de candidatos</h3><div class="chart-wrap"><canvas id="chart-funil-ind"></canvas></div></div>
       <div class="card chart-card"><h3>Status dos candidatos</h3><div class="chart-wrap"><canvas id="chart-status-ind"></canvas></div></div>
+    </div>
+    <div class="charts-row">
+      <div class="card chart-card"><h3>Vagas abertas x fechadas por mês</h3><div class="chart-wrap"><canvas id="chart-vagasmes-ind"></canvas></div></div>
+      <div class="card chart-card"><h3>Candidatos inscritos por mês</h3><div class="chart-wrap"><canvas id="chart-candmes-ind"></canvas></div></div>
     </div>` : '<div class="card empty-state"><h3>Nenhuma vaga cadastrada para este cliente ainda</h3><p>Os gráficos de recrutamento aparecem aqui assim que houver vagas.</p></div>'}
 
     ${cliente.tipoServico==='bpo' ? `
     <div class="card chart-card" style="margin-bottom:22px;"><h3>Turnover mês a mês</h3><div class="chart-wrap"><canvas id="chart-turnover-ind"></canvas></div></div>
     <div class="card chart-card" style="margin-bottom:22px;"><h3>Absenteísmo mês a mês</h3><div class="chart-wrap"><canvas id="chart-absenteismo-ind"></canvas></div></div>
+    <div class="charts-row">
+      <div class="card chart-card"><h3>Colaboradores ativos por mês</h3><div class="chart-wrap"><canvas id="chart-headcount-ind"></canvas></div></div>
+      <div class="card chart-card"><h3>Admissões x Desligamentos por mês</h3><div class="chart-wrap"><canvas id="chart-admdes-ind"></canvas></div></div>
+    </div>
+    <div class="card chart-card" style="margin-bottom:22px;"><h3>Horas-homem de treinamento por mês</h3><div class="chart-wrap"><canvas id="chart-hht-ind"></canvas></div></div>
     ${temMensalidades ? `<div class="card chart-card"><h3>Mensalidades BPO — recebido x pendente por mês</h3><div class="chart-wrap"><canvas id="chart-fatmens-ind"></canvas></div></div>` : ''}
     ` : ''}
   `;
@@ -3177,6 +3208,37 @@ function drawIndicadoresCharts(){
     });
   }
 
+  const historicoMensalRS = calcularHistoricoMensalCompleto(cliente.id, mesIni, mesFim);
+
+  const ctxVagasMes = document.getElementById('chart-vagasmes-ind');
+  destruirChartIndicador('chart-vagasmes-ind');
+  if(ctxVagasMes && cargos.length>0){
+    chartsIndicadores['chart-vagasmes-ind'] = new Chart(ctxVagasMes, {
+      type: 'bar',
+      data: {
+        labels: historicoMensalRS.map(h=>formatMesRef(h.mes)),
+        datasets: [
+          { label:'Abertas', data: historicoMensalRS.map(h=>h.vagasAbertas), backgroundColor:'#C9A24B' },
+          { label:'Fechadas', data: historicoMensalRS.map(h=>h.vagasFechadas), backgroundColor:'#4C8C6B' }
+        ]
+      },
+      options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{datalabels:{display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:10}}} }
+    });
+  }
+
+  const ctxCandMes = document.getElementById('chart-candmes-ind');
+  destruirChartIndicador('chart-candmes-ind');
+  if(ctxCandMes && cargos.length>0){
+    chartsIndicadores['chart-candmes-ind'] = new Chart(ctxCandMes, {
+      type: 'bar',
+      data: {
+        labels: historicoMensalRS.map(h=>formatMesRef(h.mes)),
+        datasets: [{ label:'Candidatos inscritos', data: historicoMensalRS.map(h=>h.candidatosInscritos), backgroundColor:'#B2573D' }]
+      },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:true, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:11}}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}} }
+    });
+  }
+
   if(cliente.tipoServico==='bpo'){
     const ctxTurnover = document.getElementById('chart-turnover-ind');
     destruirChartIndicador('chart-turnover-ind');
@@ -3209,6 +3271,50 @@ function drawIndicadoresCharts(){
           }), borderColor:'#963A2C', backgroundColor:'rgba(150,58,44,0.15)', fill:true, tension:0.3, spanGaps:true }]
         },
         options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}}, plugins:{datalabels:{display:true, align:'top', color:'#3A2E22', font:{weight:'600', size:11}, formatter:(v)=>v===null||v===undefined?'':v+'%'}} }
+      });
+    }
+
+    const historicoMensalBPO = calcularHistoricoMensalCompleto(cliente.id, mesIni, mesFim);
+
+    const ctxHeadcount = document.getElementById('chart-headcount-ind');
+    destruirChartIndicador('chart-headcount-ind');
+    if(ctxHeadcount){
+      chartsIndicadores['chart-headcount-ind'] = new Chart(ctxHeadcount, {
+        type: 'line',
+        data: {
+          labels: historicoMensalBPO.map(h=>formatMesRef(h.mes)),
+          datasets: [{ label:'Colaboradores ativos', data: historicoMensalBPO.map(h=>h.ativosNoFimDoMes), borderColor:'#4C8C6B', backgroundColor:'rgba(76,140,107,0.15)', fill:true, tension:0.3 }]
+        },
+        options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{legend:{display:false}, datalabels:{display:true, align:'top', color:'#3A2E22', font:{weight:'600', size:11}}} }
+      });
+    }
+
+    const ctxAdmDes = document.getElementById('chart-admdes-ind');
+    destruirChartIndicador('chart-admdes-ind');
+    if(ctxAdmDes){
+      chartsIndicadores['chart-admdes-ind'] = new Chart(ctxAdmDes, {
+        type: 'bar',
+        data: {
+          labels: historicoMensalBPO.map(h=>formatMesRef(h.mes)),
+          datasets: [
+            { label:'Admissões', data: historicoMensalBPO.map(h=>h.admitidos), backgroundColor:'#4C8C6B' },
+            { label:'Desligamentos', data: historicoMensalBPO.map(h=>h.desligados), backgroundColor:'#B23A3A' }
+          ]
+        },
+        options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{datalabels:{display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:10}}} }
+      });
+    }
+
+    const ctxHHT = document.getElementById('chart-hht-ind');
+    destruirChartIndicador('chart-hht-ind');
+    if(ctxHHT){
+      chartsIndicadores['chart-hht-ind'] = new Chart(ctxHHT, {
+        type: 'bar',
+        data: {
+          labels: historicoMensalBPO.map(h=>formatMesRef(h.mes)),
+          datasets: [{ label:'Horas-homem', data: historicoMensalBPO.map(h=>h.horasHomemTreinamentoMes), backgroundColor:'#8C6A4B' }]
+        },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:11}, formatter:(v)=>v+'h'}}, scales:{y:{beginAtZero:true}} }
       });
     }
 
@@ -5666,11 +5772,20 @@ function viewPortalIndicadores(){
     <div class="charts-row">
       <div class="card chart-card"><h3>Funil de candidatos</h3><div class="chart-wrap"><canvas id="chart-portal-funil"></canvas></div></div>
       <div class="card chart-card"><h3>Status dos candidatos</h3><div class="chart-wrap"><canvas id="chart-portal-status"></canvas></div></div>
+    </div>
+    <div class="charts-row">
+      <div class="card chart-card"><h3>Vagas abertas x fechadas por mês</h3><div class="chart-wrap"><canvas id="chart-portal-vagasmes"></canvas></div></div>
+      <div class="card chart-card"><h3>Candidatos inscritos por mês</h3><div class="chart-wrap"><canvas id="chart-portal-candmes"></canvas></div></div>
     </div>` : ''}
 
     ${ind.bpo ? `
     <div class="card chart-card" style="margin-bottom:22px;"><h3>Turnover mês a mês</h3><div class="chart-wrap"><canvas id="chart-portal-turnover"></canvas></div></div>
     <div class="card chart-card" style="margin-bottom:22px;"><h3>Absenteísmo mês a mês</h3><div class="chart-wrap"><canvas id="chart-portal-absenteismo"></canvas></div></div>
+    <div class="charts-row">
+      <div class="card chart-card"><h3>Colaboradores ativos por mês</h3><div class="chart-wrap"><canvas id="chart-portal-headcount"></canvas></div></div>
+      <div class="card chart-card"><h3>Admissões x Desligamentos por mês</h3><div class="chart-wrap"><canvas id="chart-portal-admdes"></canvas></div></div>
+    </div>
+    <div class="card chart-card" style="margin-bottom:22px;"><h3>Horas-homem de treinamento por mês</h3><div class="chart-wrap"><canvas id="chart-portal-hht"></canvas></div></div>
     ${temMensalidades ? `<div class="card chart-card"><h3>Mensalidades — recebido x pendente por mês</h3><div class="chart-wrap"><canvas id="chart-portal-fatmens"></canvas></div></div>` : ''}
     ` : ''}
   `;
@@ -5713,6 +5828,31 @@ function drawPortalIndicadoresCharts(){
     });
   }
 
+  const historicoMensalPortal = calcularHistoricoMensalCompleto(cliente.id, mesIni, mesFim);
+
+  const ctxVagasMes = document.getElementById('chart-portal-vagasmes');
+  destruirChartPortal('chart-portal-vagasmes');
+  if(ctxVagasMes && cargos.length>0){
+    chartsPortal['chart-portal-vagasmes'] = new Chart(ctxVagasMes, {
+      type: 'bar',
+      data: { labels: historicoMensalPortal.map(h=>formatMesRef(h.mes)), datasets: [
+        { label:'Abertas', data: historicoMensalPortal.map(h=>h.vagasAbertas), backgroundColor:'#C9A24B' },
+        { label:'Fechadas', data: historicoMensalPortal.map(h=>h.vagasFechadas), backgroundColor:'#4C8C6B' }
+      ] },
+      options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{datalabels:{display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:10}}} }
+    });
+  }
+
+  const ctxCandMes = document.getElementById('chart-portal-candmes');
+  destruirChartPortal('chart-portal-candmes');
+  if(ctxCandMes && cargos.length>0){
+    chartsPortal['chart-portal-candmes'] = new Chart(ctxCandMes, {
+      type: 'bar',
+      data: { labels: historicoMensalPortal.map(h=>formatMesRef(h.mes)), datasets: [{ label:'Candidatos inscritos', data: historicoMensalPortal.map(h=>h.candidatosInscritos), backgroundColor:'#B2573D' }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:true, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:11}}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}} }
+    });
+  }
+
   const mesesPeriodo = mesesEntre(mesIni, mesFim);
 
   const ctxTurnover = document.getElementById('chart-portal-turnover');
@@ -5738,6 +5878,39 @@ function drawPortalIndicadoresCharts(){
         return prev>0 ? Math.round((perd/prev)*1000)/10 : 0;
       }), borderColor:'#963A2C', backgroundColor:'rgba(150,58,44,0.15)', fill:true, tension:0.3, spanGaps:true }] },
       options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}}, plugins:{datalabels:{display:true, align:'top', color:'#3A2E22', font:{weight:'600', size:11}, formatter:(v)=>v===null||v===undefined?'':v+'%'}} }
+    });
+  }
+
+  const ctxHeadcount = document.getElementById('chart-portal-headcount');
+  destruirChartPortal('chart-portal-headcount');
+  if(ctxHeadcount){
+    chartsPortal['chart-portal-headcount'] = new Chart(ctxHeadcount, {
+      type: 'line',
+      data: { labels: historicoMensalPortal.map(h=>formatMesRef(h.mes)), datasets: [{ label:'Colaboradores ativos', data: historicoMensalPortal.map(h=>h.ativosNoFimDoMes), borderColor:'#4C8C6B', backgroundColor:'rgba(76,140,107,0.15)', fill:true, tension:0.3 }] },
+      options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{legend:{display:false}, datalabels:{display:true, align:'top', color:'#3A2E22', font:{weight:'600', size:11}}} }
+    });
+  }
+
+  const ctxAdmDes = document.getElementById('chart-portal-admdes');
+  destruirChartPortal('chart-portal-admdes');
+  if(ctxAdmDes){
+    chartsPortal['chart-portal-admdes'] = new Chart(ctxAdmDes, {
+      type: 'bar',
+      data: { labels: historicoMensalPortal.map(h=>formatMesRef(h.mes)), datasets: [
+        { label:'Admissões', data: historicoMensalPortal.map(h=>h.admitidos), backgroundColor:'#4C8C6B' },
+        { label:'Desligamentos', data: historicoMensalPortal.map(h=>h.desligados), backgroundColor:'#B23A3A' }
+      ] },
+      options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{datalabels:{display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:10}}} }
+    });
+  }
+
+  const ctxHHT = document.getElementById('chart-portal-hht');
+  destruirChartPortal('chart-portal-hht');
+  if(ctxHHT){
+    chartsPortal['chart-portal-hht'] = new Chart(ctxHHT, {
+      type: 'bar',
+      data: { labels: historicoMensalPortal.map(h=>formatMesRef(h.mes)), datasets: [{ label:'Horas-homem', data: historicoMensalPortal.map(h=>h.horasHomemTreinamentoMes), backgroundColor:'#8C6A4B' }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0, anchor:'end', align:'top', color:'#3A2E22', font:{weight:'600', size:11}, formatter:(v)=>v+'h'}}, scales:{y:{beginAtZero:true}} }
     });
   }
 
