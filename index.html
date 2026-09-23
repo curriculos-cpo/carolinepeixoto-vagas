@@ -455,6 +455,7 @@ function prazosExperiencia(colaborador){
   return { dias1, dias2, fimEtapa1, fimEtapa2, avaliadoEtapa1, avaliadoEtapa2 };
 }
 const LIMITE_DIAS_ALERTA_EXPERIENCIA = 10;
+const LIMITE_DIAS_EXPERIENCIA_MUITO_ATRASADA = -30; // além disso, considera caso antigo/irrelevante e para de alertar
 function colaboradoresComExperienciaVencendo(clienteIdFiltro){
   const hoje = todayISO();
   const resultado = [];
@@ -471,7 +472,7 @@ function colaboradoresComExperienciaVencendo(clienteIdFiltro){
     ].forEach(p=>{
       if(p.avaliado) return;
       const diasRestantes = daysBetween(hoje, p.data);
-      if(diasRestantes !== null && diasRestantes <= LIMITE_DIAS_ALERTA_EXPERIENCIA){
+      if(diasRestantes !== null && diasRestantes <= LIMITE_DIAS_ALERTA_EXPERIENCIA && diasRestantes >= LIMITE_DIAS_EXPERIENCIA_MUITO_ATRASADA){
         resultado.push({ colaborador:c, periodo:p.periodo, diasTotais:p.dias, data:p.data, dias:diasRestantes });
       }
     });
@@ -1032,6 +1033,7 @@ function renderShell(){
         <div class="nav-item" data-action="nav" data-tab="agenda"><span class="nav-dot"></span>Agenda</div>
         <div class="nav-item" data-action="nav" data-tab="dashboard"><span class="nav-dot"></span>Visão geral</div>
         <div class="nav-item" data-action="nav" data-tab="clientes"><span class="nav-dot"></span>Cadastro de clientes e vagas</div>
+        <a class="nav-item" href="#vagas" target="_blank" rel="noopener" style="text-decoration:none;"><span class="nav-dot"></span>🔗 Portal de Vagas (público)</a>
         <div class="nav-item" data-action="nav" data-tab="colaboradores"><span class="nav-dot"></span>Acompanhamento BPO</div>
         <div class="nav-item" data-action="nav" data-tab="drive"><span class="nav-dot"></span>Materiais e documentos</div>
 
@@ -1618,6 +1620,7 @@ function viewClientes(){
     <div class="topbar">
       <div><h1>Clientes e vagas</h1><p>Selecione um cliente para ver e gerenciar as vagas dele.</p></div>
       <div style="display:flex;gap:8px;">
+        <span class="btn btn-secondary" data-action="link-portal-vagas">🔗 Portal de Vagas</span>
         <span class="btn btn-secondary" data-action="gerar-proposta-comercial">📄 Proposta para Prospect</span>
         <button class="btn btn-primary" data-action="novo-cliente">+ Novo cliente</button>
       </div>
@@ -3328,6 +3331,14 @@ function getHashCargoId(){
   const h = window.location.hash || '';
   const m = h.match(/^#inscricao-(.+)$/);
   return m ? decodeURIComponent(m[1]) : null;
+}
+
+function ehHashPortalVagas(){
+  return (window.location.hash || '') === '#vagas';
+}
+
+function ehHashBancoCurriculos(){
+  return (window.location.hash || '') === '#banco-curriculos';
 }
 
 function getHashAvaliacaoId(){
@@ -5770,6 +5781,23 @@ function onPortalClick(e){
 }
 function onPortalChange(e){ /* reservado para futuros filtros do portal */ }
 
+function modalLinkPortalVagas(){
+  const link = window.location.origin + window.location.pathname + '#vagas';
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Portal de Vagas</h2>
+    <p class="hint" style="margin-bottom:14px;">Um único link com todas as vagas que estiverem com "Vaga pública ativa" marcada — sem precisar compartilhar um link por vaga. Divulgue esse link no seu site, LinkedIn, redes sociais, etc.</p>
+    <div class="field full">
+      <label>Link público</label>
+      <input type="text" readonly value="${esc(link)}" id="link-portal-vagas-input" onclick="this.select()">
+    </div>
+    <div class="modal-footer">
+      <span><span class="btn btn-secondary btn-sm" data-action="copiar-link-portal-vagas">Copiar link</span></span>
+      <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div>
+    </div>
+  `);
+}
+
 function modalPropostaComercial(clienteId){
   const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(clienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
   const modoInicial = clienteId ? 'existente' : 'prospect';
@@ -5927,6 +5955,136 @@ function viewPropostaComercial(){
       </div>
     </div>
   `;
+}
+
+async function renderCandidaturaBanco(){
+  document.title = 'Cadastre seu currículo · Caroline Peixoto DHO';
+  document.body.innerHTML = `
+    <div class="card" style="max-width:640px;margin:32px auto;padding:0;overflow:hidden;">
+      <div style="background:var(--spine);padding:26px 32px;text-align:center;">
+        <img src="data:image/png;base64,${LOGO_CLARO_B64}" alt="Caroline Peixoto DHO" style="max-width:260px;width:100%;height:auto;display:inline-block;">
+      </div>
+      <div style="padding:32px;">
+        <h1 style="font-size:22px;margin-bottom:6px;">Cadastre seu currículo</h1>
+        <p style="color:var(--ink-soft);margin:0 0 24px 0;font-size:14px;">Não encontrou uma vaga aberta agora que combine com você? Deixe seu currículo aqui — assim que surgir uma oportunidade na sua área, você poderá ser considerado(a).</p>
+        <form id="form-banco-curriculos">
+          <div class="form-grid">
+            <div class="field full"><label>Nome completo *</label><input required name="nome"></div>
+            <div class="field"><label>Telefone / WhatsApp *</label><input required name="telefone"></div>
+            <div class="field"><label>E-mail *</label><input required type="email" name="email"></div>
+            <div class="field full"><label>Área de interesse *</label><input required name="areaInteresse" placeholder="Ex.: Vendas, Administrativo, Cozinha, TI…"></div>
+            <div class="field full"><label>Currículo (PDF ou Word) *</label><input required type="file" id="input-curriculo-banco" accept=".pdf,.doc,.docx"></div>
+          </div>
+          <div class="checkbox-row"><input required type="checkbox" id="chk-lgpd-banco" name="lgpd"><label for="chk-lgpd-banco" style="font-weight:400;">Autorizo o uso dos meus dados e currículo para fins de processos seletivos futuros, conforme a LGPD.</label></div>
+          <p class="hint" id="erro-banco-curriculos" style="color:var(--red);display:none;"></p>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;" id="btn-enviar-banco">Enviar currículo</button>
+        </form>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--ink-soft);font-size:12px;margin-top:16px;">Caroline Peixoto DHO · Desenvolvimento Humano e Organizacional</p>
+    <div id="toast-slot"></div>
+  `;
+
+  let arquivoSelecionado = null;
+  document.getElementById('input-curriculo-banco').addEventListener('change', e=>{
+    const file = e.target.files[0];
+    if(file && file.size > TAMANHO_MAX_CURRICULO){
+      showToast('Arquivo muito grande (máximo de 4MB).', true);
+      e.target.value = ''; arquivoSelecionado = null; return;
+    }
+    arquivoSelecionado = file || null;
+  });
+
+  document.getElementById('form-banco-curriculos').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-banco-curriculos');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    if(!arquivoSelecionado){ erroEl.textContent = 'Anexe seu currículo antes de enviar.'; erroEl.style.display='block'; return; }
+    const btn = document.getElementById('btn-enviar-banco');
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try{
+      const curriculoDataUrl = await lerArquivoBase64(arquivoSelecionado);
+      await chamarAppsScriptPost('candidaturaBanco', {
+        nome: f.get('nome').trim(),
+        telefone: f.get('telefone').trim(),
+        email: f.get('email').trim(),
+        areaInteresse: f.get('areaInteresse').trim(),
+        curriculoBase64: curriculoDataUrl,
+        curriculoNome: arquivoSelecionado.name,
+        curriculoTipo: arquivoSelecionado.type
+      });
+      document.body.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+        <h2 style="margin-bottom:10px;">Currículo recebido 🎉</h2>
+        <p class="hint">Obrigado por se cadastrar em nosso banco de currículos. Seus dados foram recebidos e, assim que surgir uma vaga que combine com o seu perfil, entraremos em contato.</p>
+      </div>`;
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível enviar agora. Verifique sua conexão e tente novamente.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Enviar currículo';
+    }
+  });
+}
+
+async function renderPortalVagas(){
+  document.title = 'Vagas em aberto · Caroline Peixoto DHO';
+  document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando vagas…</div></div>';
+  const root = document.getElementById('public-root');
+
+  if(!appsScriptConfigurado()){
+    root.innerHTML = paginaPublicaIndisponivel('A integração desta página ainda não foi concluída por quem administra o painel.');
+    return;
+  }
+
+  let resultado;
+  try{
+    resultado = await chamarAppsScriptGet('action=vagasPublicasAtivas');
+  }catch(err){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Não foi possível carregar</h2>
+      <p class="hint" style="margin-bottom:16px;">${esc(err.message || 'Ocorreu um erro ao carregar as vagas.')}</p>
+      <span class="btn btn-primary" id="btn-tentar-novamente-vagas">Tentar novamente</span>
+    </div>`;
+    const btn = document.getElementById('btn-tentar-novamente-vagas');
+    if(btn) btn.addEventListener('click', ()=> renderPortalVagas());
+    return;
+  }
+
+  const vagas = (resultado && resultado.vagas) || [];
+
+  function renderLista(filtroTexto){
+    const termo = (filtroTexto||'').trim().toLowerCase();
+    const filtradas = termo ? vagas.filter(v=> (v.titulo+' '+v.modalidade+' '+v.localTrabalho+' '+v.clienteNome).toLowerCase().includes(termo)) : vagas;
+    if(filtradas.length===0) return '<div class="card empty-state" style="margin-top:20px;"><h3>Nenhuma vaga encontrada</h3><p>Tente outro termo de busca.</p></div>';
+    return filtradas.map(v=>`
+      <div class="card" style="padding:20px 24px;margin-bottom:12px;cursor:pointer;" onclick="window.location.hash='inscricao-${v.id}'">
+        <h3 style="font-size:17px;margin-bottom:6px;">${esc(v.titulo)}</h3>
+        <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:10px;">${[v.clienteNome, v.modalidade, v.localTrabalho].filter(Boolean).map(esc).join(' · ')}</p>
+        <span class="btn btn-primary btn-sm">Ver vaga e candidatar-se</span>
+      </div>
+    `).join('');
+  }
+
+  root.innerHTML = `
+    <div style="background:var(--spine);padding:26px 20px;text-align:center;">
+      <img src="data:image/png;base64,${LOGO_CLARO_B64}" alt="Caroline Peixoto DHO" style="max-width:220px;width:100%;height:auto;">
+    </div>
+    <div style="max-width:720px;margin:0 auto;padding:28px 20px 60px;">
+      <h1 style="font-size:24px;margin-bottom:6px;">Vagas em aberto</h1>
+      <p style="color:var(--ink-soft);margin-bottom:20px;">${vagas.length} oportunidade(s) disponível(is) no momento.</p>
+      <input type="search" id="busca-portal-vagas" placeholder="🔍 Buscar por cargo, cidade ou modalidade…" style="width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:20px;">
+      <div id="lista-portal-vagas">${renderLista('')}</div>
+      <div class="card" style="text-align:center;padding:24px;margin-top:20px;">
+        <p style="margin-bottom:10px;">Não encontrou a vaga ideal agora?</p>
+        <a href="#banco-curriculos" class="btn btn-secondary">Cadastre seu currículo para futuras oportunidades</a>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--ink-soft);font-size:12px;margin-top:-30px;padding-bottom:20px;">Caroline Peixoto DHO · Desenvolvimento Humano e Organizacional</p>
+  `;
+
+  document.getElementById('busca-portal-vagas').addEventListener('input', e=>{
+    document.getElementById('lista-portal-vagas').innerHTML = renderLista(e.target.value);
+  });
 }
 
 function modalCliente(cliente){
@@ -7166,6 +7324,19 @@ function onGlobalClick(e){
 
   if(action === 'nova-vaga'){ modalVaga(null, el.dataset.clienteId); return; }
   if(action === 'gerar-proposta-comercial'){ modalPropostaComercial(id); return; }
+  if(action === 'link-portal-vagas'){ modalLinkPortalVagas(); return; }
+  if(action === 'copiar-link-portal-vagas'){
+    const link = window.location.origin + window.location.pathname + '#vagas';
+    const finalizar = ()=> showToast('Link copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(finalizar).catch(()=>{
+        const inp = document.getElementById('link-portal-vagas-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+      });
+    } else {
+      const inp = document.getElementById('link-portal-vagas-input'); if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+    }
+    return;
+  }
   if(action === 'editar-vaga'){ modalVaga(getCargo(id)); return; }
   if(action === 'link-vaga'){ modalLinkVaga(getCargo(id)); return; }
   if(action === 'copiar-link-vaga'){
@@ -7570,32 +7741,38 @@ function onGlobalInput(e){
 }
 
 /* ============================= INICIALIZAÇÃO ============================= */
-(async function init(){
+async function roteirizarPaginaPublica(){
   const cargoIdPublico = getHashCargoId();
   const candidatoIdAvaliacao = getHashAvaliacaoId();
   const clienteIdCultura = getHashCulturaId();
   const clienteIdDenuncia = getHashDenunciaId();
   const clienteIdClima = getHashClimaId();
   const pesquisaIdRapida = getHashRapidaId();
-  if(cargoIdPublico){
-    await renderPublicApplication(cargoIdPublico);
-  } else if(candidatoIdAvaliacao){
-    await renderAvaliacaoComportamental(candidatoIdAvaliacao);
-  } else if(clienteIdCultura){
-    await renderDiagnosticoCultura(clienteIdCultura);
-  } else if(clienteIdDenuncia){
-    await renderCanalDenuncia(clienteIdDenuncia);
-  } else if(clienteIdClima){
-    await renderPesquisaClima(clienteIdClima);
-  } else if(pesquisaIdRapida){
-    await renderPesquisaRapidaPublica(pesquisaIdRapida);
-  } else if(ehHashPortal()){
-    await renderPortalCliente();
-  } else {
+
+  if(cargoIdPublico){ await renderPublicApplication(cargoIdPublico); return true; }
+  if(candidatoIdAvaliacao){ await renderAvaliacaoComportamental(candidatoIdAvaliacao); return true; }
+  if(clienteIdCultura){ await renderDiagnosticoCultura(clienteIdCultura); return true; }
+  if(clienteIdDenuncia){ await renderCanalDenuncia(clienteIdDenuncia); return true; }
+  if(clienteIdClima){ await renderPesquisaClima(clienteIdClima); return true; }
+  if(pesquisaIdRapida){ await renderPesquisaRapidaPublica(pesquisaIdRapida); return true; }
+  if(ehHashPortal()){ await renderPortalCliente(); return true; }
+  if(ehHashPortalVagas()){ await renderPortalVagas(); return true; }
+  if(ehHashBancoCurriculos()){ await renderCandidaturaBanco(); return true; }
+  return false;
+}
+
+(async function init(){
+  const tratouComoPublica = await roteirizarPaginaPublica();
+  if(!tratouComoPublica){
     db = await loadDB();
     garantirConfiguracoes();
     renderShell();
     verificarPersistenciaInicial();
+  } else {
+    // Dentro das páginas públicas, links internos (ex.: do Portal de Vagas para uma vaga específica,
+    // ou para o Banco de Currículos) só trocam o hash da URL — precisamos escutar essa troca pra
+    // re-renderizar a página certa, já que essas páginas não recarregam o app inteiro.
+    window.addEventListener('hashchange', roteirizarPaginaPublica);
   }
 })();
 </script>
