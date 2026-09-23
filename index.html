@@ -844,6 +844,7 @@ function garantirConfiguracoes(){
   if(!Array.isArray(db.mensalidadesPesquisaClima)) db.mensalidadesPesquisaClima = [];
   if(!Array.isArray(db.materiais)) db.materiais = [];
   if(!Array.isArray(db.pesquisasRapidas)) db.pesquisasRapidas = [];
+  if(!Array.isArray(db.notificacoesLidas)) db.notificacoesLidas = [];
   if(!Array.isArray(db.respostasPesquisaRapida)) db.respostasPesquisaRapida = [];
   db.clientes.forEach(cl=>{
     if(!cl.tipoServico) cl.tipoServico = 'rs';
@@ -855,6 +856,7 @@ function garantirConfiguracoes(){
     if(!cl.portalAcesso) cl.portalAcesso = {ativo:false, usuario:'', senha:''};
     if(cl.dataDescontinuacaoBPO===undefined) cl.dataDescontinuacaoBPO = '';
     if(!cl.produtosContratados) cl.produtosContratados = [];
+    if(!cl.notificacoesLidasPortal) cl.notificacoesLidasPortal = [];
   });
   db.colaboradores.forEach(c=>{
     if(c.salarioAdmissao===undefined) c.salarioAdmissao = '';
@@ -1395,6 +1397,65 @@ function modalEventoAgenda(evento, dataPreSelecionada){
   });
 }
 
+function calcularAlertasAtencao(clienteIdFiltro){
+  const vagasBase = clienteIdFiltro ? cargosDoCliente(clienteIdFiltro) : db.cargos;
+  const candidatosBase = clienteIdFiltro ? db.candidatos.filter(c=>c.clienteId===clienteIdFiltro) : db.candidatos;
+
+  const vagasParadas = vagasBase.filter(v=> v.status==='aberta' && daysBetween(v.dataAbertura, todayISO()) > LIMITE_DIAS_VAGA_PARADA && candidatosDoCargo(v.id).length===0)
+    .map(v=>({ id:'vaga-'+v.id, titulo: v.titulo, sub: (getCliente(v.clienteId)?.nome||'')+' · aberta há '+daysBetween(v.dataAbertura, todayISO())+' dias', dataAction:'ir-busca', dataTipo:'vaga', dataId:v.id }));
+
+  const candidatosParados = candidatosBase.filter(c=> c.cargoId && statusCandidato(c)==='em_processo' && daysBetween(ultimaAtividadeCandidato(c), todayISO()) > LIMITE_DIAS_CANDIDATO_PARADO)
+    .map(c=>{ const v=getCargo(c.cargoId); return { id:'cand-'+c.id, titulo: c.nome, sub: (v?v.titulo:'')+' · sem atualização há '+daysBetween(ultimaAtividadeCandidato(c), todayISO())+' dias', dataAction:'ir-busca', dataTipo:'candidato', dataId:c.id }; });
+
+  const experienciaVencendo = colaboradoresComExperienciaVencendo(clienteIdFiltro || null)
+    .map(e=>{
+      const cl = getCliente(e.colaborador.clienteId);
+      const situacao = e.dias<0 ? 'venceu há '+Math.abs(e.dias)+' dia(s)' : e.dias===0 ? 'vence hoje' : 'vence em '+e.dias+' dia(s)';
+      const etapaLabel = e.periodo==='etapa1' ? '1ª etapa' : '2ª etapa';
+      return { id:'exp-'+e.colaborador.id+'-'+e.periodo, titulo: e.colaborador.nome+' — '+etapaLabel+' ('+e.diasTotais+' dias)', sub: (cl?.nome||'')+' · '+situacao+' ('+formatDate(e.data)+')', dataAction:'abrir-avaliacao-experiencia', dataId:e.colaborador.id, dataPeriodo:e.periodo };
+    });
+
+  return { vagasParadas, candidatosParados, experienciaVencendo };
+}
+
+function renderPainelAtencao(alertas, lidos, acaoLido){
+  const naoLido = item => (lidos||[]).indexOf(item.id) === -1;
+  const vagasParadas = alertas.vagasParadas.filter(naoLido);
+  const candidatosParados = alertas.candidatosParados.filter(naoLido);
+  const experienciaVencendo = alertas.experienciaVencendo.filter(naoLido);
+  const total = vagasParadas.length + candidatosParados.length + experienciaVencendo.length;
+  if(total === 0) return '';
+
+  function linhaItem(item){
+    return `<div class="busca-item" style="border:1px solid var(--border);border-radius:4px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div style="cursor:pointer;flex:1;" data-action="${item.dataAction}" ${item.dataTipo?'data-tipo="'+item.dataTipo+'"':''} data-id="${item.dataId}" ${item.dataPeriodo?'data-periodo="'+item.dataPeriodo+'"':''}>
+        ${esc(item.titulo)}<div class="sub">${esc(item.sub)}</div>
+      </div>
+      <span class="btn btn-ghost btn-sm no-print" style="white-space:nowrap;" data-action="${acaoLido}" data-notif-id="${item.id}" title="Marcar como lido">✓ Lido</span>
+    </div>`;
+  }
+
+  return `
+    <div class="card" style="margin-bottom:22px;border-left:3px solid var(--amber);">
+      <h3 style="font-size:15px;margin-bottom:12px;">⚠️ Atenção necessária (${total})</h3>
+      ${vagasParadas.length ? `
+      <div style="margin-bottom:14px;">
+        <div class="hint" style="margin-bottom:6px;font-weight:600;">Vagas abertas há mais de ${LIMITE_DIAS_VAGA_PARADA} dias sem nenhum candidato (${vagasParadas.length})</div>
+        ${vagasParadas.map(linhaItem).join('')}
+      </div>` : ''}
+      ${candidatosParados.length ? `
+      <div style="margin-bottom:14px;">
+        <div class="hint" style="margin-bottom:6px;font-weight:600;">Candidatos em processo sem atualização há mais de ${LIMITE_DIAS_CANDIDATO_PARADO} dias (${candidatosParados.length})</div>
+        ${candidatosParados.map(linhaItem).join('')}
+      </div>` : ''}
+      ${experienciaVencendo.length ? `
+      <div>
+        <div class="hint" style="margin-bottom:6px;font-weight:600;">Período de experiência vencendo ou vencido (${experienciaVencendo.length})</div>
+        ${experienciaVencendo.map(linhaItem).join('')}
+      </div>` : ''}
+    </div>`;
+}
+
 function viewDashboard(){
   const clientesOpts = db.clientes.map(c=>'<option value="'+c.id+'" '+(state.dashClienteId===c.id?'selected':'')+'>'+esc(c.nome)+'</option>').join('');
   const cargosDisponiveis = state.dashClienteId ? cargosDoCliente(state.dashClienteId) : [];
@@ -1423,30 +1484,8 @@ function viewDashboard(){
   const recebidosTotal = somaCurriculosRecebidos(vagasFiltradas);
   const taxaContratacao = recebidosTotal ? Math.round((m.contratados/recebidosTotal)*100) : 0;
 
-  const vagasParadas = vagasFiltradas.filter(v=> v.status==='aberta' && daysBetween(v.dataAbertura, todayISO()) > LIMITE_DIAS_VAGA_PARADA && candidatosDoCargo(v.id).length===0);
-  const candidatosParados = cands.filter(c=> c.cargoId && statusCandidato(c)==='em_processo' && daysBetween(ultimaAtividadeCandidato(c), todayISO()) > LIMITE_DIAS_CANDIDATO_PARADO);
-  const experienciaVencendo = colaboradoresComExperienciaVencendo(state.dashClienteId || null);
-  const totalAtencao = vagasParadas.length + candidatosParados.length + experienciaVencendo.length;
-
-  const painelAtencao = totalAtencao === 0 ? '' : `
-    <div class="card" style="margin-bottom:22px;border-left:3px solid var(--amber);">
-      <h3 style="font-size:15px;margin-bottom:12px;">⚠️ Atenção necessária (${totalAtencao})</h3>
-      ${vagasParadas.length ? `
-      <div style="margin-bottom:14px;">
-        <div class="hint" style="margin-bottom:6px;font-weight:600;">Vagas abertas há mais de ${LIMITE_DIAS_VAGA_PARADA} dias sem nenhum candidato (${vagasParadas.length})</div>
-        ${vagasParadas.map(v=>`<div class="busca-item" data-action="ir-busca" data-tipo="vaga" data-id="${v.id}" style="border:1px solid var(--border);border-radius:4px;margin-bottom:4px;">${esc(v.titulo)}<div class="sub">${esc(getCliente(v.clienteId)?.nome||'')} · aberta há ${daysBetween(v.dataAbertura, todayISO())} dias</div></div>`).join('')}
-      </div>` : ''}
-      ${candidatosParados.length ? `
-      <div style="margin-bottom:14px;">
-        <div class="hint" style="margin-bottom:6px;font-weight:600;">Candidatos em processo sem atualização há mais de ${LIMITE_DIAS_CANDIDATO_PARADO} dias (${candidatosParados.length})</div>
-        ${candidatosParados.map(c=>{ const v=getCargo(c.cargoId); return `<div class="busca-item" data-action="ir-busca" data-tipo="candidato" data-id="${c.id}" style="border:1px solid var(--border);border-radius:4px;margin-bottom:4px;">${esc(c.nome)}<div class="sub">${esc(v?v.titulo:'')} · sem atualização há ${daysBetween(ultimaAtividadeCandidato(c), todayISO())} dias</div></div>`; }).join('')}
-      </div>` : ''}
-      ${experienciaVencendo.length ? `
-      <div>
-        <div class="hint" style="margin-bottom:6px;font-weight:600;">Período de experiência vencendo ou vencido (${experienciaVencendo.length})</div>
-        ${experienciaVencendo.map(e=>{ const cl=getCliente(e.colaborador.clienteId); const situacao = e.dias<0 ? 'venceu há '+Math.abs(e.dias)+' dia(s)' : e.dias===0 ? 'vence hoje' : 'vence em '+e.dias+' dia(s)'; const etapaLabel = e.periodo==='etapa1' ? '1ª etapa' : '2ª etapa'; return `<div class="busca-item" data-action="abrir-avaliacao-experiencia" data-id="${e.colaborador.id}" data-periodo="${e.periodo}" style="border:1px solid var(--border);border-radius:4px;margin-bottom:4px;">${esc(e.colaborador.nome)} — ${etapaLabel} (${e.diasTotais} dias)<div class="sub">${esc(cl?.nome||'')} · ${situacao} (${formatDate(e.data)})</div></div>`; }).join('')}
-      </div>` : ''}
-    </div>`;
+  const alertasAtencao = calcularAlertasAtencao(state.dashClienteId || null);
+  const painelAtencao = renderPainelAtencao(alertasAtencao, db.notificacoesLidas||[], 'marcar-notificacao-lida');
 
   const vagasParaTabela = vagasFiltradas.filter(v=> !state.dashStatusVaga || v.status===state.dashStatusVaga);
   const tabelaVagas = !state.dashCargoId ? `
@@ -5379,7 +5418,7 @@ function renderPortalLogin(erro){
       const resp = await chamarAppsScriptPost('portalLogin', {usuario: f.get('usuario').trim(), senha: f.get('senha')});
       portalClienteId = resp.clienteId;
       await carregarDadosPortal();
-      state.portalTab = 'colaboradores';
+      state.portalTab = 'visaoGeral';
       renderPortalShell();
     }catch(err){
       renderPortalLogin(err.message || 'Usuário ou senha incorretos.');
@@ -5424,6 +5463,7 @@ function renderPortalShell(){
       </div>
       <div style="padding:20px 24px 60px;max-width:1100px;margin:0 auto;">
         <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
+          <span class="btn ${state.portalTab==='visaoGeral'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="visaoGeral">Visão Geral</span>
           <span class="btn ${state.portalTab==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="colaboradores">Colaboradores cadastrados</span>
           <span class="btn ${state.portalTab==='materiais'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="materiais">Materiais e documentos</span>
           <span class="btn ${state.portalTab==='indicadores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="indicadores">Indicadores</span>
@@ -5442,12 +5482,21 @@ function renderPortalShell(){
 function renderPortalView(){
   const view = document.getElementById('portal-view');
   if(!view) return;
-  if(state.portalTab==='colaboradores') view.innerHTML = viewPortalColaboradores();
+  if(state.portalTab==='visaoGeral') view.innerHTML = viewPortalVisaoGeral();
+  else if(state.portalTab==='colaboradores') view.innerHTML = viewPortalColaboradores();
   else if(state.portalTab==='materiais') view.innerHTML = viewPortalMateriais();
   else {
     view.innerHTML = viewPortalIndicadores();
     requestAnimationFrame(()=>{ requestAnimationFrame(drawPortalIndicadoresCharts); });
   }
+}
+
+function viewPortalVisaoGeral(){
+  const cliente = db.clientes[0];
+  const alertas = calcularAlertasAtencao(cliente.id);
+  const painel = renderPainelAtencao(alertas, cliente.notificacoesLidasPortal||[], 'portal-marcar-notificacao-lida');
+  if(!painel) return '<div class="card empty-state"><h3>Tudo em dia! ✅</h3><p>Nenhuma pendência no momento.</p></div>';
+  return painel;
 }
 
 function viewPortalColaboradores(){
@@ -5707,6 +5756,15 @@ function onPortalClick(e){
   if(action === 'portal-tab'){ state.portalTab = el.dataset.tab; renderPortalView(); return; }
   if(action === 'portal-novo-colaborador'){ modalPortalColaborador(null); return; }
   if(action === 'portal-editar-colaborador'){ modalPortalColaborador(db.colaboradores.find(c=>c.id===id)); return; }
+  if(action === 'portal-marcar-notificacao-lida'){
+    const notifId = el.dataset.notifId;
+    const cliente = db.clientes[0];
+    if(!cliente.notificacoesLidasPortal) cliente.notificacoesLidasPortal = [];
+    if(!cliente.notificacoesLidasPortal.includes(notifId)) cliente.notificacoesLidasPortal.push(notifId);
+    renderPortalView();
+    chamarAppsScriptPost('portalMarcarNotificacaoLida', {clienteId: cliente.id, notifId: notifId}).catch(()=>{});
+    return;
+  }
   if(action === 'fechar-modal'){ closeModal(); return; }
   if(action === 'fechar-modal-overlay'){ if(e.target===el) closeModal(); return; }
 }
@@ -6912,6 +6970,12 @@ function onGlobalClick(e){
   const id = el.dataset.id;
 
   if(action === 'ir-busca'){ irParaResultadoBusca(el.dataset.tipo, id); return; }
+  if(action === 'marcar-notificacao-lida'){
+    const notifId = el.dataset.notifId;
+    if(!db.notificacoesLidas.includes(notifId)) db.notificacoesLidas.push(notifId);
+    saveDB(); renderView();
+    return;
+  }
   if(action === 'nav'){ state.tab = el.dataset.tab; renderView(); return; }
   if(action === 'toggle-nav-rs'){ toggleNavRS(); return; }
   if(action === 'agenda-mes'){ state.agendaMes = mesAdjacente(state.agendaMes, parseInt(el.dataset.delta,10)); renderView(); return; }
