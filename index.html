@@ -5476,6 +5476,8 @@ function renderPortalShell(){
         <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
           <span class="btn ${state.portalTab==='visaoGeral'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="visaoGeral">Visão Geral</span>
           <span class="btn ${state.portalTab==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="colaboradores">Colaboradores cadastrados</span>
+          <span class="btn ${state.portalTab==='funcoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="funcoes">Funções e cargos</span>
+          <span class="btn ${state.portalTab==='treinamentos'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="treinamentos">Treinamentos</span>
           <span class="btn ${state.portalTab==='materiais'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="materiais">Materiais e documentos</span>
           <span class="btn ${state.portalTab==='indicadores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="indicadores">Indicadores</span>
         </div>
@@ -5495,6 +5497,8 @@ function renderPortalView(){
   if(!view) return;
   if(state.portalTab==='visaoGeral') view.innerHTML = viewPortalVisaoGeral();
   else if(state.portalTab==='colaboradores') view.innerHTML = viewPortalColaboradores();
+  else if(state.portalTab==='funcoes') view.innerHTML = viewPortalFuncoes();
+  else if(state.portalTab==='treinamentos') view.innerHTML = viewPortalTreinamentos();
   else if(state.portalTab==='materiais') view.innerHTML = viewPortalMateriais();
   else {
     view.innerHTML = viewPortalIndicadores();
@@ -5516,12 +5520,12 @@ function viewPortalColaboradores(){
   const linhas = colaboradores.map(c=>{
     const f = getFuncao(c.funcaoId);
     return `<tr>
-      <td><strong>${esc(c.nome)}</strong></td>
+      <td><span style="cursor:pointer;font-weight:600;color:var(--accent);" data-action="portal-abrir-prontuario" data-id="${c.id}">${esc(c.nome)}</span></td>
       <td>${esc(f?f.nome:'—')}</td>
       <td>${formatDate(c.dataAdmissao)}</td>
       <td>${statusColaborador(c)!=='desligado' ? formatMoeda(salarioAtualColaborador(c)) : '—'}</td>
       <td>${statusColaboradorBadge(c)}</td>
-      <td><span class="btn btn-ghost btn-sm" data-action="portal-editar-colaborador" data-id="${c.id}">Editar</span></td>
+      <td><span class="btn btn-ghost btn-sm" data-action="portal-abrir-prontuario" data-id="${c.id}">📋 Prontuário</span> <span class="btn btn-ghost btn-sm" data-action="portal-editar-colaborador" data-id="${c.id}">Editar</span></td>
     </tr>`;
   }).join('');
   return `
@@ -5766,7 +5770,13 @@ function onPortalClick(e){
   if(action === 'portal-sair'){ window.location.reload(); return; }
   if(action === 'portal-tab'){ state.portalTab = el.dataset.tab; renderPortalView(); return; }
   if(action === 'portal-novo-colaborador'){ modalPortalColaborador(null); return; }
-  if(action === 'portal-editar-colaborador'){ modalPortalColaborador(db.colaboradores.find(c=>c.id===id)); return; }
+  if(action === 'portal-editar-colaborador'){ closeModal(); modalPortalColaborador(db.colaboradores.find(c=>c.id===id)); return; }
+  if(action === 'portal-abrir-prontuario'){ abrirProntuarioPortal(id); return; }
+  if(action === 'portal-novo-registro'){ modalPortalNovoRegistro(id); return; }
+  if(action === 'portal-nova-funcao'){ modalPortalFuncao(null); return; }
+  if(action === 'portal-editar-funcao'){ modalPortalFuncao(db.funcoes.find(f=>f.id===id)); return; }
+  if(action === 'portal-novo-treinamento'){ modalPortalTreinamento(null); return; }
+  if(action === 'portal-editar-treinamento'){ modalPortalTreinamento(db.treinamentos.find(t=>t.id===id)); return; }
   if(action === 'portal-marcar-notificacao-lida'){
     const notifId = el.dataset.notifId;
     const cliente = db.clientes[0];
@@ -6084,6 +6094,287 @@ async function renderPortalVagas(){
 
   document.getElementById('busca-portal-vagas').addEventListener('input', e=>{
     document.getElementById('lista-portal-vagas').innerHTML = renderLista(e.target.value);
+  });
+}
+
+function abrirProntuarioPortal(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const cliente = db.clientes[0];
+  const funcao = getFuncao(c.funcaoId);
+  const descritivo = funcao ? db.descritivosCargo.find(d=>d.funcaoId===funcao.id) : null;
+  const dataFimContagem = c.dataDesligamento || todayISO();
+  const diasCasa = daysBetween(c.dataAdmissao, dataFimContagem) || 0;
+  const anosCasa = Math.floor(diasCasa/365);
+  const mesesCasa = Math.floor((diasCasa%365)/30);
+  const tempoCasaTexto = (anosCasa>0? anosCasa+' ano(s) ':'') + mesesCasa+' mês(es)';
+
+  const historicoOrdenado = (c.historicoSalarial||[]).slice().sort((a,b)=>b.data.localeCompare(a.data));
+  const registros = (c.registros||[]).slice().sort((a,b)=>b.data.localeCompare(a.data));
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>📋 Prontuário — ${esc(c.nome)}</h2>
+    <div class="modal-sub">${esc(cliente?.nome||'')}${funcao?' · '+esc(funcao.nome):''}</div>
+
+    <div class="kpi-grid" style="margin:14px 0;">
+      <div class="kpi"><div class="label">Status</div><div style="margin-top:4px;">${statusColaboradorBadge(c)}</div></div>
+      <div class="kpi"><div class="label">Admissão</div><div class="value" style="font-size:16px;">${formatDate(c.dataAdmissao)}</div></div>
+      <div class="kpi"><div class="label">Tempo de casa</div><div class="value" style="font-size:16px;">${tempoCasaTexto}</div></div>
+      <div class="kpi"><div class="label">Salário atual</div><div class="value" style="font-size:16px;">${statusColaborador(c)!=='desligado' ? formatMoeda(salarioAtualColaborador(c)) : '—'}</div></div>
+    </div>
+
+    <div class="section-title">Contato</div>
+    <p class="hint">${c.telefone?esc(c.telefone):'Telefone não informado'}${c.email?' · '+esc(c.email):''}</p>
+
+    ${funcao ? `
+    <div class="section-title">Cargo</div>
+    <p class="hint">${esc(funcao.nome)}${funcao.subordinadoA?' · Subordinado a '+esc(funcao.subordinadoA):''}${funcao.area?' · '+esc(funcao.area):''}<br>
+    ${descritivo ? '📄 Descritivo de cargo preenchido' : 'Nenhum descritivo de cargo cadastrado para esta função.'}</p>
+    ` : '<div class="section-title">Cargo</div><p class="hint">Nenhuma função vinculada.</p>'}
+
+    ${c.emAfastamento ? `
+    <div class="section-title">Afastamento atual</div>
+    <p class="hint">${esc(c.tipoAfastamento||'Tipo não informado')} — desde ${formatDate(c.dataInicioAfastamento)}${c.dataFimAfastamento?' · previsão de retorno '+formatDate(c.dataFimAfastamento):''}</p>
+    ` : ''}
+
+    ${c.dataDesligamento ? `
+    <div class="section-title">Desligamento</div>
+    <p class="hint">${formatDate(c.dataDesligamento)} — ${esc(c.tipoDesligamento||'Tipo não informado')}${c.motivoDesligamento?'<br>'+esc(c.motivoDesligamento):''}</p>
+    ` : ''}
+
+    <div class="section-title">Histórico salarial</div>
+    <div class="table-wrap"><table><thead><tr><th>Data</th><th>Valor</th><th>Motivo</th></tr></thead><tbody>
+      ${historicoOrdenado.map(h=>'<tr><td>'+formatDate(h.data)+'</td><td>'+formatMoeda(parseFloat(h.valor)||0)+'</td><td>'+esc(h.motivo||'—')+'</td></tr>').join('')}
+      <tr><td>${formatDate(c.dataAdmissao)}</td><td>${formatMoeda(parseFloat(c.salarioAdmissao)||0)}</td><td>Salário de admissão</td></tr>
+    </tbody></table></div>
+
+    ${c.observacoes ? `<div class="section-title">Observações gerais</div><p class="hint">${esc(c.observacoes)}</p>` : ''}
+
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Registros (feedbacks, 1:1, advertências, suspensões)</span>
+      <span class="btn btn-secondary btn-sm" data-action="portal-novo-registro" data-id="${c.id}">+ Novo registro</span>
+    </div>
+    ${registros.length===0 ? '<p class="hint">Nenhum registro ainda.</p>' : registros.map(r=>`
+      <div class="card" style="padding:10px 14px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <strong>${esc(r.tipo)}</strong>
+          <span class="hint" style="white-space:nowrap;">${formatDate(r.data)}</span>
+        </div>
+        <p style="margin:6px 0 0 0;font-size:13.5px;white-space:pre-line;">${esc(r.descricao)}</p>
+        ${r.registradoPor?'<p class="hint" style="margin:6px 0 0 0;">Registrado por: '+esc(r.registradoPor)+'</p>':''}
+      </div>
+    `).join('')}
+
+    <div class="modal-footer">
+      <span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="portal-editar-colaborador" data-id="${c.id}">Editar dados cadastrais</span>
+      </div>
+    </div>
+  `);
+}
+
+function modalPortalNovoRegistro(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const cliente = db.clientes[0];
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Novo registro</h2>
+    <div class="modal-sub">${esc(c.nome)}</div>
+    <form id="form-portal-registro">
+      <div class="form-grid">
+        <div class="field full"><label>Tipo *</label><select required name="tipo">${TIPOS_REGISTRO_COLABORADOR.map(t=>'<option>'+t+'</option>').join('')}</select></div>
+        <div class="field"><label>Data *</label><input required type="date" name="data" value="${todayISO()}"></div>
+        <div class="field"><label>Registrado por</label><input name="registradoPor" placeholder="Seu nome"></div>
+        <div class="field full"><label>Descrição *</label><textarea required name="descricao" style="min-height:100px;" placeholder="Detalhe o ocorrido..."></textarea></div>
+      </div>
+      <p class="hint" id="erro-portal-registro" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar registro</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-portal-registro').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-portal-registro');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    try{
+      await chamarAppsScriptPost('portalSalvarRegistroColaborador', {
+        clienteId: cliente.id, colaboradorId: colaboradorId,
+        registro: { tipo: f.get('tipo'), data: f.get('data'), descricao: f.get('descricao').trim(), registradoPor: f.get('registradoPor').trim() }
+      });
+      await carregarDadosPortal();
+      abrirProntuarioPortal(colaboradorId);
+      showToast('Registro salvo.');
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível salvar agora.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Salvar registro';
+    }
+  });
+}
+
+function viewPortalFuncoes(){
+  const cliente = db.clientes[0];
+  const funcoes = funcoesDoCliente(cliente.id).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const linhas = funcoes.map(f=>{
+    const ocupados = colaboradoresAtivosNaFuncao(f.id).length;
+    const autorizado = f.quantidadeAutorizada!=='' && f.quantidadeAutorizada!=null ? parseInt(f.quantidadeAutorizada,10) : null;
+    const ocupacaoTexto = autorizado===null ? ocupados+' ativo(s)' : ocupados+' / '+autorizado;
+    return `<tr>
+      <td><strong>${esc(f.nome)}</strong></td>
+      <td>${esc(f.subordinadoA||'—')}</td>
+      <td>${esc(f.area||'—')}</td>
+      <td>${ocupacaoTexto}</td>
+      <td><span class="btn btn-ghost btn-sm" data-action="portal-editar-funcao" data-id="${f.id}">Editar</span></td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="topbar" style="margin-bottom:14px;">
+      <div><p class="hint">${funcoes.length} função(ões) cadastrada(s)</p></div>
+      <span class="btn btn-primary btn-sm" data-action="portal-nova-funcao">+ Nova função</span>
+    </div>
+    ${funcoes.length===0 ? '<div class="card empty-state"><h3>Nenhuma função cadastrada</h3></div>' : `
+    <div class="card table-wrap"><table><thead><tr><th>Título do cargo</th><th>Subordinado a</th><th>Área</th><th>Ocupação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
+  `;
+}
+
+function modalPortalFuncao(funcao){
+  const cliente = db.clientes[0];
+  const editando = !!funcao;
+  funcao = funcao || {id:'', clienteId:cliente.id, nome:'', subordinadoA:'', area:'', quantidadeAutorizada:''};
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${editando ? 'Editar função' : 'Nova função'}</h2>
+    <form id="form-portal-funcao">
+      <div class="form-grid">
+        <div class="field full"><label>Título do cargo *</label><input required name="nome" value="${esc(funcao.nome)}"></div>
+        <div class="field"><label>Subordinado ao cargo</label><input name="subordinadoA" value="${esc(funcao.subordinadoA||'')}"></div>
+        <div class="field"><label>Unidade / Gerência / Área</label><input name="area" value="${esc(funcao.area||'')}"></div>
+        <div class="field"><label>Quadro autorizado (nº de vagas)</label><input type="number" min="0" step="1" name="quantidadeAutorizada" value="${esc(funcao.quantidadeAutorizada)}" placeholder="Deixe em branco para não controlar"></div>
+      </div>
+      <p class="hint" id="erro-portal-funcao" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar função</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-portal-funcao').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-portal-funcao');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const dadosFuncao = Object.assign({}, funcao, {
+      nome: f.get('nome').trim(), subordinadoA: f.get('subordinadoA').trim(),
+      area: f.get('area').trim(), quantidadeAutorizada: f.get('quantidadeAutorizada') || ''
+    });
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    try{
+      await chamarAppsScriptPost('portalSalvarFuncao', {clienteId: cliente.id, funcao: dadosFuncao});
+      await carregarDadosPortal();
+      closeModal();
+      renderPortalView();
+      showToast('Função salva.');
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível salvar agora.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Salvar função';
+    }
+  });
+}
+
+function viewPortalTreinamentos(){
+  const cliente = db.clientes[0];
+  const treinamentos = db.treinamentos.filter(t=>t.clienteId===cliente.id).slice().sort((a,b)=>b.data.localeCompare(a.data));
+  const totalHorasHomem = treinamentos.reduce((s,t)=>s+horasHomemTreinamento(t), 0);
+  const linhas = treinamentos.map(t=>`<tr>
+    <td><strong>${esc(t.titulo)}</strong>${t.instrutor?'<div class="hint">Instrutor(a): '+esc(t.instrutor)+'</div>':''}</td>
+    <td>${formatDate(t.data)}</td>
+    <td>${esc(t.cargaHoraria)}h</td>
+    <td>${(t.participantes||[]).length}</td>
+    <td>${horasHomemTreinamento(t)}h</td>
+    <td><span class="btn btn-ghost btn-sm" data-action="portal-editar-treinamento" data-id="${t.id}">Editar</span></td>
+  </tr>`).join('');
+  return `
+    <div class="topbar" style="margin-bottom:14px;">
+      <div><p class="hint">${treinamentos.length} treinamento(s) · ${totalHorasHomem}h totais</p></div>
+      <span class="btn btn-primary btn-sm" data-action="portal-novo-treinamento">+ Novo treinamento</span>
+    </div>
+    ${treinamentos.length===0 ? '<div class="card empty-state"><h3>Nenhum treinamento registrado</h3></div>' : `
+    <div class="card table-wrap"><table><thead><tr><th>Treinamento</th><th>Data</th><th>Carga horária</th><th>Participantes</th><th>Horas-homem</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
+  `;
+}
+
+function modalPortalTreinamento(treinamento){
+  const cliente = db.clientes[0];
+  const editando = !!treinamento;
+  treinamento = treinamento || {id:'', clienteId:cliente.id, titulo:'', data:todayISO(), cargaHoraria:'', instrutor:'', descricao:'', participantes:[]};
+  const colaboradoresCliente = colaboradoresDoCliente(cliente.id).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${editando ? 'Editar treinamento' : 'Novo treinamento'}</h2>
+    <form id="form-portal-treinamento">
+      <div class="form-grid">
+        <div class="field full"><label>Título *</label><input required name="titulo" value="${esc(treinamento.titulo)}"></div>
+        <div class="field"><label>Data *</label><input required type="date" name="data" value="${treinamento.data}"></div>
+        <div class="field"><label>Carga horária (horas) *</label><input required type="number" step="0.5" min="0" name="cargaHoraria" value="${esc(treinamento.cargaHoraria)}"></div>
+        <div class="field full"><label>Instrutor(a) / Fornecedor</label><input name="instrutor" value="${esc(treinamento.instrutor||'')}"></div>
+        <div class="field full"><label>Descrição (opcional)</label><textarea name="descricao">${esc(treinamento.descricao||'')}</textarea></div>
+      </div>
+      <div class="section-title">Participantes</div>
+      ${colaboradoresCliente.length===0 ? '<p class="hint">Nenhum colaborador cadastrado ainda.</p>' : `
+      <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px 12px;">
+        ${colaboradoresCliente.map(c=>`<div class="checkbox-row"><input type="checkbox" class="chk-portal-participante" value="${c.id}" ${treinamento.participantes.includes(c.id)?'checked':''}><label>${esc(c.nome)}</label></div>`).join('')}
+      </div>`}
+      <p class="hint" id="erro-portal-treinamento" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar treinamento</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-portal-treinamento').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-portal-treinamento');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const participantes = Array.from(document.querySelectorAll('.chk-portal-participante:checked')).map(chk=>chk.value);
+    const dadosTreinamento = Object.assign({}, treinamento, {
+      titulo: f.get('titulo').trim(), data: f.get('data'), cargaHoraria: f.get('cargaHoraria'),
+      instrutor: f.get('instrutor').trim(), descricao: f.get('descricao').trim(), participantes: participantes
+    });
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    try{
+      await chamarAppsScriptPost('portalSalvarTreinamento', {clienteId: cliente.id, treinamento: dadosTreinamento});
+      await carregarDadosPortal();
+      closeModal();
+      renderPortalView();
+      showToast('Treinamento salvo.');
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível salvar agora.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Salvar treinamento';
+    }
   });
 }
 
