@@ -260,7 +260,7 @@ async function chamarAppsScriptPost(action, payload, timeoutMs, tentativa){
   if(!appsScriptConfigurado()) throw new Error('Integração com o Google ainda não foi configurada.');
   tentativa = tentativa || 1;
   const controller = new AbortController();
-  const timer = setTimeout(()=>controller.abort(), timeoutMs || 25000);
+  const timer = setTimeout(()=>controller.abort(), timeoutMs || 35000);
   let res;
   try{
     res = await fetch(APPS_SCRIPT_URL, {
@@ -295,13 +295,20 @@ async function chamarAppsScriptGet(query, timeoutMs, tentativa){
   if(!appsScriptConfigurado()) throw new Error('Integração com o Google ainda não foi configurada.');
   tentativa = tentativa || 1;
   const controller = new AbortController();
-  const timer = setTimeout(()=>controller.abort(), timeoutMs || 25000);
+  const timer = setTimeout(()=>controller.abort(), timeoutMs || 35000);
   let res;
   try{
     res = await fetch(APPS_SCRIPT_URL + '?' + query, { signal: controller.signal });
   }catch(err){
     clearTimeout(timer);
-    if(err.name === 'AbortError') throw new Error('A conexão demorou demais para responder. Verifique sua internet e tente novamente.');
+    if(err.name === 'AbortError'){
+      // Consultas são só leitura — é seguro tentar de novo automaticamente antes de mostrar erro pro usuário.
+      if(tentativa < 3){
+        await new Promise(r=>setTimeout(r, 1000));
+        return chamarAppsScriptGet(query, timeoutMs, tentativa+1);
+      }
+      throw new Error('A conexão demorou demais para responder, mesmo após algumas tentativas. Verifique sua internet e tente novamente.');
+    }
     throw err;
   }
   clearTimeout(timer);
