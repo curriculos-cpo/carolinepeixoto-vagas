@@ -439,6 +439,14 @@ const LOGO_CLARO_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAbgAAACMCAYAAAAOVry8AACYI0lEQVR4
 function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
 function todayISO(){ const d = new Date(); const tz = d.getTimezoneOffset()*60000; return new Date(d-tz).toISOString().slice(0,10); }
 function formatDate(iso){ if(!iso) return '—'; const [y,m,d] = iso.split('-'); return d+'/'+m+'/'+y; }
+function formatDateHora(isoDateTime){
+  if(!isoDateTime) return '—';
+  const d = new Date(isoDateTime);
+  if(isNaN(d.getTime())) return '—';
+  const dia = String(d.getDate()).padStart(2,'0'), mes = String(d.getMonth()+1).padStart(2,'0'), ano = d.getFullYear();
+  const hora = String(d.getHours()).padStart(2,'0'), min = String(d.getMinutes()).padStart(2,'0');
+  return dia+'/'+mes+'/'+ano+' às '+hora+':'+min;
+}
 function daysBetween(a,b){ if(!a||!b) return null; const d1=new Date(a), d2=new Date(b); return Math.round((d2-d1)/86400000); }
 
 function dataMenosMeses(dataISO, meses){
@@ -7250,6 +7258,95 @@ function modalLinkCultura(cliente){
   `);
 }
 
+function modalAgendarEntrevista(candidato){
+  const cargo = getCargo(candidato.cargoId);
+  const agora = new Date();
+  agora.setMinutes(0,0,0);
+  agora.setHours(agora.getHours()+2);
+  const dataDefault = agora.toISOString().slice(0,10);
+  const horaDefault = String(agora.getHours()).padStart(2,'0')+':00';
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Agendar entrevista online</h2>
+    <div class="modal-sub">${esc(candidato.nome)}${cargo?' · '+esc(cargo.titulo):''}</div>
+    <p class="hint" style="margin-bottom:10px;">Cria um evento na sua Google Agenda com link de Google Meet gerado automaticamente. O candidato não é adicionado como convidado — você recebe o link aqui pra copiar e enviar do seu jeito.</p>
+    <form id="form-agendar-entrevista">
+      <div class="form-grid">
+        <div class="field full"><label>Título do evento</label><input name="titulo" value="Entrevista — ${esc(candidato.nome)}${cargo?' ('+esc(cargo.titulo)+')':''}"></div>
+        <div class="field"><label>Data *</label><input required type="date" name="data" value="${dataDefault}"></div>
+        <div class="field"><label>Hora *</label><input required type="time" name="hora" value="${horaDefault}"></div>
+        <div class="field"><label>Duração</label><select name="duracao"><option value="30" selected>30 minutos</option><option value="45">45 minutos</option><option value="60">1 hora</option></select></div>
+      </div>
+      <p class="hint" id="erro-agendar-entrevista" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Criar entrevista</button>
+        </div>
+      </div>
+    </form>
+  `);
+
+  document.getElementById('form-agendar-entrevista').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-agendar-entrevista');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const dataHoraISO = new Date(f.get('data')+'T'+f.get('hora')+':00').toISOString();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Criando…';
+    try{
+      const resp = await chamarAppsScriptPost('criarEntrevistaMeet', {
+        candidatoId: candidato.id,
+        titulo: f.get('titulo').trim(),
+        dataHora: dataHoraISO,
+        duracaoMinutos: f.get('duracao')
+      });
+      candidato.entrevistaAgendada = { dataHora: dataHoraISO, duracaoMinutos: parseInt(f.get('duracao'),10), linkMeet: resp.linkMeet, eventId: resp.eventId, titulo: f.get('titulo').trim() };
+      db = await loadDB();
+      closeModal();
+      modalLinkEntrevista(db.candidatos.find(c=>c.id===candidato.id) || candidato);
+      showToast('Entrevista criada na sua Google Agenda!');
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível criar a entrevista agora.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Criar entrevista';
+    }
+  });
+}
+
+function modalLinkEntrevista(candidato){
+  const ea = candidato.entrevistaAgendada;
+  if(!ea) return;
+  const mensagem = 'Olá, '+candidato.nome+'! Sua entrevista está agendada para '+formatDateHora(ea.dataHora)+'. Link da videochamada: '+ea.linkMeet;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Entrevista agendada</h2>
+    <div class="modal-sub">${esc(candidato.nome)} · ${formatDateHora(ea.dataHora)}</div>
+    <div class="field full">
+      <label>Link do Google Meet</label>
+      <input type="text" readonly value="${esc(ea.linkMeet)}" id="link-meet-input" onclick="this.select()">
+    </div>
+    ${candidato.telefone ? `<div class="field full"><label>Mensagem (pode editar antes de enviar)</label><textarea id="texto-mensagem-entrevista" style="min-height:90px;">${esc(mensagem)}</textarea></div>` : '<p class="hint">Este candidato não tem telefone cadastrado — copie o link e envie por onde preferir.</p>'}
+    <div class="modal-footer">
+      <span>${candidato.telefone ? '<span class="btn btn-secondary btn-sm" id="btn-enviar-entrevista-whatsapp">💬 Enviar por WhatsApp</span>' : ''}</span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="copiar-link-meet" data-id="${candidato.id}">Copiar link</span>
+      </div>
+    </div>
+  `);
+  const btnWpp = document.getElementById('btn-enviar-entrevista-whatsapp');
+  if(btnWpp){
+    btnWpp.addEventListener('click', ()=>{
+      const textoFinal = document.getElementById('texto-mensagem-entrevista').value;
+      window.open(linkWhatsApp(candidato.telefone, textoFinal), '_blank');
+    });
+  }
+}
+
 function modalLinkAvaliacao(candidato){
   garantirConfiguracoes();
   const link = linkAvaliacao(candidato.id);
@@ -7384,6 +7481,19 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       })() : `
       <p class="hint" style="margin-bottom:8px;">Este candidato ainda não respondeu a avaliação comportamental.</p>
       <span class="btn btn-secondary btn-sm" data-action="avaliacao-comportamental" data-id="${candidato.id}">🧭 Enviar link da avaliação</span>
+      `}
+      ` : ''}
+
+      ${editando ? `
+      <div class="section-title">Entrevista online</div>
+      ${candidato.entrevistaAgendada && candidato.entrevistaAgendada.linkMeet ? `
+      <p class="hint" style="margin-top:-4px;margin-bottom:8px;">Agendada para ${formatDateHora(candidato.entrevistaAgendada.dataHora)} (${candidato.entrevistaAgendada.duracaoMinutos} min).</p>
+      <div class="field full"><input type="text" readonly value="${esc(candidato.entrevistaAgendada.linkMeet)}" id="link-meet-candidato-${candidato.id}" onclick="this.select()"></div>
+      <span class="btn btn-secondary btn-sm" data-action="copiar-link-meet" data-id="${candidato.id}">Copiar link</span>
+      <span class="btn btn-secondary btn-sm" data-action="agendar-entrevista" data-id="${candidato.id}">Reagendar</span>
+      ` : `
+      <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Cria um evento na sua Google Agenda com link de Google Meet automático, pronto pra enviar ao candidato.</p>
+      <span class="btn btn-secondary btn-sm" data-action="agendar-entrevista" data-id="${candidato.id}">📅 Agendar entrevista (Google Meet)</span>
       `}
       ` : ''}
 
@@ -7824,6 +7934,22 @@ function onGlobalClick(e){
   }
   if(action === 'fechar-vaga'){ modalFecharVaga(getCargo(id)); return; }
   if(action === 'avaliacao-comportamental'){ modalLinkAvaliacao(db.candidatos.find(c=>c.id===id)); return; }
+  if(action === 'agendar-entrevista'){ modalAgendarEntrevista(db.candidatos.find(c=>c.id===id)); return; }
+  if(action === 'copiar-link-meet'){
+    const candidato = db.candidatos.find(c=>c.id===id);
+    const link = candidato && candidato.entrevistaAgendada ? candidato.entrevistaAgendada.linkMeet : '';
+    const finalizar = ()=> showToast('Link copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(finalizar).catch(()=>{
+        const inp = document.getElementById('link-meet-input') || document.getElementById('link-meet-candidato-'+id);
+        if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+      });
+    } else {
+      const inp = document.getElementById('link-meet-input') || document.getElementById('link-meet-candidato-'+id);
+      if(inp){ inp.select(); document.execCommand('copy'); finalizar(); }
+    }
+    return;
+  }
   if(action === 'carta-proposta'){ modalCartaProposta(db.candidatos.find(c=>c.id===id)); return; }
   if(action === 'cp-copiar'){
     const campo = document.getElementById('cp-texto');
