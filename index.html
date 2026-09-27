@@ -7309,8 +7309,10 @@ function modalAgendarEntrevista(candidato){
       const dataCampo = f.get('data'), horaCampo = f.get('hora');
       candidato.entrevistaAgendada = { dataHora: dataHoraISO, duracaoMinutos: parseInt(f.get('duracao'),10), linkMeet: resp.linkMeet, eventId: resp.eventId, titulo: tituloEvento };
       db = await loadDB();
+      garantirConfiguracoes();
       const candidatoAtualizado = db.candidatos.find(c=>c.id===candidato.id) || candidato;
 
+      if(!Array.isArray(db.agenda)) db.agenda = [];
       db.agenda.push({
         id: uid('ag'),
         titulo: tituloEvento,
