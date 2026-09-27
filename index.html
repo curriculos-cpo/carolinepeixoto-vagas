@@ -7308,9 +7308,6 @@ function modalAgendarEntrevista(candidato){
       const tituloEvento = f.get('titulo').trim();
       const dataCampo = f.get('data'), horaCampo = f.get('hora');
       candidato.entrevistaAgendada = { dataHora: dataHoraISO, duracaoMinutos: parseInt(f.get('duracao'),10), linkMeet: resp.linkMeet, eventId: resp.eventId, titulo: tituloEvento };
-      db = await loadDB();
-      garantirConfiguracoes();
-      const candidatoAtualizado = db.candidatos.find(c=>c.id===candidato.id) || candidato;
 
       if(!Array.isArray(db.agenda)) db.agenda = [];
       db.agenda.push({
@@ -7324,10 +7321,16 @@ function modalAgendarEntrevista(candidato){
         concluido: false,
         ata: {participantes:'', decisoes:'', proximosPassos:''}
       });
-      await saveDB();
+      const salvouOk = await saveDB();
+      if(!salvouOk){
+        erroEl.textContent = 'A entrevista foi criada na Google Agenda, mas não consegui salvar no painel agora. Clique em "Criar entrevista" de novo para tentar salvar aqui também.';
+        erroEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Criar entrevista';
+        return;
+      }
 
       closeModal();
-      modalLinkEntrevista(candidatoAtualizado);
+      modalLinkEntrevista(candidato);
       showToast('Entrevista criada na sua Google Agenda e na Agenda do painel!');
     }catch(err){
       erroEl.textContent = err.message || 'Não foi possível criar a entrevista agora.';
