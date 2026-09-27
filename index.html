@@ -1077,6 +1077,7 @@ function renderShell(){
           <input type="file" accept="application/json" id="import-file" style="display:none;">
         </label>
         <span class="btn btn-secondary btn-sm" data-action="recuperar-dados-antigos" style="width:100%;margin-top:6px;">Tentar recuperar dados antigos</span>
+        <span class="btn btn-secondary btn-sm" data-action="ver-tamanho-db" style="width:100%;margin-top:6px;">📊 Ver tamanho do banco de dados</span>
         <span class="btn btn-secondary btn-sm" data-action="configurar-mensagens" style="width:100%;margin-top:6px;">💬 Mensagens automáticas</span>
       </div>
     </div>
@@ -7304,11 +7305,28 @@ function modalAgendarEntrevista(candidato){
         dataHora: dataHoraISO,
         duracaoMinutos: f.get('duracao')
       });
-      candidato.entrevistaAgendada = { dataHora: dataHoraISO, duracaoMinutos: parseInt(f.get('duracao'),10), linkMeet: resp.linkMeet, eventId: resp.eventId, titulo: f.get('titulo').trim() };
+      const tituloEvento = f.get('titulo').trim();
+      const dataCampo = f.get('data'), horaCampo = f.get('hora');
+      candidato.entrevistaAgendada = { dataHora: dataHoraISO, duracaoMinutos: parseInt(f.get('duracao'),10), linkMeet: resp.linkMeet, eventId: resp.eventId, titulo: tituloEvento };
       db = await loadDB();
+      const candidatoAtualizado = db.candidatos.find(c=>c.id===candidato.id) || candidato;
+
+      db.agenda.push({
+        id: uid('ag'),
+        titulo: tituloEvento,
+        data: dataCampo,
+        hora: horaCampo,
+        tipo: 'Entrevista',
+        clienteId: cargo ? cargo.clienteId : '',
+        descricao: 'Candidato: '+candidato.nome+(cargo?' · Vaga: '+cargo.titulo:'')+'\nLink do Google Meet: '+resp.linkMeet,
+        concluido: false,
+        ata: {participantes:'', decisoes:'', proximosPassos:''}
+      });
+      await saveDB();
+
       closeModal();
-      modalLinkEntrevista(db.candidatos.find(c=>c.id===candidato.id) || candidato);
-      showToast('Entrevista criada na sua Google Agenda!');
+      modalLinkEntrevista(candidatoAtualizado);
+      showToast('Entrevista criada na sua Google Agenda e na Agenda do painel!');
     }catch(err){
       erroEl.textContent = err.message || 'Não foi possível criar a entrevista agora.';
       erroEl.style.display = 'block';
@@ -7334,7 +7352,8 @@ function modalLinkEntrevista(candidato){
       <span>${candidato.telefone ? '<span class="btn btn-secondary btn-sm" id="btn-enviar-entrevista-whatsapp">💬 Enviar por WhatsApp</span>' : ''}</span>
       <div class="right">
         <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
-        <span class="btn btn-primary" data-action="copiar-link-meet" data-id="${candidato.id}">Copiar link</span>
+        <span class="btn btn-secondary" data-action="copiar-link-meet" data-id="${candidato.id}">Copiar link</span>
+        <a class="btn btn-primary" href="${esc(ea.linkMeet)}" target="_blank" rel="noopener">🎥 Abrir reunião</a>
       </div>
     </div>
   `);
@@ -7489,6 +7508,7 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       ${candidato.entrevistaAgendada && candidato.entrevistaAgendada.linkMeet ? `
       <p class="hint" style="margin-top:-4px;margin-bottom:8px;">Agendada para ${formatDateHora(candidato.entrevistaAgendada.dataHora)} (${candidato.entrevistaAgendada.duracaoMinutos} min).</p>
       <div class="field full"><input type="text" readonly value="${esc(candidato.entrevistaAgendada.linkMeet)}" id="link-meet-candidato-${candidato.id}" onclick="this.select()"></div>
+      <a class="btn btn-primary btn-sm" href="${esc(candidato.entrevistaAgendada.linkMeet)}" target="_blank" rel="noopener">🎥 Abrir reunião</a>
       <span class="btn btn-secondary btn-sm" data-action="copiar-link-meet" data-id="${candidato.id}">Copiar link</span>
       <span class="btn btn-secondary btn-sm" data-action="agendar-entrevista" data-id="${candidato.id}">Reagendar</span>
       ` : `
@@ -8235,6 +8255,35 @@ function onGlobalClick(e){
         db = dadosAntigos;
         saveDB(true).then(ok=>{ if(ok){ renderView(); showToast('Dados antigos recuperados e salvos no Google com sucesso!'); } });
       }
+    });
+    return;
+  }
+  if(action === 'ver-tamanho-db'){
+    showToast('Consultando tamanho do arquivo…');
+    chamarAppsScriptGet('action=diagnosticoTamanhoDB').then(resp=>{
+      const c = resp.contagens;
+      openModal(`
+        <button class="modal-close" data-action="fechar-modal">&times;</button>
+        <h2>📊 Tamanho do banco de dados</h2>
+        <div class="kpi-grid" style="margin:14px 0;">
+          <div class="kpi ${resp.tamanhoMB>5?'c-red':(resp.tamanhoMB>2?'c-amber':'c-green')}"><div class="label">Tamanho do arquivo</div><div class="value">${resp.tamanhoMB} MB</div><div class="sub">${resp.tamanhoKB} KB</div></div>
+        </div>
+        <p class="hint" style="margin-bottom:10px;">Referência: até 2 MB, tudo tranquilo. Entre 2 e 5 MB, comece a ficar de olho — pode notar lentidão ocasional. Acima de 5 MB, vale considerar uma reestruturação de como os dados são guardados.</p>
+        <div class="section-title">Registros por tipo</div>
+        <table style="width:100%;font-size:13px;"><tbody>
+          <tr><td>Clientes</td><td style="text-align:right;">${c.clientes}</td></tr>
+          <tr><td>Vagas</td><td style="text-align:right;">${c.cargos}</td></tr>
+          <tr><td>Candidatos</td><td style="text-align:right;">${c.candidatos}</td></tr>
+          <tr><td>Colaboradores</td><td style="text-align:right;">${c.colaboradores}</td></tr>
+          <tr><td>Respostas de Pesquisa de Clima</td><td style="text-align:right;">${c.pesquisasClima}</td></tr>
+          <tr><td>Respostas de Pesquisas Rápidas</td><td style="text-align:right;">${c.respostasPesquisaRapida}</td></tr>
+          <tr><td>Denúncias</td><td style="text-align:right;">${c.denuncias}</td></tr>
+          <tr><td>Diagnósticos de Cultura</td><td style="text-align:right;">${c.diagnosticosCultura}</td></tr>
+        </tbody></table>
+        <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div></div>
+      `);
+    }).catch(err=>{
+      showToast(err.message || 'Não foi possível consultar agora.', true);
     });
     return;
   }
