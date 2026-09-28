@@ -287,7 +287,7 @@ async function chamarAppsScriptPost(action, payload, timeoutMs, tentativa){
     }
     throw new Error('O Google não respondeu corretamente depois de algumas tentativas. Tente novamente em instantes, ou peça para tentar em outro navegador (Chrome, de preferência).');
   }
-  if(!data.ok) throw new Error(data.error || 'Falha na integração.');
+  if(!data.ok){ const erro = new Error(data.error || 'Falha na integração.'); erro.dados = data; throw erro; }
   return data;
 }
 
@@ -368,6 +368,74 @@ async function loadDB(){
   return { clientes: [], cargos: [], candidatos: [] };
 }
 
+/* ===== Combinação de alterações =====
+   O painel guarda uma "foto" (dbBase) do banco no momento em que carregou/salvou pela última vez.
+   Se o servidor avisar que chegaram novidades enquanto a página estava aberta (respostas de candidatos,
+   inscrições, denúncias, edições do portal...), o painel compara: o que VOCÊ mudou vence; o que você
+   não mexeu fica com a versão mais nova do servidor. Assim nada que chegou de fora é apagado. */
+let dbBase = null;
+function clonarJSON(o){ return o === undefined ? undefined : JSON.parse(JSON.stringify(o)); }
+function registrarBaseDoBanco(){ dbBase = clonarJSON(db); }
+
+function jsonCanonico(v){
+  if(v === undefined || v === null) return 'null';
+  if(typeof v !== 'object') return JSON.stringify(v);
+  if(Array.isArray(v)) return '[' + v.map(jsonCanonico).join(',') + ']';
+  return '{' + Object.keys(v).filter(k=>v[k] !== undefined).sort().map(k=>JSON.stringify(k) + ':' + jsonCanonico(v[k])).join(',') + '}';
+}
+function mesmoValor(a, b){ return jsonCanonico(a) === jsonCanonico(b); }
+function ehRegistroComId(x){ return !!x && typeof x === 'object' && !Array.isArray(x) && typeof x.id === 'string'; }
+
+function mesclarCampos(base, local, servidor){
+  const saida = clonarJSON(servidor) || {};
+  const chaves = new Set([...Object.keys(base || {}), ...Object.keys(local || {})]);
+  chaves.forEach(k=>{
+    if(mesmoValor((base || {})[k], (local || {})[k])) return;   // você não mexeu neste campo → fica o do servidor
+    if((local || {})[k] === undefined) delete saida[k]; else saida[k] = clonarJSON(local[k]);
+  });
+  return saida;
+}
+
+function mesclarLista(base, local, servidor){
+  base = base || []; local = local || []; servidor = servidor || [];
+  const todos = base.concat(local, servidor);
+  if(todos.length === 0 || !todos.every(ehRegistroComId)){
+    // Lista simples (ex.: textos) ou sem identificador: soma o que você adicionou e tira o que você removeu.
+    const chBase = new Set(base.map(jsonCanonico)), chLocal = new Set(local.map(jsonCanonico));
+    const removidos = new Set([...chBase].filter(k=>!chLocal.has(k)));
+    const saida = servidor.filter(x=>!removidos.has(jsonCanonico(x))).map(clonarJSON);
+    const presentes = new Set(saida.map(jsonCanonico));
+    local.forEach(x=>{ const k = jsonCanonico(x); if(!chBase.has(k) && !presentes.has(k)){ saida.push(clonarJSON(x)); presentes.add(k); } });
+    return saida;
+  }
+  const baseCadaId = new Map(base.map(r=>[r.id, r]));
+  const localCadaId = new Map(local.map(r=>[r.id, r]));
+  let saida = servidor.map(clonarJSON).filter(r=>!(baseCadaId.has(r.id) && !localCadaId.has(r.id)));   // remove o que VOCÊ apagou
+  const posicao = new Map(saida.map((r,i)=>[r.id, i]));
+  local.forEach(rl=>{
+    const rb = baseCadaId.get(rl.id);
+    if(rb && mesmoValor(rb, rl)) return;                          // você não mexeu neste registro
+    if(posicao.has(rl.id)) saida[posicao.get(rl.id)] = mesclarCampos(rb || {}, rl, saida[posicao.get(rl.id)]);
+    else { saida.push(clonarJSON(rl)); posicao.set(rl.id, saida.length - 1); }
+  });
+  return saida;
+}
+
+function mesclarBancoDeDados(base, local, servidor){
+  const saida = clonarJSON(servidor);
+  const chaves = new Set([...Object.keys(base || {}), ...Object.keys(local || {})]);
+  chaves.forEach(k=>{
+    if(k === '_rev') return;
+    const b = (base || {})[k], l = local[k], s = servidor[k];
+    if(mesmoValor(b, l)) return;                                   // você não mexeu nesta parte do banco
+    if(Array.isArray(l) || Array.isArray(b)) saida[k] = mesclarLista(b, l, s);
+    else if(l && typeof l === 'object') saida[k] = mesclarCampos(b, l, s);
+    else if(l === undefined) delete saida[k];
+    else saida[k] = clonarJSON(l);
+  });
+  return saida;
+}
+
 async function saveDB(forcar){
   if(!appsScriptConfigurado()){
     mostrarAvisoConfiguracao();
@@ -379,11 +447,38 @@ async function saveDB(forcar){
     return false;
   }
   try{
-    await chamarAppsScriptPost('saveAll', {db: db, forcar: !!forcar});
-    lastSaved = new Date();
-    renderSaveState();
-    esconderAvisoConfiguracao();
-    return true;
+    let combinou = false;
+    for(let tentativa = 1; tentativa <= 4; tentativa++){
+      const enviado = clonarJSON(db);       // exatamente o que está sendo enviado agora
+      let resp;
+      try{
+        resp = await chamarAppsScriptPost('saveAll', {db: enviado, forcar: !!forcar});
+      }catch(err){
+        if(err && err.dados && err.dados.conflito && err.dados.db && tentativa < 4){
+          if(!dbBase) throw new Error('Seus dados na tela estão desatualizados. Nada foi apagado — recarregue a página (F5) e refaça a alteração.');
+          const servidor = err.dados.db;
+          const mesclado = mesclarBancoDeDados(dbBase, db, servidor);
+          Object.keys(db).forEach(k=>{ delete db[k]; });
+          Object.assign(db, mesclado);
+          garantirConfiguracoes();
+          dbBase = clonarJSON(servidor);    // a próxima comparação parte do que o servidor tinha
+          combinou = true;
+          continue;
+        }
+        throw err;
+      }
+      if(typeof resp.rev === 'number'){ db._rev = resp.rev; }
+      dbBase = enviado;
+      lastSaved = new Date();
+      renderSaveState();
+      esconderAvisoConfiguracao();
+      if(combinou){
+        showToast('Suas alterações foram combinadas com novidades que chegaram enquanto a página estava aberta (ex.: respostas de candidatos).');
+        if(document.getElementById('view')) renderView();
+      }
+      return true;
+    }
+    throw new Error('Não consegui combinar as alterações depois de várias tentativas. Recarregue a página (F5) e refaça a alteração.');
   }catch(e){
     showToast(e.message || 'Não foi possível salvar agora. Verifique sua conexão com a internet e tente novamente.', true);
     mostrarAvisoConfiguracao('⚠️ Não foi possível salvar agora. O que você digitar pode não ser gravado. Verifique sua conexão e clique em "Testar novamente".');
@@ -1078,6 +1173,7 @@ function renderShell(){
         </label>
         <span class="btn btn-secondary btn-sm" data-action="recuperar-dados-antigos" style="width:100%;margin-top:6px;">Tentar recuperar dados antigos</span>
         <span class="btn btn-secondary btn-sm" data-action="ver-tamanho-db" style="width:100%;margin-top:6px;">📊 Ver tamanho do banco de dados</span>
+        <span class="btn btn-secondary btn-sm" data-action="recuperar-perdidos" style="width:100%;margin-top:6px;">🛟 Recuperar dados perdidos</span>
         <span class="btn btn-secondary btn-sm" data-action="configurar-mensagens" style="width:100%;margin-top:6px;">💬 Mensagens automáticas</span>
       </div>
     </div>
@@ -7413,6 +7509,92 @@ function modalTransferirCandidato(candidato){
   });
 }
 
+function modalRecuperarPerdidos(){
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>🛟 Recuperar dados perdidos</h2>
+    <p class="hint" style="margin-bottom:10px;">Procura nos backups automáticos (os 40 mais recentes) respostas de candidatos, denúncias e pesquisas que estão salvas mas sumiram do painel — por exemplo, um DISC que o candidato finalizou e não apareceu. <strong>Nada é apagado nem substituído:</strong> só o que está faltando é devolvido.</p>
+    <div id="rec-status" class="hint" style="min-height:20px;"></div>
+    <div id="rec-lista" style="max-height:340px;overflow-y:auto;margin:10px 0;"></div>
+    <div class="modal-footer">
+      <span><span class="btn btn-secondary btn-sm" id="rec-parar" style="display:none;">Parar busca</span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-secondary" id="rec-buscar">Procurar nos backups</span>
+        <span class="btn btn-primary" id="rec-restaurar" style="display:none;">Restaurar selecionados</span>
+      </div>
+    </div>
+  `);
+
+  const elStatus = document.getElementById('rec-status'), elLista = document.getElementById('rec-lista');
+  const btnBuscar = document.getElementById('rec-buscar'), btnParar = document.getElementById('rec-parar'), btnRestaurar = document.getElementById('rec-restaurar');
+  const achados = new Map();
+  let parar = false;
+  const chaveDe = it => it.colecao + '|' + it.tipo + '|' + it.id;
+  const recente = it => !!it.data && (daysBetween(it.data, todayISO()) || 0) <= 30;
+
+  function desenhar(){
+    const itens = Array.from(achados.values()).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+    elLista.innerHTML = itens.map(it=>`
+      <div class="checkbox-row" style="align-items:flex-start;">
+        <input type="checkbox" class="rec-chk" id="rec-${esc(chaveDe(it))}" data-chave="${esc(chaveDe(it))}" ${recente(it)?'checked':''}>
+        <label for="rec-${esc(chaveDe(it))}" style="font-weight:400;"><strong>${esc(it.titulo)}</strong><br>
+          <span class="hint">${it.data?'Data: '+formatDate(it.data)+' · ':''}encontrado no backup de ${esc(formatDateHora(it.backupCriadoEm))}${recente(it)?'':' · <em>antigo — confira antes de marcar</em>'}</span></label>
+      </div>`).join('');
+    btnRestaurar.style.display = itens.length ? '' : 'none';
+  }
+
+  async function buscar(){
+    parar = false; achados.clear(); desenhar();
+    btnBuscar.style.display = 'none'; btnParar.style.display = '';
+    try{
+      const resp = await chamarAppsScriptGet('action=listarBackups');
+      const backups = resp.backups || [];
+      for(let i = 0; i < backups.length && !parar; i++){
+        if(!document.body.contains(elStatus)) return;   // fechou a janela
+        elStatus.textContent = 'Verificando backup ' + (i+1) + ' de ' + backups.length + ' (' + formatDateHora(backups[i].criadoEm) + ')… ' + achados.size + ' item(ns) encontrado(s) até agora.';
+        try{
+          const r = await chamarAppsScriptGet('action=itensBackup&id=' + encodeURIComponent(backups[i].id));
+          (r.itens || []).forEach(it=>{ if(!achados.has(chaveDe(it))) achados.set(chaveDe(it), Object.assign({backupId: backups[i].id, backupCriadoEm: backups[i].criadoEm}, it)); });
+          desenhar();
+        }catch(e){ /* backup ilegível: pula para o próximo */ }
+      }
+      if(!document.body.contains(elStatus)) return;
+      elStatus.textContent = achados.size
+        ? (parar ? 'Busca interrompida. ' : 'Busca concluída. ') + achados.size + ' item(ns) estão nos backups e não estão mais no painel. Marque os que quer restaurar.'
+        : 'Não encontrei nada perdido nos backups disponíveis. Se um DISC ou outra resposta continua faltando, o backup dessa época pode já ter sido substituído (guardamos os 40 mais recentes); nesse caso o candidato precisará responder de novo.';
+    }catch(err){
+      elStatus.textContent = 'Não foi possível consultar os backups agora: ' + (err.message || 'erro desconhecido') + '.';
+    }
+    btnBuscar.style.display = ''; btnParar.style.display = 'none';
+  }
+
+  btnBuscar.addEventListener('click', buscar);
+  btnParar.addEventListener('click', ()=>{ parar = true; });
+  btnRestaurar.addEventListener('click', async ()=>{
+    const marcados = Array.from(document.querySelectorAll('.rec-chk:checked')).map(chk=>achados.get(chk.dataset.chave)).filter(Boolean);
+    if(marcados.length === 0){ showToast('Marque ao menos um item para restaurar.', true); return; }
+    parar = true;
+    btnRestaurar.textContent = 'Restaurando…';
+    try{
+      const r = await chamarAppsScriptPost('restaurarItens', {itens: marcados.map(it=>({colecao: it.colecao, tipo: it.tipo, id: it.id, backupId: it.backupId}))});
+      const atualizado = await loadDB();
+      if(dbCarregadoComSucesso){
+        Object.keys(db).forEach(k=>{ delete db[k]; });
+        Object.assign(db, atualizado);
+        garantirConfiguracoes();
+        registrarBaseDoBanco();
+      }
+      closeModal();
+      renderView();
+      showToast(r.restaurados + ' item(ns) restaurado(s)' + (r.ignorados ? ' (' + r.ignorados + ' já estavam no painel)' : '') + '.');
+    }catch(err){
+      btnRestaurar.textContent = 'Restaurar selecionados';
+      elStatus.textContent = 'Não foi possível restaurar agora: ' + (err.message || 'erro desconhecido') + '.';
+    }
+  });
+}
+
 function modalAgendarEntrevista(candidato){
   const cargo = getCargo(candidato.cargoId);
   const agora = new Date();
@@ -8399,6 +8581,7 @@ function onGlobalClick(e){
       if(dbCarregadoComSucesso){
         db = dadosCarregados;
         garantirConfiguracoes();
+        registrarBaseDoBanco();
         renderView();
         esconderAvisoConfiguracao();
         showToast('Tudo certo! Dados recarregados e o armazenamento está funcionando.');
@@ -8425,6 +8608,7 @@ function onGlobalClick(e){
     });
     return;
   }
+  if(action === 'recuperar-perdidos'){ modalRecuperarPerdidos(); return; }
   if(action === 'ver-tamanho-db'){
     showToast('Consultando tamanho do arquivo…');
     chamarAppsScriptGet('action=diagnosticoTamanhoDB').then(resp=>{
@@ -8579,6 +8763,7 @@ async function roteirizarPaginaPublica(){
   if(!tratouComoPublica){
     db = await loadDB();
     garantirConfiguracoes();
+    registrarBaseDoBanco();
     renderShell();
     verificarPersistenciaInicial();
   } else {
