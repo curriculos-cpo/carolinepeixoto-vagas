@@ -1674,6 +1674,7 @@ function viewCandidatos(){
       <td>${badgeHtml(statusCandidato(c))}</td>
       <td class="no-print" style="white-space:nowrap;">
         <span class="btn btn-ghost btn-sm" data-action="editar-candidato" data-id="${c.id}">Ver / editar</span>
+        <span class="btn btn-ghost btn-sm" data-action="transferir-candidato" data-id="${c.id}" title="Transferir para outra vaga">🔀 Transferir</span>
         ${(statusCandidato(c)==='em_processo' && c.etapas.some(e=>e.resultado==='')) ? '<span class="btn btn-ghost btn-sm" data-action="avancar-etapa" data-id="'+c.id+'" title="Marcar próxima etapa como avançada">▶ Avançar</span>' : ''}
         ${appsScriptConfigurado() ? '<span class="btn btn-ghost btn-sm" data-action="avaliacao-comportamental" data-id="'+c.id+'" title="Enviar/ver avaliação comportamental">🧭'+(c.avaliacaoComportamental&&c.avaliacaoComportamental.data?' '+esc(c.avaliacaoComportamental.perfil):'')+'</span>' : ''}
         ${statusCandidato(c)==='contratado' ? '<span class="btn btn-ghost btn-sm" data-action="carta-proposta" data-id="'+c.id+'" title="Gerar carta proposta">📄 Proposta</span>' : ''}
@@ -1752,6 +1753,7 @@ function viewBancoCurriculos(){
       <td>${formatDate(c.dataRecebimento)}</td>
       <td class="no-print" style="white-space:nowrap;">
         <span class="btn btn-ghost btn-sm" data-action="editar-candidato" data-id="${c.id}">Ver / editar</span>
+        <span class="btn btn-ghost btn-sm" data-action="transferir-candidato" data-id="${c.id}" title="Levar para uma vaga">🔀 Transferir</span>
         ${btnWhatsApp(c.telefone, c.nome)}
         ${botaoCv}
       </td>
@@ -7259,6 +7261,158 @@ function modalLinkCultura(cliente){
   `);
 }
 
+function modalTransferirCandidato(candidato){
+  const cargoAtual = candidato.cargoId ? getCargo(candidato.cargoId) : null;
+  const clienteAtual = cargoAtual ? getCliente(cargoAtual.clienteId) : null;
+  const textoOrigem = cargoAtual
+    ? cargoAtual.titulo + ' — ' + (clienteAtual ? clienteAtual.nome : 'cliente não encontrado')
+    : 'Banco de currículos (sem vaga)';
+
+  const opcoesDestino = db.cargos
+    .filter(v => v.status !== 'fechada' && v.id !== candidato.cargoId)
+    .map(v => {
+      const cl = getCliente(v.clienteId);
+      return { vaga: v, rotulo: v.titulo + ' — ' + (cl ? cl.nome : 'Cliente') + ' · aberta em ' + formatDate(v.dataAbertura) + (v.status === 'pausada' ? ' [pausada]' : '') };
+    })
+    .sort((a, b) => a.rotulo.localeCompare(b.rotulo));
+
+  if(opcoesDestino.length === 0){
+    openModal(`
+      <button class="modal-close" data-action="fechar-modal">&times;</button>
+      <h2>Transferir candidato</h2>
+      <div class="modal-sub">${esc(candidato.nome)}</div>
+      <p class="hint">Não há outra vaga aberta ou pausada para receber este candidato. Cadastre ou reabra uma vaga primeiro.</p>
+      <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div></div>
+    `);
+    return;
+  }
+
+  const textoMover = cargoAtual
+    ? '<strong>Mover</strong> — sai da vaga atual e passa a fazer parte da nova.'
+    : '<strong>Mover</strong> — passa a ser candidato da vaga escolhida (a marcação de banco de currículos não muda).';
+  const textoCopiar = cargoAtual
+    ? '<strong>Copiar</strong> — continua na vaga atual e também entra na nova (cria um segundo cadastro).'
+    : '<strong>Copiar</strong> — cria um cadastro novo na vaga escolhida e mantém o original no banco.';
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Transferir candidato para outra vaga</h2>
+    <div class="modal-sub">${esc(candidato.nome)} · atualmente em: ${esc(textoOrigem)}</div>
+    <form id="form-transferir-candidato">
+      <div class="field full">
+        <label>Vaga de destino *</label>
+        <input required name="destino" list="datalist-vagas-destino" placeholder="Comece a digitar o cargo ou o nome da empresa…" autocomplete="off">
+        <datalist id="datalist-vagas-destino">${opcoesDestino.map(o => '<option value="' + esc(o.rotulo) + '">').join('')}</datalist>
+      </div>
+      <div class="field full">
+        <label>O que fazer com o cadastro?</label>
+        <div class="checkbox-row"><input type="radio" id="rad-transf-mover" name="modo" value="mover" checked><label for="rad-transf-mover" style="font-weight:400;">${textoMover}</label></div>
+        <div class="checkbox-row"><input type="radio" id="rad-transf-copiar" name="modo" value="copiar"><label for="rad-transf-copiar" style="font-weight:400;">${textoCopiar}</label></div>
+      </div>
+      <div class="checkbox-row"><input type="checkbox" id="chk-transf-reiniciar" name="reiniciar" checked><label for="chk-transf-reiniciar" style="font-weight:400;">Reiniciar as etapas do processo para a nova vaga (recomendado)</label></div>
+      <p class="hint" style="margin-top:4px;">Reiniciar zera triagem, entrevistas, proposta, declínio e status manual. O currículo, a avaliação comportamental (DISC) e as observações são mantidos, e o histórico da transferência é anotado nas observações.</p>
+      <p class="hint" id="erro-transferir-candidato" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Transferir</button>
+        </div>
+      </div>
+    </form>
+  `);
+
+  document.getElementById('form-transferir-candidato').addEventListener('submit', async e => {
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-transferir-candidato');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+
+    const digitado = (f.get('destino') || '').trim().toLowerCase();
+    const escolhido = opcoesDestino.find(o => o.rotulo.toLowerCase() === digitado);
+    if(!escolhido){
+      erroEl.textContent = 'Escolha uma das vagas sugeridas: digite parte do nome e toque na opção que aparecer na lista.';
+      erroEl.style.display = 'block';
+      return;
+    }
+    const destino = escolhido.vaga;
+    const modo = f.get('modo') === 'copiar' ? 'copiar' : 'mover';
+    const reiniciar = !!f.get('reiniciar');
+
+    const nomeNormalizado = (candidato.nome || '').trim().toLowerCase();
+    const jaExiste = candidatosDoCargo(destino.id).some(c => c.id !== candidato.id && (c.nome || '').trim().toLowerCase() === nomeNormalizado);
+    if(jaExiste && !confirm('Já existe um candidato chamado "' + candidato.nome + '" nessa vaga. Transferir mesmo assim?')) return;
+
+    const clienteDestino = getCliente(destino.clienteId);
+    const hoje = formatDate(todayISO());
+    const origemTxt = cargoAtual ? '"' + cargoAtual.titulo + '" (' + (clienteAtual ? clienteAtual.nome : '—') + ')' : 'o Banco de currículos';
+    const destinoTxt = '"' + destino.titulo + '" (' + (clienteDestino ? clienteDestino.nome : '—') + ')';
+    const anexarNota = (obs, nota) => (obs ? obs + '\n' : '') + '[' + hoje + '] ' + nota;
+    const reiniciarProcesso = alvo => {
+      alvo.etapas = defaultEtapas();
+      alvo.declinou = false; alvo.dataDeclinio = ''; alvo.motivoDeclinio = '';
+      alvo.statusManual = ''; alvo.convidado = false;
+    };
+
+    const curriculosDestinoAntes = destino.curriculosRecebidos;
+    let desfazerCandidato;
+
+    if(modo === 'mover'){
+      const campos = ['cargoId', 'clienteId', 'etapas', 'convidado', 'declinou', 'dataDeclinio', 'motivoDeclinio', 'statusManual', 'observacoes'];
+      const backup = {};
+      campos.forEach(k => {
+        const existia = (k in candidato);
+        backup[k] = { existia, valor: existia ? JSON.parse(JSON.stringify(candidato[k] === undefined ? null : candidato[k])) : null };
+      });
+      desfazerCandidato = () => { campos.forEach(k => { if(backup[k].existia) candidato[k] = backup[k].valor; else delete candidato[k]; }); };
+
+      candidato.cargoId = destino.id;
+      candidato.clienteId = destino.clienteId;
+      if(reiniciar) reiniciarProcesso(candidato);
+      candidato.observacoes = anexarNota(candidato.observacoes, 'Transferido de ' + origemTxt + ' para ' + destinoTxt + '.');
+    } else {
+      const existiaObs = ('observacoes' in candidato);
+      const obsAntes = candidato.observacoes;
+      const copia = JSON.parse(JSON.stringify(candidato));
+      copia.id = uid('cand');
+      copia.inscricaoId = '';
+      copia.cargoId = destino.id;
+      copia.clienteId = destino.clienteId;
+      copia.bancoDeCurriculos = false;
+      copia.dataRecebimento = todayISO();
+      delete copia.entrevistaAgendada;
+      if(reiniciar) reiniciarProcesso(copia);
+      copia.observacoes = anexarNota(candidato.observacoes, 'Copiado de ' + origemTxt + ' para ' + destinoTxt + '.');
+      candidato.observacoes = anexarNota(candidato.observacoes, 'Também considerado para ' + destinoTxt + '.');
+      db.candidatos.push(copia);
+      desfazerCandidato = () => {
+        const i = db.candidatos.findIndex(c => c.id === copia.id);
+        if(i >= 0) db.candidatos.splice(i, 1);
+        if(existiaObs) candidato.observacoes = obsAntes; else delete candidato.observacoes;
+      };
+    }
+
+    // Mesma regra da ficha do candidato: o contador de currículos da vaga nunca fica abaixo do nº de cadastrados.
+    const totalRegistrados = candidatosDoCargo(destino.id).length;
+    if(curriculosRecebidosCargo(destino) < totalRegistrados) destino.curriculosRecebidos = totalRegistrados;
+
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    const salvou = await saveDB();
+    if(!salvou){
+      desfazerCandidato();
+      destino.curriculosRecebidos = curriculosDestinoAntes;
+      erroEl.textContent = 'Não consegui salvar agora, então nada foi alterado. Verifique a conexão e tente de novo.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Transferir';
+      return;
+    }
+    closeModal();
+    renderView();
+    showToast(modo === 'mover' ? 'Candidato movido para "' + destino.titulo + '".' : 'Candidato copiado para "' + destino.titulo + '".');
+  });
+}
+
 function modalAgendarEntrevista(candidato){
   const cargo = getCargo(candidato.cargoId);
   const agora = new Date();
@@ -7509,6 +7663,12 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       ` : ''}
 
       ${editando ? `
+      <div class="section-title">Transferir para outra vaga</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Se o perfil também se encaixa em outra vaga, mova ou copie este candidato sem cadastrar de novo. Salve antes qualquer alteração feita nesta ficha.</p>
+      <span class="btn btn-secondary btn-sm" data-action="transferir-candidato" data-id="${candidato.id}">🔀 Transferir candidato</span>
+      ` : ''}
+
+      ${editando ? `
       <div class="section-title">Entrevista online</div>
       ${candidato.entrevistaAgendada && candidato.entrevistaAgendada.linkMeet ? `
       <p class="hint" style="margin-top:-4px;margin-bottom:8px;">Agendada para ${formatDateHora(candidato.entrevistaAgendada.dataHora)} (${candidato.entrevistaAgendada.duracaoMinutos} min).</p>
@@ -7680,7 +7840,8 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       bancoDeCurriculos: bancoMarcado,
       bancoAnotacoes: f.get('bancoAnotacoes').trim(),
       areaInteresse: f.get('areaInteresse').trim(),
-      avaliacaoComportamental: candidato.avaliacaoComportamental || null
+      avaliacaoComportamental: candidato.avaliacaoComportamental || null,
+      entrevistaAgendada: candidato.entrevistaAgendada || null
     };
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -7960,6 +8121,7 @@ function onGlobalClick(e){
   if(action === 'fechar-vaga'){ modalFecharVaga(getCargo(id)); return; }
   if(action === 'avaliacao-comportamental'){ modalLinkAvaliacao(db.candidatos.find(c=>c.id===id)); return; }
   if(action === 'agendar-entrevista'){ modalAgendarEntrevista(db.candidatos.find(c=>c.id===id)); return; }
+  if(action === 'transferir-candidato'){ const candTransf = db.candidatos.find(c=>c.id===id); if(candTransf) modalTransferirCandidato(candTransf); return; }
   if(action === 'copiar-link-meet'){
     const candidato = db.candidatos.find(c=>c.id===id);
     const link = candidato && candidato.entrevistaAgendada ? candidato.entrevistaAgendada.linkMeet : '';
