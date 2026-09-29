@@ -7535,6 +7535,43 @@ function modalTransferirCandidato(candidato){
   });
 }
 
+let analiseIAEmAndamento = false;
+async function executarAnaliseIAEmLotes(cargoId){
+  analiseIAEmAndamento = true;
+  let totalAnalisados = 0, totalSinalizados = 0, totalErros = 0, totalGeral = 0, primeiraChamada = true, paradaPorErro = false;
+  try{
+    let continuar = true;
+    while(continuar){
+      showToast(totalGeral ? 'Analisando com IA… '+totalAnalisados+' de '+totalGeral+' processado(s) até agora.' : 'Analisando com IA…');
+      let resp;
+      try{
+        resp = await chamarAppsScriptPost('analisarCandidatosIA', {cargoId: cargoId, limite: 8}, 100000);
+      }catch(err){
+        showToast('A análise parou: '+(err.message||'erro desconhecido')+'. O que já foi analisado está salvo — clique em "Analisar com IA" de novo pra continuar de onde parou.', true);
+        paradaPorErro = true;
+        break;
+      }
+      if(primeiraChamada){ totalGeral = resp.total; primeiraChamada = false; }
+      totalAnalisados += resp.analisados;
+      totalSinalizados += resp.sinalizados;
+      totalErros += (resp.comErro ? resp.comErro.length : 0);
+      continuar = resp.restantes > 0 && resp.processadosNestaChamada > 0; // evita loop infinito se nada avançar numa chamada
+    }
+  } finally {
+    analiseIAEmAndamento = false;
+  }
+
+  const recarregado = await loadDB();
+  if(dbCarregadoComSucesso){ Object.keys(db).forEach(k=>{ delete db[k]; }); Object.assign(db, recarregado); garantirConfiguracoes(); registrarBaseDoBanco(); }
+  renderView();
+
+  if(!paradaPorErro){
+    let msg = totalAnalisados+' currículo(s) analisado(s) no total, '+totalSinalizados+' sinalizado(s).';
+    if(totalErros){ msg += ' '+totalErros+' não puderam ser lidos (confira manualmente).'; }
+    showToast(msg);
+  }
+}
+
 function modalRecuperarPerdidos(){
   openModal(`
     <button class="modal-close" data-action="fechar-modal">&times;</button>
@@ -8347,20 +8384,11 @@ function onGlobalClick(e){
     const cargoId = el.dataset.cargoId;
     const vagaAlvo = getCargo(cargoId);
     if(!vagaAlvo || !vagaAlvo.criterioObrigatorioIA) return;
+    if(analiseIAEmAndamento){ showToast('Já tem uma análise em andamento — aguarde terminar.', true); return; }
     const pendentesAntes = db.candidatos.filter(c=>c.cargoId===cargoId && c.curriculoUrl && !c.avaliacaoIA).length;
     if(pendentesAntes===0){ showToast('Não há currículos pendentes de análise nesta vaga.'); return; }
-    if(!confirm('Isso vai analisar '+pendentesAntes+' currículo(s) com IA, comparando com o critério: "'+vagaAlvo.criterioObrigatorioIA+'". Quem não atender é sinalizado e o status muda para "Não avançou" (sempre revisável). Continuar?')) return;
-    showToast('Analisando currículos com IA… isso pode levar alguns minutos.');
-    chamarAppsScriptPost('analisarCandidatosIA', {cargoId: cargoId}, 120000).then(async resp=>{
-      const recarregado = await loadDB();
-      if(dbCarregadoComSucesso){ Object.keys(db).forEach(k=>{ delete db[k]; }); Object.assign(db, recarregado); garantirConfiguracoes(); registrarBaseDoBanco(); }
-      renderView();
-      let msg = resp.analisados+' currículo(s) analisado(s), '+resp.sinalizados+' sinalizado(s).';
-      if(resp.comErro && resp.comErro.length){ msg += ' '+resp.comErro.length+' não puderam ser lidos (confira o currículo manualmente).'; }
-      showToast(msg, resp.comErro && resp.comErro.length===resp.total);
-    }).catch(err=>{
-      showToast(err.message || 'Não foi possível analisar agora.', true);
-    });
+    if(!confirm('Isso vai analisar '+pendentesAntes+' currículo(s) com IA, comparando com o critério: "'+vagaAlvo.criterioObrigatorioIA+'". Quem não atender é sinalizado e o status muda para "Não avançou" (sempre revisável). Pode levar alguns minutos se forem muitos currículos — o painel mostra o progresso. Continuar?')) return;
+    executarAnaliseIAEmLotes(cargoId);
     return;
   }
   if(action === 'reverter-sinalizacao-ia'){
