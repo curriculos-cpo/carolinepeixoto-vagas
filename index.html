@@ -1762,7 +1762,7 @@ function viewCandidatos(){
     const cl = getCliente(c.clienteId);
     return `<tr>
       <td class="no-print"><input type="checkbox" class="chk-candidato" data-id="${c.id}" ${state.candidatosSelecionados.has(c.id)?'checked':''}></td>
-      <td><strong>${esc(c.nome)}</strong><div class="hint">${esc(c.telefone||'')}${c.telefone&&c.email?' · ':''}${esc(c.email||'')}${(c.temCurriculo||c.curriculoUrl)?' · 📎 currículo':''}${c.bancoDeCurriculos?' · 🗂 banco':''}</div></td>
+      <td><strong>${esc(c.nome)}</strong>${c.sinalizadoIA?' <span class="badge badge-red" title="'+esc(c.avaliacaoIA?c.avaliacaoIA.justificativa:'')+'">🤖 sinalizado</span>':''}<div class="hint">${esc(c.telefone||'')}${c.telefone&&c.email?' · ':''}${esc(c.email||'')}${(c.temCurriculo||c.curriculoUrl)?' · 📎 currículo':''}${c.bancoDeCurriculos?' · 🗂 banco':''}</div></td>
       <td>${esc(cl?.nome||'—')}</td>
       <td>${esc(cg?.titulo||'—')}</td>
       <td>${formatDate(c.dataRecebimento)}</td>
@@ -1814,6 +1814,21 @@ function viewCandidatos(){
       </select>
       <input type="search" placeholder="Buscar por nome…" data-role="cand-busca" value="${esc(state.candBusca)}">
     </div>
+    ${(()=>{
+      if(!state.candCargoId) return '';
+      const vagaSelecionada = getCargo(state.candCargoId);
+      if(!vagaSelecionada || !vagaSelecionada.criterioObrigatorioIA) return '';
+      const candidatosDaVaga = db.candidatos.filter(c=>c.cargoId===vagaSelecionada.id);
+      const pendentes = candidatosDaVaga.filter(c=>c.curriculoUrl && !c.avaliacaoIA).length;
+      const sinalizadosAtuais = candidatosDaVaga.filter(c=>c.sinalizadoIA).length;
+      return `<div class="card" style="margin-bottom:14px;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span>🤖 Critério obrigatório desta vaga: <em>${esc(vagaSelecionada.criterioObrigatorioIA)}</em></span>
+        <span class="btn btn-secondary btn-sm" data-action="analisar-candidatos-ia" data-cargo-id="${vagaSelecionada.id}" ${pendentes===0?'style="opacity:.6;"':''}>
+          ${pendentes>0 ? 'Analisar '+pendentes+' currículo(s) com IA' : 'Nenhum currículo pendente de análise'}
+        </span>
+        ${sinalizadosAtuais>0 ? '<span class="hint">⚠️ '+sinalizadosAtuais+' sinalizado(s) atualmente</span>' : ''}
+      </div>`;
+    })()}
     ${barraLote}
     ${db.clientes.length===0 ? `<div class="card empty-state"><h3>Cadastre um cliente e uma vaga primeiro</h3><p>Vá em "Clientes e vagas" para começar.</p></div>` :
       lista.length===0 ? `<div class="card empty-state"><h3>Nenhum candidato encontrado</h3><p>Ajuste os filtros ou cadastre um novo candidato.</p></div>` :
@@ -6858,7 +6873,7 @@ async function importarInscricoes(){
 
 function modalVaga(vaga, clientePreSelecionado){
   const editando = !!vaga;
-  vaga = vaga || {id:'', clienteId: clientePreSelecionado||'', titulo:'', quantidadeVagas:1, curriculosRecebidos:'', dataAbertura: todayISO(), dataFechamentoPrevista:'', dataFechamentoReal:'', status:'aberta', houveContratacao:'', responsavel:'', observacoes:'', vagaPublicaAtiva:false, exibirNomeCliente:true, modalidade:'', localTrabalho:'', descricaoPublica:'', salario:'', oQueVaiFazer:'', oQueBuscamos:'', beneficios:{}, beneficiosOutros:'', valorServico:'', statusPagamento:'pendente', valorPago:'', dataPagamento:'', observacoesFinanceiras:''};
+  vaga = vaga || {id:'', clienteId: clientePreSelecionado||'', titulo:'', quantidadeVagas:1, curriculosRecebidos:'', dataAbertura: todayISO(), dataFechamentoPrevista:'', dataFechamentoReal:'', status:'aberta', houveContratacao:'', responsavel:'', observacoes:'', criterioObrigatorioIA:'', vagaPublicaAtiva:false, exibirNomeCliente:true, modalidade:'', localTrabalho:'', descricaoPublica:'', salario:'', oQueVaiFazer:'', oQueBuscamos:'', beneficios:{}, beneficiosOutros:'', valorServico:'', statusPagamento:'pendente', valorPago:'', dataPagamento:'', observacoesFinanceiras:''};
   vaga.beneficios = vaga.beneficios || {};
   const eraPublicaAntes = !!vaga.vagaPublicaAtiva;
   const clientesOpts = db.clientes.map(c=>'<option value="'+c.id+'" '+(vaga.clienteId===c.id?'selected':'')+'>'+esc(c.nome)+'</option>').join('');
@@ -6913,6 +6928,15 @@ function modalVaga(vaga, clientePreSelecionado){
           <div class="hint">Deixe em branco se não souber a data exata — assim ela fica fora do cálculo de tempo médio de fechamento.</div>
         </div>
         <div class="field full"><label>Observações</label><textarea name="observacoes">${esc(vaga.observacoes||'')}</textarea></div>
+      </div>
+
+      <div class="section-title">Análise automática de currículos (IA)</div>
+      <div class="form-grid">
+        <div class="field full">
+          <label>Critério obrigatório (opcional)</label>
+          <textarea name="criterioObrigatorioIA" placeholder="Ex.: Experiência comprovada como Supervisor Comercial ou cargo de liderança em vendas">${esc(vaga.criterioObrigatorioIA||'')}</textarea>
+          <div class="hint">Se preenchido, você poderá usar o botão "🤖 Analisar currículos com IA" (na lista de candidatos desta vaga) para conferir automaticamente cada currículo contra este critério. Quem não atender é sinalizado e o status muda para "Não avançou" — sempre revisável, nunca definitivo.</div>
+        </div>
       </div>
 
       <div class="section-title">Página pública de inscrição</div>
@@ -7009,6 +7033,7 @@ function modalVaga(vaga, clientePreSelecionado){
       localTrabalho: f.get('localTrabalho').trim(),
       descricaoPublica: f.get('descricaoPublica').trim(),
       salario: f.get('salario').trim(),
+      criterioObrigatorioIA: f.get('criterioObrigatorioIA').trim(),
       oQueVaiFazer: f.get('oQueVaiFazer').trim(),
       oQueBuscamos: f.get('oQueBuscamos').trim(),
       beneficios: Object.fromEntries(BENEFICIOS_LISTA.map(b => [b.chave, !!f.get('beneficio_'+b.chave)])),
@@ -7448,13 +7473,14 @@ function modalTransferirCandidato(candidato){
       alvo.etapas = defaultEtapas();
       alvo.declinou = false; alvo.dataDeclinio = ''; alvo.motivoDeclinio = '';
       alvo.statusManual = ''; alvo.convidado = false;
+      alvo.avaliacaoIA = null; alvo.sinalizadoIA = false;
     };
 
     const curriculosDestinoAntes = destino.curriculosRecebidos;
     let desfazerCandidato;
 
     if(modo === 'mover'){
-      const campos = ['cargoId', 'clienteId', 'etapas', 'convidado', 'declinou', 'dataDeclinio', 'motivoDeclinio', 'statusManual', 'observacoes'];
+      const campos = ['cargoId', 'clienteId', 'etapas', 'convidado', 'declinou', 'dataDeclinio', 'motivoDeclinio', 'statusManual', 'observacoes', 'avaliacaoIA', 'sinalizadoIA'];
       const backup = {};
       campos.forEach(k => {
         const existia = (k in candidato);
@@ -7844,6 +7870,17 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       `}
       ` : ''}
 
+      ${editando && candidato.avaliacaoIA ? `
+      <div class="section-title">Análise por IA</div>
+      <div class="card" style="padding:10px 14px;margin-bottom:10px;background:${candidato.sinalizadoIA?'var(--red-soft)':'var(--green-soft)'};">
+        <p style="margin:0 0 6px 0;"><strong>${candidato.sinalizadoIA ? '⚠️ Sinalizado: não atende ao critério' : '✅ Atende ao critério avaliado'}</strong></p>
+        <p class="hint" style="margin:0 0 4px 0;">Critério: ${esc(candidato.avaliacaoIA.criterioAvaliado)}</p>
+        <p style="margin:0 0 4px 0;font-size:13.5px;">${esc(candidato.avaliacaoIA.justificativa)}</p>
+        <p class="hint" style="margin:0;">Confiança da IA: ${esc(candidato.avaliacaoIA.confianca||'—')} · Analisado em ${formatDate(candidato.avaliacaoIA.data)}</p>
+      </div>
+      ${candidato.sinalizadoIA ? '<span class="btn btn-secondary btn-sm" data-action="reverter-sinalizacao-ia" data-id="'+candidato.id+'">↩️ Reverter sinalização</span>' : ''}
+      ` : ''}
+
       ${editando ? `
       <div class="section-title">Transferir para outra vaga</div>
       <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Se o perfil também se encaixa em outra vaga, mova ou copie este candidato sem cadastrar de novo. Salve antes qualquer alteração feita nesta ficha.</p>
@@ -8023,7 +8060,9 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       bancoAnotacoes: f.get('bancoAnotacoes').trim(),
       areaInteresse: f.get('areaInteresse').trim(),
       avaliacaoComportamental: candidato.avaliacaoComportamental || null,
-      entrevistaAgendada: candidato.entrevistaAgendada || null
+      entrevistaAgendada: candidato.entrevistaAgendada || null,
+      avaliacaoIA: candidato.avaliacaoIA || null,
+      sinalizadoIA: candidato.sinalizadoIA || false
     };
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -8304,6 +8343,38 @@ function onGlobalClick(e){
   if(action === 'avaliacao-comportamental'){ modalLinkAvaliacao(db.candidatos.find(c=>c.id===id)); return; }
   if(action === 'agendar-entrevista'){ modalAgendarEntrevista(db.candidatos.find(c=>c.id===id)); return; }
   if(action === 'transferir-candidato'){ const candTransf = db.candidatos.find(c=>c.id===id); if(candTransf) modalTransferirCandidato(candTransf); return; }
+  if(action === 'analisar-candidatos-ia'){
+    const cargoId = el.dataset.cargoId;
+    const vagaAlvo = getCargo(cargoId);
+    if(!vagaAlvo || !vagaAlvo.criterioObrigatorioIA) return;
+    const pendentesAntes = db.candidatos.filter(c=>c.cargoId===cargoId && c.curriculoUrl && !c.avaliacaoIA).length;
+    if(pendentesAntes===0){ showToast('Não há currículos pendentes de análise nesta vaga.'); return; }
+    if(!confirm('Isso vai analisar '+pendentesAntes+' currículo(s) com IA, comparando com o critério: "'+vagaAlvo.criterioObrigatorioIA+'". Quem não atender é sinalizado e o status muda para "Não avançou" (sempre revisável). Continuar?')) return;
+    showToast('Analisando currículos com IA… isso pode levar alguns minutos.');
+    chamarAppsScriptPost('analisarCandidatosIA', {cargoId: cargoId}, 120000).then(async resp=>{
+      const recarregado = await loadDB();
+      if(dbCarregadoComSucesso){ Object.keys(db).forEach(k=>{ delete db[k]; }); Object.assign(db, recarregado); garantirConfiguracoes(); registrarBaseDoBanco(); }
+      renderView();
+      let msg = resp.analisados+' currículo(s) analisado(s), '+resp.sinalizados+' sinalizado(s).';
+      if(resp.comErro && resp.comErro.length){ msg += ' '+resp.comErro.length+' não puderam ser lidos (confira o currículo manualmente).'; }
+      showToast(msg, resp.comErro && resp.comErro.length===resp.total);
+    }).catch(err=>{
+      showToast(err.message || 'Não foi possível analisar agora.', true);
+    });
+    return;
+  }
+  if(action === 'reverter-sinalizacao-ia'){
+    const candidatoRev = db.candidatos.find(c=>c.id===id);
+    if(!candidatoRev) return;
+    candidatoRev.sinalizadoIA = false;
+    if(candidatoRev.statusManual === 'nao_avancou') candidatoRev.statusManual = '';
+    saveDB();
+    if(document.getElementById('modal-slot').innerHTML) closeModal();
+    renderView();
+    showToast('Sinalização revertida. Status voltou ao automático.');
+    return;
+  }
+
   if(action === 'copiar-link-meet'){
     const candidato = db.candidatos.find(c=>c.id===id);
     const link = candidato && candidato.entrevistaAgendada ? candidato.entrevistaAgendada.linkMeet : '';
