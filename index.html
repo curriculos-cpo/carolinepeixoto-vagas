@@ -940,6 +940,8 @@ function garantirConfiguracoes(){
     if(!db.configuracoes.mensagemAvaliacao) db.configuracoes.mensagemAvaliacao = MENSAGEM_AVALIACAO_PADRAO;
   }
   if(!Array.isArray(db.colaboradores)) db.colaboradores = [];
+  if(!Array.isArray(db.candidatos)) db.candidatos = [];
+  db.candidatos.forEach(c=>{ if(c.visualizadoPeloRH===undefined) c.visualizadoPeloRH = true; });
   if(!Array.isArray(db.funcoes)) db.funcoes = [];
   if(!Array.isArray(db.descritivosCargo)) db.descritivosCargo = [];
   if(!Array.isArray(db.mensalidadesBPO)) db.mensalidadesBPO = [];
@@ -1153,7 +1155,7 @@ function renderShell(){
         </div>
         <div id="nav-rs-submenu" style="display:none;">
           <div class="nav-item nav-sub" data-action="nav" data-tab="candidatos">Candidatos</div>
-          <div class="nav-item nav-sub" data-action="nav" data-tab="banco">Banco de Currículos</div>
+          <div class="nav-item nav-sub" data-action="nav" data-tab="banco">Banco de Currículos <span id="nav-banco-badge"></span></div>
           <div class="nav-item nav-sub" data-action="nav" data-tab="relatorio">Relatório para o cliente</div>
         </div>
 
@@ -1233,6 +1235,11 @@ function renderNavActive(){
   document.querySelectorAll('.nav-item').forEach(el=>{
     el.classList.toggle('active', el.dataset.tab === state.tab);
   });
+  const badgeBanco = document.getElementById('nav-banco-badge');
+  if(badgeBanco){
+    const n = db.candidatos.filter(c=>c.bancoDeCurriculos && !c.visualizadoPeloRH).length;
+    badgeBanco.innerHTML = n ? '<span class="badge badge-amber">'+n+'</span>' : '';
+  }
   const submenuRS = document.getElementById('nav-rs-submenu');
   const setaRS = document.getElementById('nav-rs-seta');
   if(submenuRS && ['candidatos','banco','relatorio'].includes(state.tab)){
@@ -1846,7 +1853,11 @@ function viewBancoCurriculos(){
   if(state.bancoArea){
     lista = lista.filter(c=> (c.areaInteresse||'') === state.bancoArea);
   }
-  lista = lista.slice().sort((a,b)=> (b.dataRecebimento||'').localeCompare(a.dataRecebimento||''));
+  lista = lista.slice().sort((a,b)=>{
+    const naoVistoA = a.visualizadoPeloRH ? 0 : 1, naoVistoB = b.visualizadoPeloRH ? 0 : 1;
+    if(naoVistoA !== naoVistoB) return naoVistoB - naoVistoA; // não vistos primeiro
+    return (b.dataRecebimento||'').localeCompare(a.dataRecebimento||'');
+  });
 
   const areasDisponiveis = Array.from(new Set(db.candidatos.filter(c=>c.bancoDeCurriculos && c.areaInteresse).map(c=>c.areaInteresse))).sort();
 
@@ -1856,8 +1867,8 @@ function viewBancoCurriculos(){
     const vinculo = cg ? (esc(cg.titulo) + (cl ? ' · '+esc(cl.nome) : '')) : '<span class="hint">Sem vaga vinculada</span>';
     const botaoCv = c.curriculoUrl ? '<a class="btn btn-ghost btn-sm" href="'+esc(c.curriculoUrl)+'" target="_blank">Ver CV</a>'
       : (c.temCurriculo ? '<span class="btn btn-ghost btn-sm" data-action="baixar-curriculo" data-id="'+c.id+'">Baixar CV</span>' : '');
-    return `<tr>
-      <td><strong>${esc(c.nome)}</strong><div class="hint">${esc(c.telefone||'')}${c.telefone&&c.email?' · ':''}${esc(c.email||'')}</div></td>
+    return `<tr${c.visualizadoPeloRH?'':' style="background:var(--amber-soft,#FFF6E5);"'}>
+      <td><strong>${esc(c.nome)}</strong>${c.visualizadoPeloRH?'':' <span class="badge badge-amber">🆕 Novo</span>'}<div class="hint">${esc(c.telefone||'')}${c.telefone&&c.email?' · ':''}${esc(c.email||'')}</div></td>
       <td>${esc(c.areaInteresse||'—')}</td>
       <td>${vinculo}</td>
       <td style="max-width:240px;white-space:pre-line;">${esc(c.bancoAnotacoes||'—')}</td>
@@ -1871,9 +1882,11 @@ function viewBancoCurriculos(){
     </tr>`;
   }).join('');
 
+  const naoVistos = lista.filter(c=>!c.visualizadoPeloRH).length;
+
   return `
     <div class="topbar">
-      <div><h1>Banco de currículos</h1><p>${lista.length} candidato(s) disponíveis para futuras vagas</p></div>
+      <div><h1>Banco de currículos</h1><p>${lista.length} candidato(s) disponíveis para futuras vagas${naoVistos?' · <strong>'+naoVistos+' novo(s) ainda não visto(s)</strong>':''}</p></div>
       <button class="btn btn-primary" data-action="novo-candidato-banco">+ Novo candidato no banco</button>
     </div>
     <div class="filters-row">
@@ -8094,6 +8107,7 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       curriculoUrl: candidato.curriculoUrl || '',
       inscricaoId: candidato.inscricaoId || '',
       bancoDeCurriculos: bancoMarcado,
+      visualizadoPeloRH: true,
       bancoAnotacoes: f.get('bancoAnotacoes').trim(),
       areaInteresse: f.get('areaInteresse').trim(),
       avaliacaoComportamental: candidato.avaliacaoComportamental || null,
@@ -8592,7 +8606,16 @@ function onGlobalClick(e){
   }
   if(action === 'novo-candidato'){ modalCandidato(null, state.candCargoId || ''); return; }
   if(action === 'novo-candidato-banco'){ modalCandidato(null, '', true); return; }
-  if(action === 'editar-candidato'){ modalCandidato(db.candidatos.find(c=>c.id===id)); return; }
+  if(action === 'editar-candidato'){
+    const candidatoAberto = db.candidatos.find(c=>c.id===id);
+    if(candidatoAberto && !candidatoAberto.visualizadoPeloRH){
+      candidatoAberto.visualizadoPeloRH = true;
+      saveDB();
+      renderView();
+    }
+    modalCandidato(candidatoAberto);
+    return;
+  }
   if(action === 'avancar-etapa'){ avancarProximaEtapa(id); return; }
   if(action === 'lote-avancar'){
     let n=0;
