@@ -6337,7 +6337,7 @@ function renderPortalShell(){
       <div style="background:var(--spine);padding:18px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
         <div style="display:flex;align-items:center;gap:12px;">
           <img src="data:image/png;base64,${LOGO_COLORIDO_B64}" style="height:30px;">
-          <div style="color:#fff;">
+          <div style="color:var(--spine-text);">
             <div style="font-weight:600;font-size:14px;">${esc(cliente.nome)}</div>
             <div style="font-size:11px;opacity:.7;">Portal do Cliente</div>
           </div>
@@ -9570,6 +9570,10 @@ function onGlobalClick(e){
           <tr><td>Respostas de Pesquisas Rápidas</td><td style="text-align:right;">${c.respostasPesquisaRapida}</td></tr>
           <tr><td>Denúncias</td><td style="text-align:right;">${c.denuncias}</td></tr>
           <tr><td>Diagnósticos de Cultura</td><td style="text-align:right;">${c.diagnosticosCultura}</td></tr>
+          <tr><td>Férias gozadas registradas</td><td style="text-align:right;">${c.feriasGozadas}</td></tr>
+          <tr><td>Mudanças de cargo registradas</td><td style="text-align:right;">${c.historicoFuncao}</td></tr>
+          <tr><td>Candidatos com análise por IA</td><td style="text-align:right;">${c.candidatosComAnaliseIA} (${c.tamanhoTextoAvaliacaoIA_KB} KB de texto)</td></tr>
+          <tr><td>Candidatos com parecer por IA</td><td style="text-align:right;">${c.candidatosComParecerIA} (${c.tamanhoTextoParecerIA_KB} KB de texto)</td></tr>
         </tbody></table>
         <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div></div>
       `);
