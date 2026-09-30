@@ -55,7 +55,7 @@
   .brand img{max-width:132px;width:100%;height:auto;display:block;margin:0 auto 10px auto;}
   .brand .app-title{font-family:var(--sans);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--spine-text-soft);font-weight:600;}
   .nav{display:flex;flex-direction:column;gap:2px;}
-  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:4px;color:var(--spine-text-soft);cursor:pointer;font-weight:500;border-left:3px solid transparent;font-size:14px;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:4px;color:var(--spine-text-soft);cursor:pointer;font-weight:500;border-left:3px solid transparent;font-size:14px;transition:background-color .15s ease, color .15s ease, border-color .15s ease;}
   .nav-section-label{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--spine-text-soft);opacity:.6;padding:14px 12px 4px 12px;}
   .nav-item-expansivel{justify-content:space-between;}
   .nav-seta{margin-left:auto;font-size:11px;opacity:.7;}
@@ -108,7 +108,9 @@
   .filters-row select,.filters-row input[type=search]{padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-family:var(--sans);font-size:13.5px;background:#fff;color:var(--ink);}
 
   /* Buttons */
-  .btn{font-family:var(--sans);font-weight:600;font-size:13.5px;padding:9px 15px;border-radius:4px;border:1px solid transparent;cursor:pointer;display:inline-flex;align-items:center;gap:6px;line-height:1;}
+  .btn{font-family:var(--sans);font-weight:600;font-size:13.5px;padding:9px 15px;border-radius:4px;border:1px solid transparent;cursor:pointer;display:inline-flex;align-items:center;gap:6px;line-height:1;transition:transform .12s ease, box-shadow .12s ease, background-color .12s ease, border-color .12s ease, opacity .12s ease;}
+  .btn:hover{transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
   .btn-primary{background:var(--accent);color:#fff;}
   .btn-primary:hover{background:#8F4530;}
   .btn-secondary{background:#fff;color:var(--ink);border:1px solid var(--border);}
@@ -121,7 +123,7 @@
   .btn[disabled]{opacity:.5;cursor:not-allowed;}
 
   /* Cards */
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:box-shadow .15s ease, transform .15s ease;}
   .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-bottom:22px;}
   .agenda-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
   .agenda-dow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);text-align:center;padding-bottom:4px;}
@@ -173,8 +175,15 @@
   .badge-gray{background:var(--gray-soft);color:var(--gray);border:1px solid var(--border);}
 
   /* Modal */
-  .modal-overlay{position:fixed;inset:0;background:rgba(43,24,16,.6);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;z-index:100;}
-  .modal{background:#fff;border-radius:8px;max-width:760px;width:100%;padding:26px 28px 28px 28px;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(43,24,16,.6);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;z-index:100;animation:overlayFadeIn .18s ease;}
+  .modal{background:#fff;border-radius:8px;max-width:760px;width:100%;padding:26px 28px 28px 28px;animation:modalPopIn .2s cubic-bezier(.2,.8,.3,1);}
+  @keyframes overlayFadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes modalPopIn{from{opacity:0;transform:translateY(8px) scale(.98);}to{opacity:1;transform:translateY(0) scale(1);}}
+  @keyframes viewFadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  #view.view-animar{animation:viewFadeIn .22s ease;}
+  @media (prefers-reduced-motion: reduce){
+    .modal-overlay, .modal, #view.view-animar{animation:none;}
+  }
   .modal h2{font-size:19px;margin-bottom:2px;}
   .modal .modal-sub{color:var(--ink-soft);font-size:13px;margin-bottom:18px;}
   .modal-close{float:right;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);line-height:1;}
@@ -556,6 +565,11 @@ function dataMaisDias(dataISO, dias){
   d.setDate(d.getDate() + dias);
   return d.toISOString().slice(0,10);
 }
+function dataMaisMeses(dataISO, meses){
+  const [y,m,d] = dataISO.split('-').map(Number);
+  const data = new Date(Date.UTC(y, (m-1)+meses, d));
+  return data.toISOString().slice(0,10);
+}
 function prazosExperiencia(colaborador){
   if(!colaborador.dataAdmissao) return null;
   const dias1 = parseInt(colaborador.duracaoExperiencia1, 10) || 45;
@@ -591,7 +605,61 @@ function colaboradoresComExperienciaVencendo(clienteIdFiltro){
   });
   return resultado.sort((a,b)=>a.dias-b.dias);
 }
+const LIMITE_DIAS_ALERTA_FERIAS = 60; // avisa com essa antecedência do fim do período concessivo (prazo legal p/ conceder)
+function statusFeriasColaborador(colaborador){
+  if(!colaborador.dataAdmissao) return { periodos: [] };
+  const hoje = todayISO();
+  const feriasGozadas = (colaborador.feriasGozadas||[]).slice().sort((a,b)=>a.dataInicio.localeCompare(b.dataInicio));
+  const dataLimite = colaborador.dataDesligamento || hoje;
+
+  const periodos = [];
+  for(let n=0; n<60; n++){
+    const inicioPA = dataMaisMeses(colaborador.dataAdmissao, n*12);
+    if(inicioPA > dataLimite) break;
+    const fimPA = dataMaisMeses(colaborador.dataAdmissao, (n+1)*12);
+    const fimConcessivo = dataMaisMeses(colaborador.dataAdmissao, (n+2)*12);
+    periodos.push({ numero:n+1, inicioPA, fimPA, fimConcessivo, completo: fimPA<=hoje });
+  }
+
+  let idxFerias = 0;
+  periodos.forEach(p=>{
+    if(!p.completo){ p.status='em_andamento'; return; }
+    if(idxFerias < feriasGozadas.length){
+      p.gozada = feriasGozadas[idxFerias];
+      idxFerias++;
+      p.status = 'gozada';
+    } else {
+      const diasParaVencer = daysBetween(hoje, p.fimConcessivo);
+      if(diasParaVencer < 0) p.status = 'vencida';
+      else if(diasParaVencer <= LIMITE_DIAS_ALERTA_FERIAS) p.status = 'vencendo';
+      else p.status = 'pendente';
+      p.diasParaVencer = diasParaVencer;
+    }
+  });
+
+  return { periodos, feriasSemPeriodo: feriasGozadas.slice(idxFerias) };
+}
+
+function colaboradoresComFeriasVencendo(clienteIdFiltro){
+  const resultado = [];
+  db.colaboradores.forEach(c=>{
+    if(statusColaborador(c)==='desligado') return;
+    const cliente = getCliente(c.clienteId);
+    if(!cliente || cliente.tipoServico!=='bpo') return;
+    if(clienteIdFiltro && c.clienteId!==clienteIdFiltro) return;
+    const st = statusFeriasColaborador(c);
+    st.periodos.forEach(p=>{
+      if(p.status==='vencendo' || p.status==='vencida'){
+        resultado.push({ colaborador:c, periodo:p });
+      }
+    });
+  });
+  return resultado.sort((a,b)=> (a.periodo.diasParaVencer??-9999) - (b.periodo.diasParaVencer??-9999));
+}
+
 function colaboradoresDoCliente(clienteId){ return db.colaboradores.filter(c=>c.clienteId===clienteId); }
+
+
 function funcoesDoCliente(clienteId){ return db.funcoes.filter(f=>f.clienteId===clienteId); }
 function getFuncao(id){ return db.funcoes.find(f=>f.id===id); }
 function getColaborador(id){ return db.colaboradores.find(c=>c.id===id); }
@@ -944,6 +1012,13 @@ function garantirConfiguracoes(){
   if(!Array.isArray(db.colaboradores)) db.colaboradores = [];
   if(!Array.isArray(db.candidatos)) db.candidatos = [];
   db.candidatos.forEach(c=>{ if(c.visualizadoPeloRH===undefined) c.visualizadoPeloRH = true; });
+  db.colaboradores.forEach(c=>{
+    if(!Array.isArray(c.feriasGozadas)) c.feriasGozadas = [];
+    if(!Array.isArray(c.historicoFuncao)) c.historicoFuncao = [];
+    if(c.historicoFuncao.length===0 && c.funcaoId && c.dataAdmissao){
+      c.historicoFuncao.push({ id:uid('hf'), funcaoId:c.funcaoId, dataInicio:c.dataAdmissao, tipo:'Admissão', observacao:'' });
+    }
+  });
   if(!Array.isArray(db.funcoes)) db.funcoes = [];
   if(!Array.isArray(db.descritivosCargo)) db.descritivosCargo = [];
   if(!Array.isArray(db.mensalidadesBPO)) db.mensalidadesBPO = [];
@@ -1276,16 +1351,55 @@ function renderView(){
   else if(state.tab === 'cultura') view.innerHTML = viewCulturaStandalone();
   else if(state.tab === 'rapidas') view.innerHTML = viewPesquisasRapidasAdmin();
   else if(state.tab === 'propostaComercial') view.innerHTML = viewPropostaComercial();
+  else if(state.tab === 'parecerCandidato') view.innerHTML = viewParecerCandidato();
   else if(state.tab === 'relatorio') view.innerHTML = viewRelatorio();
+  view.classList.remove('view-animar');
+  void view.offsetWidth; // força o navegador a recalcular, pra animação tocar de novo a cada troca
+  view.classList.add('view-animar');
   afterRenderView();
 }
 
 function afterRenderView(){
+  if(state.tab === 'dashboard'){
+    requestAnimationFrame(()=>{ requestAnimationFrame(drawDashboardSparklines); });
+  }
   if(state.tab === 'indicadores'){
     requestAnimationFrame(()=>{ requestAnimationFrame(drawIndicadoresCharts); });
   }
   if(state.tab === 'clima'){
     requestAnimationFrame(()=>{ requestAnimationFrame(drawClimaCharts); });
+  }
+}
+
+function drawDashboardSparklines(){
+  if(!window.Chart) return;
+  const tendencia = calcularTendenciaDashboard(state.dashClienteId || '', 6);
+  const labels = tendencia.map(t=>formatMesRef(t.mes));
+  const estiloSparkline = {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, datalabels:{display:true, align:'top', color:'#6B5645', font:{weight:'600', size:10}} },
+    scales:{ x:{display:false}, y:{display:false, beginAtZero:true} },
+    elements:{ point:{radius:3, hoverRadius:5} }
+  };
+
+  const ctxVagas = document.getElementById('chart-sparkline-vagas');
+  destruirChartIndicador('chart-sparkline-vagas');
+  if(ctxVagas){
+    chartsIndicadores['chart-sparkline-vagas'] = new Chart(ctxVagas, {
+      type:'line',
+      data:{ labels, datasets:[{ data: tendencia.map(t=>t.vagasAbertas), borderColor:'#A5533D', backgroundColor:'rgba(165,83,61,0.12)', fill:true, tension:0.35 }] },
+      options: estiloSparkline
+    });
+  }
+
+  const ctxCand = document.getElementById('chart-sparkline-candidatos');
+  destruirChartIndicador('chart-sparkline-candidatos');
+  if(ctxCand){
+    chartsIndicadores['chart-sparkline-candidatos'] = new Chart(ctxCand, {
+      type:'line',
+      data:{ labels, datasets:[{ data: tendencia.map(t=>t.candidatosRecebidos), borderColor:'#4C8C6B', backgroundColor:'rgba(76,140,107,0.12)', fill:true, tension:0.35 }] },
+      options: estiloSparkline
+    });
   }
 }
 
@@ -1538,7 +1652,15 @@ function calcularAlertasAtencao(clienteIdFiltro){
       return { id:'exp-'+e.colaborador.id+'-'+e.periodo, titulo: e.colaborador.nome+' — '+etapaLabel+' ('+e.diasTotais+' dias)', sub: (cl?.nome||'')+' · '+situacao+' ('+formatDate(e.data)+')', dataAction:'abrir-avaliacao-experiencia', dataId:e.colaborador.id, dataPeriodo:e.periodo };
     });
 
-  return { vagasParadas, candidatosParados, experienciaVencendo };
+  const feriasVencendo = colaboradoresComFeriasVencendo(clienteIdFiltro || null)
+    .map(e=>{
+      const cl = getCliente(e.colaborador.clienteId);
+      const dias = e.periodo.diasParaVencer;
+      const situacao = dias<0 ? 'venceu há '+Math.abs(dias)+' dia(s) — risco de pagamento em dobro' : dias===0 ? 'vence hoje' : 'vence em '+dias+' dia(s)';
+      return { id:'ferias-'+e.colaborador.id+'-'+e.periodo.numero, titulo: e.colaborador.nome+' — '+e.periodo.numero+'º período aquisitivo', sub: (cl?.nome||'')+' · '+situacao+' (prazo: '+formatDate(e.periodo.fimConcessivo)+')', dataAction:'abrir-prontuario-alerta', dataId:e.colaborador.id };
+    });
+
+  return { vagasParadas, candidatosParados, experienciaVencendo, feriasVencendo };
 }
 
 function renderPainelAtencao(alertas, lidos, acaoLido){
@@ -1546,7 +1668,8 @@ function renderPainelAtencao(alertas, lidos, acaoLido){
   const vagasParadas = alertas.vagasParadas.filter(naoLido);
   const candidatosParados = alertas.candidatosParados.filter(naoLido);
   const experienciaVencendo = alertas.experienciaVencendo.filter(naoLido);
-  const total = vagasParadas.length + candidatosParados.length + experienciaVencendo.length;
+  const feriasVencendo = (alertas.feriasVencendo||[]).filter(naoLido);
+  const total = vagasParadas.length + candidatosParados.length + experienciaVencendo.length + feriasVencendo.length;
   if(total === 0) return '';
 
   function linhaItem(item){
@@ -1572,9 +1695,14 @@ function renderPainelAtencao(alertas, lidos, acaoLido){
         ${candidatosParados.map(linhaItem).join('')}
       </div>` : ''}
       ${experienciaVencendo.length ? `
-      <div>
+      <div style="margin-bottom:14px;">
         <div class="hint" style="margin-bottom:6px;font-weight:600;">Período de experiência vencendo ou vencido (${experienciaVencendo.length})</div>
         ${experienciaVencendo.map(linhaItem).join('')}
+      </div>` : ''}
+      ${feriasVencendo.length ? `
+      <div>
+        <div class="hint" style="margin-bottom:6px;font-weight:600;">Férias vencendo ou vencidas — prazo legal de concessão (${feriasVencendo.length})</div>
+        ${feriasVencendo.map(linhaItem).join('')}
       </div>` : ''}
     </div>`;
 }
@@ -1653,6 +1781,10 @@ function viewDashboard(){
     </div>
 
     ${painelAtencao}
+    <div class="charts-row" style="margin-bottom:18px;">
+      <div class="card chart-card" style="padding:14px 16px;"><h3 style="font-size:13px;margin-bottom:6px;color:var(--ink-soft);">Vagas abertas — últimos 6 meses</h3><div class="chart-wrap" style="height:90px;"><canvas id="chart-sparkline-vagas"></canvas></div></div>
+      <div class="card chart-card" style="padding:14px 16px;"><h3 style="font-size:13px;margin-bottom:6px;color:var(--ink-soft);">Candidatos recebidos — últimos 6 meses</h3><div class="chart-wrap" style="height:90px;"><canvas id="chart-sparkline-candidatos"></canvas></div></div>
+    </div>
     <div class="kpi-grid">
       <div class="kpi"><div class="label">Vagas abertas</div><div class="value">${vagasAbertas}</div><div class="sub">de ${vagasFiltradas.length} no escopo</div></div>
       <div class="kpi c-amber"><div class="label">Currículos recebidos</div><div class="value">${recebidosTotal}</div><div class="sub">${m.recebidos} cadastrado(s) como candidato</div></div>
@@ -1771,7 +1903,7 @@ function viewCandidatos(){
     const cl = getCliente(c.clienteId);
     return `<tr>
       <td class="no-print"><input type="checkbox" class="chk-candidato" data-id="${c.id}" ${state.candidatosSelecionados.has(c.id)?'checked':''}></td>
-      <td><strong>${esc(c.nome)}</strong>${c.sinalizadoIA?' <span class="badge badge-red" title="'+esc(c.avaliacaoIA?c.avaliacaoIA.justificativa:'')+'">🤖 sinalizado</span>':''}<div class="hint">${esc(c.telefone||'')}${c.telefone&&c.email?' · ':''}${esc(c.email||'')}${(c.temCurriculo||c.curriculoUrl)?' · 📎 currículo':''}${c.bancoDeCurriculos?' · 🗂 banco':''}</div></td>
+      <td><strong>${esc(c.nome)}</strong>${(c.avaliacaoIA && c.avaliacaoIA.matchScore!==null && c.avaliacaoIA.matchScore!==undefined)?' <span class="badge '+(c.avaliacaoIA.matchScore>=80?'badge-green':(c.avaliacaoIA.matchScore>=50?'badge-amber':'badge-red'))+'" title="Compatibilidade com a vaga">'+c.avaliacaoIA.matchScore+'% match</span>':''}${c.sinalizadoIA?' <span class="badge badge-red" title="'+esc(c.avaliacaoIA?c.avaliacaoIA.justificativa:'')+'">🤖 sinalizado</span>':''}<div class="hint">${esc(c.telefone||'')}${c.telefone&&c.email?' · ':''}${esc(c.email||'')}${(c.temCurriculo||c.curriculoUrl)?' · 📎 currículo':''}${c.bancoDeCurriculos?' · 🗂 banco':''}</div></td>
       <td>${esc(cl?.nome||'—')}</td>
       <td>${esc(cg?.titulo||'—')}</td>
       <td>${formatDate(c.dataRecebimento)}</td>
@@ -1830,11 +1962,13 @@ function viewCandidatos(){
       const candidatosDaVaga = db.candidatos.filter(c=>c.cargoId===vagaSelecionada.id);
       const pendentes = candidatosDaVaga.filter(c=>c.curriculoUrl && !c.avaliacaoIA).length;
       const sinalizadosAtuais = candidatosDaVaga.filter(c=>c.sinalizadoIA).length;
+      const comScore = candidatosDaVaga.filter(c=>c.avaliacaoIA && c.avaliacaoIA.matchScore!==null && c.avaliacaoIA.matchScore!==undefined).length;
       return `<div class="card" style="margin-bottom:14px;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span>🤖 Critério obrigatório desta vaga: <em>${esc(vagaSelecionada.criterioObrigatorioIA)}</em></span>
         <span class="btn btn-secondary btn-sm" data-action="analisar-candidatos-ia" data-cargo-id="${vagaSelecionada.id}" ${pendentes===0?'style="opacity:.6;"':''}>
           ${pendentes>0 ? 'Analisar '+pendentes+' currículo(s) com IA' : 'Nenhum currículo pendente de análise'}
         </span>
+        ${comScore>0 ? '<span class="btn btn-primary btn-sm" data-action="ver-shortlist" data-cargo-id="'+vagaSelecionada.id+'">🏆 Ver Shortlist</span>' : ''}
         ${sinalizadosAtuais>0 ? '<span class="hint">⚠️ '+sinalizadosAtuais+' sinalizado(s) atualmente</span>' : ''}
       </div>`;
     })()}
@@ -2627,6 +2761,23 @@ function viewAbsenteismo(cliente){
   `;
 }
 
+function calcularTendenciaDashboard(clienteId, numMeses){
+  const mesFimRef = todayISO().slice(0,7);
+  const mesIniRef = dataMaisMeses(mesFimRef+'-01', -(numMeses-1)).slice(0,7);
+  const meses = mesesEntre(mesIniRef, mesFimRef);
+  const cargosBase = clienteId ? cargosDoCliente(clienteId) : db.cargos;
+  const candidatosBase = clienteId ? db.candidatos.filter(c=>c.clienteId===clienteId) : db.candidatos;
+
+  return meses.map(mm=>{
+    const de = primeiroDiaDoMes(mm), ate = ultimoDiaDoMes(mm);
+    return {
+      mes: mm,
+      vagasAbertas: cargosBase.filter(v=>v.dataAbertura && v.dataAbertura>=de && v.dataAbertura<=ate).length,
+      candidatosRecebidos: candidatosBase.filter(c=>c.dataRecebimento && c.dataRecebimento>=de && c.dataRecebimento<=ate).length
+    };
+  });
+}
+
 function calcularHistoricoMensalCompleto(clienteId, mesIni, mesFim){
   const meses = mesesEntre(mesIni, mesFim);
   const cargos = cargosDoCliente(clienteId);
@@ -3302,6 +3453,39 @@ function viewIndicadores(){
       <div class="card chart-card"><h3>Admissões x Desligamentos por mês</h3><div class="chart-wrap"><canvas id="chart-admdes-ind"></canvas></div></div>
     </div>
     <div class="card chart-card" style="margin-bottom:22px;"><h3>Horas-homem de treinamento por mês</h3><div class="chart-wrap"><canvas id="chart-hht-ind"></canvas></div></div>
+
+    ${(()=>{
+      const td = calcularTiposDesligamento(cliente.id, mesIni, mesFim);
+      if(td.total===0) return '';
+      return `
+      <div class="section-title" style="margin:18px 0 10px 0;">Tipos de Desligamento</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:12px;">${td.total} desligamento(s) no período.</p>
+      <div class="kpi-grid" style="margin-bottom:16px;">
+        <div class="kpi c-red"><div class="label">Involuntário</div><div class="value">${td.pctInvoluntario!==null?td.pctInvoluntario+'%':'—'}</div><div class="sub">${td.involuntario} de ${td.voluntario+td.involuntario} classificado(s)</div></div>
+        <div class="kpi c-green"><div class="label">Voluntário</div><div class="value">${td.pctVoluntario!==null?td.pctVoluntario+'%':'—'}</div><div class="sub">${td.voluntario} de ${td.voluntario+td.involuntario} classificado(s)</div></div>
+        ${td.outro>0 ? `<div class="kpi"><div class="label">Outro motivo</div><div class="value">${td.outro}</div><div class="sub">acordo, fim de contrato, aposentadoria, etc.</div></div>` : ''}
+      </div>
+      <div class="card chart-card" style="margin-bottom:22px;"><h3>Desligamentos por tipo</h3><div class="chart-wrap"><canvas id="chart-tipos-desligamento-ind"></canvas></div></div>
+      `;
+    })()}
+
+    ${(()=>{
+      const rd = calcularResultadoPesquisaDesligamento(cliente.id, mesIni, mesFim);
+      if(rd.totalRespostas===0) return '';
+      return `
+      <div class="section-title" style="margin:18px 0 10px 0;">Pesquisa de Desligamento</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:12px;">Baseado em ${rd.totalRespostas} pesquisa(s) respondida(s) no período.</p>
+      <div class="kpi-grid" style="margin-bottom:16px;">
+        <div class="kpi ${rd.nps.score>=50?'c-green':(rd.nps.score>=0?'c-amber':'c-red')}"><div class="label">NPS de Desligamento</div><div class="value" style="font-size:28px;">${rd.nps.score}</div><div class="sub">${rd.nps.promotores} promotor(es) · ${rd.nps.neutros} neutro(s) · ${rd.nps.detratores} detrator(es)</div></div>
+        <div class="kpi"><div class="label">Relacionamento com gestor(a)</div><div class="value">${rd.mediaGestor || '—'}</div><div class="sub">média de 0 a 5</div></div>
+        <div class="kpi"><div class="label">Sentiram oportunidade de crescimento</div><div class="value">${rd.pctCrescimento!==null?rd.pctCrescimento+'%':'—'}</div></div>
+        <div class="kpi"><div class="label">Expectativas atendidas</div><div class="value">${rd.pctExpectativas!==null?rd.pctExpectativas+'%':'—'}</div></div>
+        <div class="kpi"><div class="label">Se sentiram reconhecidos</div><div class="value">${rd.pctReconhecimento!==null?rd.pctReconhecimento+'%':'—'}</div></div>
+      </div>
+      ${rd.motivos.length ? `<div class="card chart-card" style="margin-bottom:22px;"><h3>Motivos de saída mais comuns</h3><div class="chart-wrap"><canvas id="chart-motivos-desligamento-ind"></canvas></div></div>` : ''}
+      `;
+    })()}
+
     ${temMensalidades ? `<div class="card chart-card"><h3>Mensalidades BPO — recebido x pendente por mês</h3><div class="chart-wrap"><canvas id="chart-fatmens-ind"></canvas></div></div>` : ''}
     ` : ''}
   `;
@@ -3462,6 +3646,34 @@ function drawIndicadoresCharts(){
       });
     }
 
+    const ctxTiposDeslig = document.getElementById('chart-tipos-desligamento-ind');
+    destruirChartIndicador('chart-tipos-desligamento-ind');
+    if(ctxTiposDeslig){
+      const tdTipos = calcularTiposDesligamento(cliente.id, mesIni, mesFim).porTipo;
+      chartsIndicadores['chart-tipos-desligamento-ind'] = new Chart(ctxTiposDeslig, {
+        type: 'bar',
+        data: {
+          labels: tdTipos.map(t=>t[0]),
+          datasets: [{ label:'Desligamentos', data: tdTipos.map(t=>t[1]), backgroundColor:'#963A2C' }]
+        },
+        options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:true, anchor:'end', align:'right', color:'#3A2E22', font:{weight:'600', size:11}}}, scales:{x:{beginAtZero:true, ticks:{precision:0}}} }
+      });
+    }
+
+    const ctxMotivosDeslig = document.getElementById('chart-motivos-desligamento-ind');
+    destruirChartIndicador('chart-motivos-desligamento-ind');
+    if(ctxMotivosDeslig){
+      const rdMotivos = calcularResultadoPesquisaDesligamento(cliente.id, mesIni, mesFim).motivos;
+      chartsIndicadores['chart-motivos-desligamento-ind'] = new Chart(ctxMotivosDeslig, {
+        type: 'bar',
+        data: {
+          labels: rdMotivos.map(m=>m[0]),
+          datasets: [{ label:'Respostas', data: rdMotivos.map(m=>m[1]), backgroundColor:'#B2573D' }]
+        },
+        options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels:{display:true, anchor:'end', align:'right', color:'#3A2E22', font:{weight:'600', size:11}}}, scales:{x:{beginAtZero:true, ticks:{precision:0}}} }
+      });
+    }
+
     const ctxFat = document.getElementById('chart-fatmens-ind');
     destruirChartIndicador('chart-fatmens-ind');
     if(ctxFat){
@@ -3589,6 +3801,12 @@ function ehHashPortalVagas(){
 
 function ehHashBancoCurriculos(){
   return (window.location.hash || '') === '#banco-curriculos';
+}
+
+function getHashDesligamentoToken(){
+  const h = window.location.hash || '';
+  const m = h.match(/^#desligamento-(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
 }
 
 function getHashAvaliacaoId(){
@@ -3783,6 +4001,17 @@ const STATUS_DENUNCIA = {
   concluida: {nome:'Concluída', cor:'badge-green'}
 };
 
+const PERGUNTAS_PESQUISA_DESLIGAMENTO = [
+  { chave:'motivo', texto:'Qual foi o principal motivo da sua saída?', tipo:'escolha', opcoes:['Nova oportunidade de trabalho','Salário ou benefícios','Relacionamento com o(a) gestor(a)','Ambiente ou clima de trabalho','Falta de oportunidade de crescimento','Questões pessoais ou familiares','Carga ou condições de trabalho','Outro motivo'] },
+  { chave:'nps', texto:'De 0 a 10, o quanto você recomendaria esta empresa como um bom lugar para trabalhar?', tipo:'nps' },
+  { chave:'gestor', texto:'Como você avalia seu relacionamento com seu(sua) gestor(a) direto(a)?', tipo:'escala' },
+  { chave:'crescimento', texto:'Você sentiu que teve oportunidades claras de crescimento na empresa?', tipo:'simnao' },
+  { chave:'expectativas', texto:'Suas expectativas em relação à função foram atendidas?', tipo:'simnao' },
+  { chave:'reconhecimento', texto:'Você se sentiu reconhecido(a) pelo seu trabalho?', tipo:'simnao' },
+  { chave:'oQuePoderiaSerDiferente', texto:'O que a empresa poderia ter feito diferente para que você permanecesse?', tipo:'texto' },
+  { chave:'mensagemFinal', texto:'Deixe uma mensagem final, sugestão ou feedback (opcional).', tipo:'texto' }
+];
+
 const GRUPOS_PESQUISA_CLIMA = [
   {chave:'percepcaoGeral', nome:'Percepção Geral da Empresa', perguntas:[
     {chave:'boaEmpresa', texto:'Considero esta uma boa empresa para trabalhar'},
@@ -3824,6 +4053,71 @@ const GRUPOS_PESQUISA_CLIMA = [
 
 function linkPesquisaClima(clienteId){
   return window.location.origin + window.location.pathname + '#clima-' + clienteId;
+}
+
+
+function calcularTiposDesligamento(clienteId, mesIni, mesFim){
+  const de = primeiroDiaDoMes(mesIni), ate = ultimoDiaDoMes(mesFim);
+  const desligados = colaboradoresDoCliente(clienteId).filter(c=>
+    c.dataDesligamento && c.dataDesligamento >= de && c.dataDesligamento <= ate
+  );
+
+  let voluntario = 0, involuntario = 0, outro = 0;
+  const porTipo = {};
+  desligados.forEach(c=>{
+    const tipo = c.tipoDesligamento || 'Não informado';
+    porTipo[tipo] = (porTipo[tipo]||0) + 1;
+    const classe = CLASSIFICACAO_TIPO_DESLIGAMENTO[c.tipoDesligamento];
+    if(classe==='voluntario') voluntario++;
+    else if(classe==='involuntario') involuntario++;
+    else outro++;
+  });
+
+  const classificados = voluntario + involuntario; // "outro" fica de fora do percentual, por não ser turnover clássico
+  return {
+    total: desligados.length,
+    voluntario, involuntario, outro,
+    pctVoluntario: classificados? Math.round((voluntario/classificados)*1000)/10 : null,
+    pctInvoluntario: classificados? Math.round((involuntario/classificados)*1000)/10 : null,
+    porTipo: Object.entries(porTipo).sort((a,b)=>b[1]-a[1])
+  };
+}
+
+function calcularResultadoPesquisaDesligamento(clienteId, mesIni, mesFim){
+  const de = primeiroDiaDoMes(mesIni), ate = ultimoDiaDoMes(mesFim);
+  const comResposta = colaboradoresDoCliente(clienteId).filter(c=>
+    c.pesquisaDesligamento && c.pesquisaDesligamento.respondida &&
+    c.pesquisaDesligamento.dataResposta >= de && c.pesquisaDesligamento.dataResposta <= ate
+  );
+
+  let promotores=0, neutros=0, detratores=0, itensNps=0;
+  let somaGestor=0, itensGestor=0;
+  let simCrescimento=0, naoCrescimento=0, simExpectativas=0, naoExpectativas=0, simReconhecimento=0, naoReconhecimento=0;
+  const motivosContagem = {};
+
+  comResposta.forEach(c=>{
+    const r = c.pesquisaDesligamento.respostas || {};
+    const nps = parseFloat(r.nps);
+    if(!isNaN(nps)){ itensNps++; if(nps>=9) promotores++; else if(nps>=7) neutros++; else detratores++; }
+    const gestor = parseFloat(r.gestor);
+    if(!isNaN(gestor)){ itensGestor++; somaGestor += gestor; }
+    if(r.crescimento==='sim') simCrescimento++; else if(r.crescimento==='nao') naoCrescimento++;
+    if(r.expectativas==='sim') simExpectativas++; else if(r.expectativas==='nao') naoExpectativas++;
+    if(r.reconhecimento==='sim') simReconhecimento++; else if(r.reconhecimento==='nao') naoReconhecimento++;
+    if(r.motivo) motivosContagem[r.motivo] = (motivosContagem[r.motivo]||0) + 1;
+  });
+
+  const totalCrescimento = simCrescimento+naoCrescimento, totalExpectativas = simExpectativas+naoExpectativas, totalReconhecimento = simReconhecimento+naoReconhecimento;
+
+  return {
+    totalRespostas: comResposta.length,
+    nps: { score: itensNps? Math.round(((promotores-detratores)/itensNps)*1000)/10 : 0, promotores, neutros, detratores, total: itensNps },
+    mediaGestor: itensGestor? Math.round((somaGestor/itensGestor)*10)/10 : 0,
+    pctCrescimento: totalCrescimento? Math.round((simCrescimento/totalCrescimento)*1000)/10 : null,
+    pctExpectativas: totalExpectativas? Math.round((simExpectativas/totalExpectativas)*1000)/10 : null,
+    pctReconhecimento: totalReconhecimento? Math.round((simReconhecimento/totalReconhecimento)*1000)/10 : null,
+    motivos: Object.entries(motivosContagem).sort((a,b)=>b[1]-a[1])
+  };
 }
 
 function calcularResultadoPesquisaClima(clienteId, areaFiltro){
@@ -4352,6 +4646,115 @@ function modalMensagemAutomatica(candidato, statusNovo){
   });
 }
 
+async function renderPesquisaDesligamentoPublica(token){
+  document.title = 'Pesquisa de Desligamento · Caroline Peixoto DHO';
+  document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando…</div></div><div id="toast-slot"></div>';
+  const root = document.getElementById('public-root');
+
+  if(!appsScriptConfigurado()){
+    root.innerHTML = paginaPublicaIndisponivel('A integração desta página ainda não foi concluída por quem administra o painel.');
+    return;
+  }
+
+  let info;
+  try{
+    info = await chamarAppsScriptGet('action=pesquisaDesligamentoInfo&token=' + encodeURIComponent(token));
+  }catch(err){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Não foi possível carregar</h2>
+      <p class="hint" style="margin-bottom:16px;">${esc(err.message || 'Ocorreu um erro ao carregar a pesquisa.')}</p>
+      <span class="btn btn-primary" id="btn-tentar-novamente-pd">Tentar novamente</span>
+    </div>`;
+    const btn = document.getElementById('btn-tentar-novamente-pd');
+    if(btn) btn.addEventListener('click', ()=> renderPesquisaDesligamentoPublica(token));
+    return;
+  }
+
+  if(!info || !info.ok){
+    root.innerHTML = paginaPublicaIndisponivel('Não encontramos esta pesquisa. Confira o link recebido.');
+    return;
+  }
+
+  if(info.jaRespondeu){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Pesquisa já respondida</h2>
+      <p class="hint">Obrigado, ${esc(info.nome.split(' ')[0])}! Identificamos que você já respondeu esta pesquisa anteriormente.</p>
+    </div>`;
+    return;
+  }
+
+  const primeiroNome = info.nome.split(' ')[0];
+
+  root.innerHTML = `
+    <div class="card" style="max-width:680px;margin:32px auto;padding:0;overflow:hidden;">
+      <div style="background:var(--spine);padding:26px 32px;text-align:center;">
+        <img src="data:image/png;base64,${LOGO_COLORIDO_B64}" alt="Caroline Peixoto DHO" style="max-width:260px;width:100%;height:auto;display:inline-block;">
+      </div>
+      <div style="padding:32px;">
+        <h1 style="font-size:22px;margin-bottom:6px;">Pesquisa de Desligamento</h1>
+        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 22px 0;">Olá, ${esc(primeiroNome)}. Sua opinião é muito importante para ${esc(info.clienteNome||'a empresa')} continuar melhorando. Leva menos de 2 minutos, e suas respostas serão tratadas com toda a confidencialidade possível.</p>
+
+        <form id="form-pd">
+          ${PERGUNTAS_PESQUISA_DESLIGAMENTO.map(p=>{
+            if(p.tipo==='escolha'){
+              return `<div style="margin-bottom:20px;"><p style="font-size:14px;margin:0 0 8px 0;font-weight:600;">${esc(p.texto)}</p>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  ${p.opcoes.map((o,i)=>`<label style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:400;"><input type="radio" name="p_${p.chave}" value="${esc(o)}" ${i===0?'required':''}>${esc(o)}</label>`).join('')}
+                </div></div>`;
+            }
+            if(p.tipo==='simnao'){
+              return `<div style="margin-bottom:18px;"><p style="font-size:14px;margin:0 0 8px 0;font-weight:600;">${esc(p.texto)}</p>
+                <div style="display:flex;gap:18px;">
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:400;"><input type="radio" name="p_${p.chave}" value="sim" required>Sim</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:400;"><input type="radio" name="p_${p.chave}" value="nao">Não</label>
+                </div></div>`;
+            }
+            if(p.tipo==='escala' || p.tipo==='nps'){
+              const max = p.tipo==='nps' ? 10 : 5;
+              const legenda = p.tipo==='nps' ? '0 = nunca recomendaria · 10 = recomendaria com certeza' : '1 = muito ruim · 5 = muito bom';
+              return `<div style="margin-bottom:20px;"><p style="font-size:14px;margin:0 0 4px 0;font-weight:600;">${esc(p.texto)}</p>
+                <p class="hint" style="margin:0 0 8px 0;">${legenda}</p>
+                <div style="display:flex;gap:${p.tipo==='nps'?'4px':'14px'};align-items:center;flex-wrap:wrap;">
+                  ${Array.from({length:max+1},(_,n)=>n).map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;font-weight:400;">
+                    <input type="radio" name="p_${p.chave}" value="${n}" required>${n}
+                  </label>`).join('')}
+                </div></div>`;
+            }
+            // texto
+            return `<div style="margin-bottom:20px;"><label style="font-size:14px;font-weight:600;">${esc(p.texto)}</label><textarea name="p_${p.chave}" style="min-height:80px;margin-top:6px;"></textarea></div>`;
+          }).join('')}
+
+          <p class="hint" id="erro-pd" style="color:var(--red);display:none;"></p>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;" id="btn-enviar-pd">Enviar respostas</button>
+        </form>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--ink-soft);font-size:12px;margin-top:16px;">Caroline Peixoto DHO · Desenvolvimento Humano e Organizacional</p>
+  `;
+
+  document.getElementById('form-pd').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-pd');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const respostas = {};
+    PERGUNTAS_PESQUISA_DESLIGAMENTO.forEach(p=>{ respostas[p.chave] = f.get('p_'+p.chave) || ''; });
+    const btn = document.getElementById('btn-enviar-pd');
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try{
+      await chamarAppsScriptPost('salvarRespostaPesquisaDesligamento', {token: token, respostas: respostas});
+      root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+        <h2 style="margin-bottom:10px;">Obrigado, ${esc(primeiroNome)}!</h2>
+        <p class="hint">Suas respostas foram registradas. Desejamos sucesso na sua próxima jornada.</p>
+      </div>`;
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível enviar agora. Tente novamente.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Enviar respostas';
+    }
+  });
+}
+
 async function renderAvaliacaoComportamental(candidatoId){
   document.title = 'Avaliação Comportamental · Caroline Peixoto DHO';
   document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando sua avaliação… isso pode levar alguns segundos na primeira vez.</div></div><div id="toast-slot"></div>';
@@ -4529,6 +4932,7 @@ const TIPOS_DESLIGAMENTO = [
   'Demissão sem justa causa (pela empresa)',
   'Demissão com justa causa (pela empresa)',
   'Pedido de demissão (pelo colaborador)',
+  'Rescisão indireta (falha grave da empresa)',
   'Rescisão por acordo entre as partes',
   'Término de contrato de experiência',
   'Término de contrato por prazo determinado',
@@ -4538,6 +4942,15 @@ const TIPOS_DESLIGAMENTO = [
   'Redução de quadro / Reestruturação',
   'Outro'
 ];
+
+// Classificação usada só para o indicador de Voluntário x Involuntário. Tipos fora daqui (acordo, fim de
+// contrato, aposentadoria, falecimento, etc.) entram como "Outro motivo" — não são turnover no sentido clássico.
+const CLASSIFICACAO_TIPO_DESLIGAMENTO = {
+  'Demissão sem justa causa (pela empresa)': 'involuntario',
+  'Demissão com justa causa (pela empresa)': 'involuntario',
+  'Rescisão indireta (falha grave da empresa)': 'involuntario',
+  'Pedido de demissão (pelo colaborador)': 'voluntario'
+};
 
 const MOTIVOS_ALTERACAO_SALARIAL = ['Reajuste / Dissídio coletivo', 'Promoção', 'Mérito', 'Equiparação salarial', 'Mudança de função', 'Outro'];
 
@@ -4674,14 +5087,42 @@ function abrirProntuario(colaboradorId){
       <div class="kpi"><div class="label">Salário atual</div><div class="value" style="font-size:16px;">${statusColaborador(c)!=='desligado' ? formatMoeda(salarioAtualColaborador(c)) : '—'}</div></div>
     </div>
 
+    <span class="btn btn-primary btn-sm" data-action="ver-trilha-colaborador" data-id="${c.id}" style="margin-bottom:14px;display:inline-block;">🛤️ Ver trilha completa</span>
+
     <div class="section-title">Contato</div>
     <p class="hint">${c.telefone?esc(c.telefone):'Telefone não informado'}${c.email?' · '+esc(c.email):''}</p>
 
     ${funcao ? `
-    <div class="section-title">Cargo</div>
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Cargo</span>
+      <span class="btn btn-secondary btn-sm" data-action="registrar-mudanca-funcao" data-id="${c.id}">+ Registrar mudança de cargo</span>
+    </div>
     <p class="hint">${esc(funcao.nome)}${funcao.subordinadoA?' · Subordinado a '+esc(funcao.subordinadoA):''}${funcao.area?' · '+esc(funcao.area):''}<br>
     ${descritivo ? '📄 Descritivo de cargo preenchido — <span class="btn btn-ghost btn-sm" data-action="descritivo-cargo" data-id="'+funcao.id+'">Ver descritivo</span>' : 'Nenhum descritivo de cargo cadastrado para esta função.'}</p>
-    ` : '<div class="section-title">Cargo</div><p class="hint">Nenhuma função vinculada.</p>'}
+    ` : `
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Cargo</span>
+      <span class="btn btn-secondary btn-sm" data-action="registrar-mudanca-funcao" data-id="${c.id}">+ Registrar mudança de cargo</span>
+    </div>
+    <p class="hint">Nenhuma função vinculada.</p>
+    `}
+
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Férias</span>
+      <span class="btn btn-secondary btn-sm" data-action="registrar-ferias" data-id="${c.id}">+ Registrar férias gozadas</span>
+    </div>
+    ${(()=>{
+      const st = statusFeriasColaborador(c);
+      if(st.periodos.length===0) return '<p class="hint">Sem data de admissão para calcular os períodos.</p>';
+      const rotulos = { gozada:'✅ Gozada', em_andamento:'⏳ Em formação', pendente:'Pendente', vencendo:'⚠️ Vencendo', vencida:'🔴 Vencida — risco de pagamento em dobro' };
+      return '<div class="table-wrap"><table><thead><tr><th>Período aquisitivo</th><th>Prazo p/ conceder</th><th>Situação</th></tr></thead><tbody>' +
+        st.periodos.map(p=>`<tr>
+          <td>${p.numero}º (${formatDate(p.inicioPA)} a ${formatDate(p.fimPA)})</td>
+          <td>${formatDate(p.fimConcessivo)}</td>
+          <td>${rotulos[p.status]||p.status}${p.gozada?' — gozada em '+formatDate(p.gozada.dataInicio):''}</td>
+        </tr>`).join('') + '</tbody></table></div>';
+    })()}
+
 
     <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
       <span>Período de experiência</span>
@@ -4710,6 +5151,27 @@ function abrirProntuario(colaboradorId){
     ${c.dataDesligamento ? `
     <div class="section-title">Desligamento</div>
     <p class="hint">${formatDate(c.dataDesligamento)} — ${esc(c.tipoDesligamento||'Tipo não informado')}${c.motivoDesligamento?'<br>'+esc(c.motivoDesligamento):''}</p>
+    <div class="section-title">Pesquisa de desligamento</div>
+    ${!c.pesquisaDesligamento || !c.pesquisaDesligamento.enviada ? `
+      <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Envie um link por WhatsApp para ${esc(c.nome.split(' ')[0])} responder, de forma anônima para o gestor, sobre a experiência dele(a) na empresa.</p>
+      <span class="btn btn-secondary btn-sm" data-action="enviar-pesquisa-desligamento" data-id="${c.id}">📋 Enviar pesquisa de desligamento</span>
+    ` : (!c.pesquisaDesligamento.respondida ? `
+      <p class="hint" style="margin-bottom:8px;">Link enviado em ${formatDate(c.pesquisaDesligamento.dataEnvio)}, ainda sem resposta.</p>
+      <span class="btn btn-secondary btn-sm" data-action="enviar-pesquisa-desligamento" data-id="${c.id}">🔗 Ver / reenviar link</span>
+    ` : `
+      <p class="hint" style="margin-bottom:10px;">Respondida em ${formatDate(c.pesquisaDesligamento.dataResposta)}.</p>
+      <div class="card" style="padding:14px 16px;background:var(--bg);">
+        ${PERGUNTAS_PESQUISA_DESLIGAMENTO.map(p=>{
+          const r = c.pesquisaDesligamento.respostas ? c.pesquisaDesligamento.respostas[p.chave] : '';
+          if(!r && r !== 0) return '';
+          let valorFmt = r;
+          if(p.tipo==='simnao') valorFmt = (r==='sim'?'Sim':'Não');
+          else if(p.tipo==='escala') valorFmt = r+' de 5';
+          else if(p.tipo==='nps') valorFmt = r+' de 10';
+          return `<div style="margin-bottom:10px;"><p class="hint" style="margin:0 0 2px 0;">${esc(p.texto)}</p><p style="margin:0;font-size:13.5px;white-space:pre-line;">${esc(String(valorFmt))}</p></div>`;
+        }).join('')}
+      </div>
+    `)}
     ` : ''}
 
     <div class="section-title">Histórico salarial</div>
@@ -4740,6 +5202,160 @@ function abrirProntuario(colaboradorId){
       <div class="right">
         <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
         <span class="btn btn-primary" data-action="editar-colaborador" data-id="${c.id}">Editar dados cadastrais</span>
+      </div>
+    </div>
+  `);
+}
+
+function modalRegistrarFerias(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const st = statusFeriasColaborador(c);
+  const pendente = st.periodos.find(p=>p.status==='pendente' || p.status==='vencendo' || p.status==='vencida');
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Registrar férias gozadas</h2>
+    <div class="modal-sub">${esc(c.nome)}${pendente?' · refere-se ao '+pendente.numero+'º período aquisitivo':''}</div>
+    <form id="form-registrar-ferias">
+      <div class="form-grid">
+        <div class="field"><label>Data de início *</label><input required type="date" name="dataInicio"></div>
+        <div class="field"><label>Data de fim *</label><input required type="date" name="dataFim"></div>
+        <div class="field full"><label>Observações</label><input name="observacao" placeholder="Ex.: 20 dias + 10 dias de abono pecuniário"></div>
+      </div>
+      <p class="hint" id="erro-registrar-ferias" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar férias</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-registrar-ferias').addEventListener('submit', e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-registrar-ferias');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const dataInicio = f.get('dataInicio'), dataFim = f.get('dataFim');
+    if(dataFim < dataInicio){ erroEl.textContent = 'A data de fim não pode ser antes da data de início.'; erroEl.style.display = 'block'; return; }
+    const dias = daysBetween(dataInicio, dataFim) + 1;
+    if(!Array.isArray(c.feriasGozadas)) c.feriasGozadas = [];
+    c.feriasGozadas.push({ id:uid('fer'), dataInicio, dataFim, dias, observacao: f.get('observacao').trim() });
+    closeModal();
+    saveDB();
+    abrirProntuario(colaboradorId);
+    showToast('Férias registradas.');
+  });
+}
+
+const TIPOS_MUDANCA_FUNCAO = ['Promoção', 'Transferência de área', 'Mudança de função (lateral)', 'Ajuste de cargo'];
+function modalRegistrarMudancaFuncao(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const funcoesCliente = funcoesDoCliente(c.clienteId).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const funcaoAtual = getFuncao(c.funcaoId);
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Registrar mudança de cargo</h2>
+    <div class="modal-sub">${esc(c.nome)}${funcaoAtual?' · atualmente: '+esc(funcaoAtual.nome):''}</div>
+    <form id="form-mudanca-funcao">
+      <div class="form-grid">
+        <div class="field full"><label>Nova função *</label><select required name="funcaoId"><option value="">Selecione…</option>${funcoesCliente.map(fc=>'<option value="'+fc.id+'" '+(fc.id===c.funcaoId?'disabled':'')+'>'+esc(fc.nome)+'</option>').join('')}</select></div>
+        <div class="field"><label>Data *</label><input required type="date" name="dataInicio" value="${todayISO()}"></div>
+        <div class="field"><label>Tipo *</label><select required name="tipo"><option value="">Selecione…</option>${TIPOS_MUDANCA_FUNCAO.map(t=>'<option>'+t+'</option>').join('')}</select></div>
+        <div class="field full"><label>Observações</label><input name="observacao" placeholder="Opcional"></div>
+      </div>
+      <p class="hint" id="erro-mudanca-funcao" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar mudança</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-mudanca-funcao').addEventListener('submit', e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-mudanca-funcao');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const novaFuncaoId = f.get('funcaoId');
+    if(novaFuncaoId === c.funcaoId){ erroEl.textContent = 'Essa já é a função atual do colaborador.'; erroEl.style.display = 'block'; return; }
+    if(!Array.isArray(c.historicoFuncao)) c.historicoFuncao = [];
+    c.historicoFuncao.push({ id:uid('hf'), funcaoId: novaFuncaoId, dataInicio: f.get('dataInicio'), tipo: f.get('tipo'), observacao: f.get('observacao').trim() });
+    c.funcaoId = novaFuncaoId;
+    closeModal();
+    saveDB();
+    abrirProntuario(colaboradorId);
+    showToast('Mudança de cargo registrada.');
+  });
+}
+
+function montarTrilhaColaborador(c){
+  const eventos = [];
+  (c.historicoFuncao||[]).forEach(hf=>{
+    const func = getFuncao(hf.funcaoId);
+    const icones = {'Admissão':'🎉','Promoção':'📈','Transferência de área':'🔄','Mudança de função (lateral)':'↔️','Ajuste de cargo':'🔧'};
+    eventos.push({ data: hf.dataInicio, icone: icones[hf.tipo]||'💼', titulo: hf.tipo, desc: func ? func.nome : '', obs: hf.observacao });
+  });
+  (c.historicoSalarial||[]).forEach(h=>{
+    eventos.push({ data: h.data, icone:'💰', titulo:'Alteração salarial', desc: formatMoeda(parseFloat(h.valor)||0), obs: h.motivo });
+  });
+  if(c.dataAdmissao && c.salarioAdmissao){
+    eventos.push({ data: c.dataAdmissao, icone:'💰', titulo:'Salário de admissão', desc: formatMoeda(parseFloat(c.salarioAdmissao)||0), obs:'' });
+  }
+  (c.feriasGozadas||[]).forEach(fer=>{
+    eventos.push({ data: fer.dataInicio, icone:'🏖️', titulo:'Férias gozadas', desc: formatDate(fer.dataInicio)+' a '+formatDate(fer.dataFim)+' ('+fer.dias+' dia(s))', obs: fer.observacao });
+  });
+  (c.registros||[]).forEach(r=>{
+    eventos.push({ data: r.data, icone:'📝', titulo: r.tipo, desc: r.descricao, obs: r.registradoPor?'Registrado por: '+r.registradoPor:'' });
+  });
+  (db.treinamentos||[]).filter(t=>(t.participantes||[]).includes(c.id)).forEach(t=>{
+    eventos.push({ data: t.data, icone:'🎓', titulo:'Treinamento: '+t.titulo, desc: t.cargaHoraria+'h'+(t.instrutor?' · '+t.instrutor:''), obs:'' });
+  });
+  if(c.emAfastamento && c.dataInicioAfastamento){
+    eventos.push({ data: c.dataInicioAfastamento, icone:'🏥', titulo:'Afastamento', desc: c.tipoAfastamento||'Tipo não informado', obs: c.dataFimAfastamento?'Previsão de retorno: '+formatDate(c.dataFimAfastamento):'' });
+  }
+  if(c.dataDesligamento){
+    eventos.push({ data: c.dataDesligamento, icone:'🚪', titulo:'Desligamento', desc: c.tipoDesligamento||'Tipo não informado', obs: c.motivoDesligamento||'' });
+  }
+  if(c.pesquisaDesligamento && c.pesquisaDesligamento.respondida){
+    eventos.push({ data: c.pesquisaDesligamento.dataResposta, icone:'📋', titulo:'Pesquisa de desligamento respondida', desc:'', obs:'' });
+  }
+  return eventos.filter(e=>e.data).sort((a,b)=>a.data.localeCompare(b.data));
+}
+
+function modalTrilhaColaborador(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const cliente = getCliente(c.clienteId);
+  const eventos = montarTrilhaColaborador(c);
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>🛤️ Trilha — ${esc(c.nome)}</h2>
+    <div class="modal-sub">${esc(cliente?.nome||'')}</div>
+    ${eventos.length===0 ? '<p class="hint">Nenhum evento registrado ainda.</p>' : `
+    <div style="position:relative;padding-left:26px;margin-top:16px;">
+      <div style="position:absolute;left:9px;top:4px;bottom:4px;width:2px;background:var(--border);"></div>
+      ${eventos.map(ev=>`
+        <div style="position:relative;margin-bottom:18px;">
+          <div style="position:absolute;left:-26px;top:0;width:20px;height:20px;border-radius:50%;background:var(--panel);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;">${ev.icone}</div>
+          <div class="hint" style="margin-bottom:2px;">${formatDate(ev.data)}</div>
+          <p style="margin:0;font-weight:600;font-size:13.5px;">${esc(ev.titulo)}</p>
+          ${ev.desc ? '<p style="margin:2px 0 0 0;font-size:13px;">'+esc(ev.desc)+'</p>' : ''}
+          ${ev.obs ? '<p class="hint" style="margin:2px 0 0 0;white-space:pre-line;">'+esc(ev.obs)+'</p>' : ''}
+        </div>
+      `).join('')}
+    </div>
+    `}
+    <div class="modal-footer">
+      <span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="abrir-prontuario-alerta" data-id="${c.id}">Voltar ao prontuário</span>
       </div>
     </div>
   `);
@@ -4847,7 +5463,7 @@ João Souza	Auxiliar Administrativo	01/06/2024	2100"></textarea>
 
 function modalColaborador(colaborador, clienteId){
   const editando = !!colaborador;
-  colaborador = colaborador || {id:'', clienteId:clienteId, nome:'', funcaoId:'', dataAdmissao:todayISO(), dataDesligamento:'', tipoDesligamento:'', motivoDesligamento:'', observacoes:'', emAfastamento:false, tipoAfastamento:'', dataInicioAfastamento:'', dataFimAfastamento:'', salarioAdmissao:'', historicoSalarial:[], telefone:'', email:'', registros:[], duracaoExperiencia1:45, duracaoExperiencia2:45};
+  colaborador = colaborador || {id:'', clienteId:clienteId, nome:'', funcaoId:'', dataAdmissao:todayISO(), dataDesligamento:'', tipoDesligamento:'', motivoDesligamento:'', observacoes:'', emAfastamento:false, tipoAfastamento:'', dataInicioAfastamento:'', dataFimAfastamento:'', salarioAdmissao:'', historicoSalarial:[], feriasGozadas:[], historicoFuncao:[], telefone:'', email:'', registros:[], duracaoExperiencia1:45, duracaoExperiencia2:45};
   const funcoesCliente = funcoesDoCliente(colaborador.clienteId).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
   const funcaoAtual = colaborador.funcaoId ? funcoesCliente.find(f=>f.id===colaborador.funcaoId) : null;
   const funcoesDatalist = funcoesCliente.map(f=>'<option value="'+esc(f.nome)+'">').join('');
@@ -4960,7 +5576,13 @@ function modalColaborador(colaborador, clienteId){
       observacoes: f.get('observacoes').trim()
     };
     if(editando){ Object.assign(colaborador, dados); }
-    else { db.colaboradores.push(Object.assign({id:uid('colab')}, dados)); }
+    else {
+      const novoColaborador = Object.assign({id:uid('colab'), feriasGozadas:[], historicoFuncao:[]}, dados);
+      if(novoColaborador.funcaoId && novoColaborador.dataAdmissao){
+        novoColaborador.historicoFuncao.push({ id:uid('hf'), funcaoId:novoColaborador.funcaoId, dataInicio:novoColaborador.dataAdmissao, tipo:'Admissão', observacao:'' });
+      }
+      db.colaboradores.push(novoColaborador);
+    }
     closeModal(); saveDB(); renderView();
   });
 }
@@ -5791,7 +6413,7 @@ function viewPortalColaboradores(){
 function modalPortalColaborador(colaborador){
   const cliente = db.clientes[0];
   const editando = !!colaborador;
-  colaborador = colaborador || {id:'', clienteId:cliente.id, nome:'', funcaoId:'', telefone:'', email:'', dataAdmissao:todayISO(), salarioAdmissao:'', historicoSalarial:[], emAfastamento:false, tipoAfastamento:'', dataInicioAfastamento:'', dataFimAfastamento:'', dataDesligamento:'', tipoDesligamento:'', motivoDesligamento:'', observacoes:'', registros:[], avaliacoesExperiencia:[], duracaoExperiencia1:45, duracaoExperiencia2:45};
+  colaborador = colaborador || {id:'', clienteId:cliente.id, nome:'', funcaoId:'', telefone:'', email:'', dataAdmissao:todayISO(), salarioAdmissao:'', historicoSalarial:[], feriasGozadas:[], historicoFuncao:[], emAfastamento:false, tipoAfastamento:'', dataInicioAfastamento:'', dataFimAfastamento:'', dataDesligamento:'', tipoDesligamento:'', motivoDesligamento:'', observacoes:'', registros:[], avaliacoesExperiencia:[], duracaoExperiencia1:45, duracaoExperiencia2:45};
   const funcoesCliente = funcoesDoCliente(cliente.id).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
   const funcaoAtual = colaborador.funcaoId ? funcoesCliente.find(f=>f.id===colaborador.funcaoId) : null;
 
@@ -5862,6 +6484,9 @@ function modalPortalColaborador(colaborador){
       tipoDesligamento: f.get('tipoDesligamento') || '',
       observacoes: f.get('observacoes').trim()
     });
+    if(!editando && dadosColaborador.funcaoId && dadosColaborador.dataAdmissao){
+      dadosColaborador.historicoFuncao = [{ id:uid('hf'), funcaoId:dadosColaborador.funcaoId, dataInicio:dadosColaborador.dataAdmissao, tipo:'Admissão', observacao:'' }];
+    }
 
     const btn = e.target.querySelector('button[type=submit]');
     btn.disabled = true; btn.textContent = 'Salvando…';
@@ -6281,6 +6906,55 @@ function viewPropostaComercial(){
         <p style="margin:0;font-size:12px;color:var(--ink-soft);">Desenvolvimento Humano e Organizacional</p>
       </div>
     </div>
+  `;
+}
+
+function viewParecerCandidato(){
+  const candidatoId = state.parecerCandidatoId;
+  const candidato = db.candidatos.find(c=>c.id===candidatoId);
+  if(!candidato || !candidato.parecerIA) return '<div class="card empty-state"><h3>Nenhum parecer gerado ainda</h3><p>Abra a ficha de um candidato e clique em "📝 Gerar parecer para o cliente".</p></div>';
+
+  const vaga = getCargo(candidato.cargoId);
+  const cliente = getCliente(candidato.clienteId);
+  const paragrafos = candidato.parecerIA.texto.split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
+  const fontes = ['currículo'];
+  if(candidato.entrevistaAnotacoes) fontes.push('entrevista');
+  if(candidato.avaliacaoComportamental) fontes.push('avaliação comportamental (DISC)');
+
+  return `
+    <div class="topbar no-print" style="margin-bottom:14px;">
+      <div><h1>Parecer do candidato</h1><p>${esc(candidato.nome)}</p></div>
+      <div style="display:flex;gap:8px;">
+        <span class="btn btn-secondary btn-sm" data-action="gerar-parecer-candidato" data-id="${candidato.id}">🔄 Gerar novamente</span>
+        <span class="btn btn-secondary btn-sm" data-action="imprimir-relatorio">🖨️ Imprimir / Exportar PDF</span>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:760px;margin:0 auto;padding:48px;">
+      <div style="text-align:center;margin-bottom:32px;background:var(--spine);padding:18px;border-radius:8px;">
+        <img src="data:image/png;base64,${LOGO_COLORIDO_B64}" style="max-width:220px;height:auto;">
+      </div>
+
+      <h1 style="font-size:24px;text-align:center;margin-bottom:6px;">Parecer de Candidato</h1>
+      <p style="text-align:center;color:var(--ink-soft);margin-bottom:32px;">${esc(vaga?.titulo||'')}${cliente?' — '+esc(cliente.nome):''}</p>
+
+      <p style="margin-bottom:4px;"><strong>Data:</strong> ${formatDate(candidato.parecerIA.data)}</p>
+      <p style="margin-bottom:24px;"><strong>Candidato(a):</strong> ${esc(candidato.nome)}</p>
+
+      <div id="texto-parecer-editavel" contenteditable="true" style="outline:none;">
+        ${paragrafos.map(p=>'<p style="margin-bottom:16px;white-space:pre-line;">'+esc(p)+'</p>').join('')}
+      </div>
+
+      <p class="hint no-print" style="margin-top:8px;">Você pode clicar no texto acima para revisar ou ajustar antes de enviar ao cliente.</p>
+
+      <p style="margin:40px 0 6px 0;">Atenciosamente,</p>
+      <div style="text-align:center;margin-top:40px;">
+        <div style="border-top:1px solid var(--border);width:280px;margin:0 auto 6px;"></div>
+        <p style="margin:0;">Caroline Peixoto</p>
+        <p style="margin:0;font-size:12px;color:var(--ink-soft);">Desenvolvimento Humano e Organizacional</p>
+      </div>
+    </div>
+    <p class="hint no-print" style="text-align:center;margin-top:10px;">Parecer elaborado com apoio de inteligência artificial, com base em: ${fontes.join(', ')}.</p>
   `;
 }
 
@@ -7587,6 +8261,83 @@ async function executarAnaliseIAEmLotes(cargoId){
   }
 }
 
+function modalLinkPesquisaDesligamento(colaborador){
+  const token = colaborador.pesquisaDesligamento.token;
+  const link = window.location.origin + window.location.pathname + '#desligamento-' + token;
+  const primeiroNome = colaborador.nome.split(' ')[0];
+  const mensagem = 'Olá, '+primeiroNome+'! Enquanto você esteve com a gente, sua experiência é muito importante. Poderia responder uma pesquisa rápida e anônima sobre sua passagem pela empresa? '+link;
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Pesquisa de desligamento</h2>
+    <div class="modal-sub">${esc(colaborador.nome)}</div>
+    <div class="field full">
+      <label>Link da pesquisa</label>
+      <input type="text" readonly value="${esc(link)}" id="link-pd-input" onclick="this.select()">
+    </div>
+    ${colaborador.telefone ? `<div class="field full"><label>Mensagem (pode editar antes de enviar)</label><textarea id="texto-mensagem-pd" style="min-height:90px;">${esc(mensagem)}</textarea></div>` : '<p class="hint">Este colaborador não tem telefone cadastrado — copie o link e envie por onde preferir.</p>'}
+    <div class="modal-footer">
+      <span>${colaborador.telefone ? '<span class="btn btn-secondary btn-sm" id="btn-enviar-pd-whatsapp">💬 Enviar por WhatsApp</span>' : ''}</span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" id="btn-copiar-link-pd">Copiar link</span>
+      </div>
+    </div>
+  `);
+  const btnWpp = document.getElementById('btn-enviar-pd-whatsapp');
+  if(btnWpp){
+    btnWpp.addEventListener('click', ()=>{
+      const textoFinal = document.getElementById('texto-mensagem-pd').value;
+      window.open(linkWhatsApp(colaborador.telefone, textoFinal), '_blank');
+    });
+  }
+  document.getElementById('btn-copiar-link-pd').addEventListener('click', ()=>{
+    const inp = document.getElementById('link-pd-input');
+    const finalizar = ()=> showToast('Link copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(finalizar).catch(()=>{ inp.select(); document.execCommand('copy'); finalizar(); });
+    } else { inp.select(); document.execCommand('copy'); finalizar(); }
+  });
+}
+
+function modalShortlist(cargoId){
+  const vaga = getCargo(cargoId);
+  if(!vaga) return;
+  const cliente = getCliente(vaga.clienteId);
+  const candidatos = db.candidatos.filter(c=>c.cargoId===cargoId && c.avaliacaoIA && c.avaliacaoIA.matchScore!==null && c.avaliacaoIA.matchScore!==undefined)
+    .slice().sort((a,b)=> b.avaliacaoIA.matchScore - a.avaliacaoIA.matchScore);
+  const semScore = db.candidatos.filter(c=>c.cargoId===cargoId && (!c.avaliacaoIA || c.avaliacaoIA.matchScore===null || c.avaliacaoIA.matchScore===undefined)).length;
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>🏆 Shortlist — ${esc(vaga.titulo)}</h2>
+    <div class="modal-sub">${esc(cliente?.nome||'')} · ${candidatos.length} candidato(s) com placar calculado${semScore>0?' · '+semScore+' ainda sem análise':''}</div>
+    ${candidatos.length===0 ? '<p class="hint" style="margin-top:14px;">Nenhum candidato com placar de compatibilidade ainda.</p>' : `
+    <div style="margin-top:16px;">
+      ${candidatos.map((c,i)=>{
+        const cor = c.avaliacaoIA.matchScore>=80?'var(--green)':(c.avaliacaoIA.matchScore>=50?'var(--amber)':'var(--red)');
+        const fontes = [];
+        fontes.push('currículo');
+        if(c.entrevistaAnotacoes) fontes.push('entrevista');
+        if(c.avaliacaoComportamental) fontes.push('DISC');
+        return `<div class="card" style="padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;cursor:pointer;" data-action="editar-candidato" data-id="${c.id}">
+          <div style="font-size:13px;font-weight:700;color:var(--ink-soft);width:22px;">${i+1}º</div>
+          <div style="font-size:22px;font-weight:700;color:${cor};width:64px;">${c.avaliacaoIA.matchScore}%</div>
+          <div style="flex:1;">
+            <strong>${esc(c.nome)}</strong>${c.sinalizadoIA?' <span class="badge badge-red">🤖 sinalizado</span>':''}
+            <div class="hint">Baseado em: ${fontes.join(' + ')} · ${esc(c.avaliacaoIA.justificativa)}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    `}
+    <div class="modal-footer">
+      <span></span>
+      <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div>
+    </div>
+  `);
+}
+
 function modalRecuperarPerdidos(){
   openModal(`
     <button class="modal-close" data-action="fechar-modal">&times;</button>
@@ -7925,12 +8676,24 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       ${editando && candidato.avaliacaoIA ? `
       <div class="section-title">Análise por IA</div>
       <div class="card" style="padding:10px 14px;margin-bottom:10px;background:${candidato.sinalizadoIA?'var(--red-soft)':'var(--green-soft)'};">
+        ${candidato.avaliacaoIA.matchScore!==null && candidato.avaliacaoIA.matchScore!==undefined ? `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="font-size:26px;font-weight:700;color:var(--accent);">${candidato.avaliacaoIA.matchScore}%</div>
+          <div class="hint" style="margin:0;">de compatibilidade com a vaga${candidato.entrevistaAnotacoes?' (currículo + entrevista':' (currículo'}${candidato.avaliacaoComportamental?' + DISC)':')'}</div>
+        </div>` : ''}
         <p style="margin:0 0 6px 0;"><strong>${candidato.sinalizadoIA ? '⚠️ Sinalizado: não atende ao critério' : '✅ Atende ao critério avaliado'}</strong></p>
         <p class="hint" style="margin:0 0 4px 0;">Critério: ${esc(candidato.avaliacaoIA.criterioAvaliado)}</p>
         <p style="margin:0 0 4px 0;font-size:13.5px;">${esc(candidato.avaliacaoIA.justificativa)}</p>
         <p class="hint" style="margin:0;">Confiança da IA: ${esc(candidato.avaliacaoIA.confianca||'—')} · Analisado em ${formatDate(candidato.avaliacaoIA.data)}</p>
       </div>
       ${candidato.sinalizadoIA ? '<span class="btn btn-secondary btn-sm" data-action="reverter-sinalizacao-ia" data-id="'+candidato.id+'">↩️ Reverter sinalização</span>' : ''}
+      ` : ''}
+
+      ${editando && candidato.cargoId ? `
+      <div class="section-title">Parecer para o cliente</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Gera um parecer escrito pela IA (currículo + entrevista + DISC, o que estiver disponível), formatado e pronto pra revisar e enviar ao cliente.</p>
+      <span class="btn btn-secondary btn-sm" data-action="gerar-parecer-candidato" data-id="${candidato.id}">📝 ${candidato.parecerIA ? 'Gerar parecer de novo' : 'Gerar parecer para o cliente'}</span>
+      ${candidato.parecerIA ? '<span class="btn btn-ghost btn-sm" data-action="ver-parecer-candidato" data-id="'+candidato.id+'">Ver último parecer (de '+formatDate(candidato.parecerIA.data)+')</span>' : ''}
       ` : ''}
 
       ${editando ? `
@@ -7951,6 +8714,12 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Cria um evento na sua Google Agenda com link de Google Meet automático, pronto pra enviar ao candidato.</p>
       <span class="btn btn-secondary btn-sm" data-action="agendar-entrevista" data-id="${candidato.id}">📅 Agendar entrevista (Google Meet)</span>
       `}
+      ` : ''}
+
+      ${editando ? `
+      <div class="section-title">Anotações da entrevista</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:8px;">O que você observou na entrevista (respostas, postura, pontos fortes e de atenção). Usado pela análise de compatibilidade por IA, junto com o currículo e o DISC.</p>
+      <div class="field full"><textarea name="entrevistaAnotacoes" style="min-height:100px;" placeholder="Ex.: Boa comunicação, demonstrou experiência real com liderança de equipe, disponibilidade para o turno...">${esc(candidato.entrevistaAnotacoes||'')}</textarea></div>
       ` : ''}
 
       ${editando && candidato.cargoId ? `
@@ -8114,7 +8883,9 @@ function modalCandidato(candidato, cargoPreSelecionado, preBanco){
       areaInteresse: f.get('areaInteresse').trim(),
       avaliacaoComportamental: candidato.avaliacaoComportamental || null,
       entrevistaAgendada: candidato.entrevistaAgendada || null,
+      entrevistaAnotacoes: (f.get('entrevistaAnotacoes') || '').trim(),
       avaliacaoIA: candidato.avaliacaoIA || null,
+      parecerIA: candidato.parecerIA || null,
       sinalizadoIA: candidato.sinalizadoIA || false
     };
 
@@ -8228,6 +8999,10 @@ function onGlobalClick(e){
   if(action === 'abrir-prontuario'){ abrirProntuario(id); return; }
   if(action === 'novo-registro-colaborador'){ modalNovoRegistro(id); return; }
   if(action === 'abrir-avaliacao-experiencia'){ modalAvaliacaoExperiencia(id, el.dataset.periodo); return; }
+  if(action === 'abrir-prontuario-alerta'){ abrirProntuario(id); return; }
+  if(action === 'ver-trilha-colaborador'){ modalTrilhaColaborador(id); return; }
+  if(action === 'registrar-mudanca-funcao'){ modalRegistrarMudancaFuncao(id); return; }
+  if(action === 'registrar-ferias'){ modalRegistrarFerias(id); return; }
   if(action === 'excluir-colaborador'){
     if(confirm('Excluir este colaborador? Esta ação não pode ser desfeita.')){
       db.colaboradores = db.colaboradores.filter(c=>c.id!==id);
@@ -8396,6 +9171,30 @@ function onGlobalClick(e){
   if(action === 'avaliacao-comportamental'){ modalLinkAvaliacao(db.candidatos.find(c=>c.id===id)); return; }
   if(action === 'agendar-entrevista'){ modalAgendarEntrevista(db.candidatos.find(c=>c.id===id)); return; }
   if(action === 'transferir-candidato'){ const candTransf = db.candidatos.find(c=>c.id===id); if(candTransf) modalTransferirCandidato(candTransf); return; }
+  if(action === 'ver-shortlist'){ modalShortlist(el.dataset.cargoId); return; }
+  if(action === 'ver-parecer-candidato'){
+    state.parecerCandidatoId = id;
+    if(document.getElementById('modal-slot').innerHTML) closeModal();
+    state.tab = 'parecerCandidato';
+    renderView();
+    return;
+  }
+  if(action === 'gerar-parecer-candidato'){
+    const candidatoParecer = db.candidatos.find(c=>c.id===id);
+    if(!candidatoParecer) return;
+    showToast('Gerando parecer com IA… isso pode levar alguns segundos.');
+    chamarAppsScriptPost('gerarParecerCandidato', {candidatoId: id}, 60000).then(resp=>{
+      candidatoParecer.parecerIA = { texto: resp.texto, data: todayISO() };
+      state.parecerCandidatoId = id;
+      if(document.getElementById('modal-slot').innerHTML) closeModal();
+      state.tab = 'parecerCandidato';
+      renderView();
+      showToast('Parecer gerado.');
+    }).catch(err=>{
+      showToast(err.message || 'Não foi possível gerar o parecer agora.', true);
+    });
+    return;
+  }
   if(action === 'analisar-candidatos-ia'){
     const cargoId = el.dataset.cargoId;
     const vagaAlvo = getCargo(cargoId);
@@ -8416,6 +9215,23 @@ function onGlobalClick(e){
     if(document.getElementById('modal-slot').innerHTML) closeModal();
     renderView();
     showToast('Sinalização revertida. Status voltou ao automático.');
+    return;
+  }
+
+  if(action === 'enviar-pesquisa-desligamento'){
+    const colaboradorPD = getColaborador(id);
+    if(!colaboradorPD) return;
+    showToast('Gerando link…');
+    chamarAppsScriptPost('criarPesquisaDesligamento', {colaboradorId: id}).then(resp=>{
+      colaboradorPD.pesquisaDesligamento = Object.assign({}, colaboradorPD.pesquisaDesligamento, {
+        token: resp.token, enviada: true, dataEnvio: todayISO(),
+        respondida: (colaboradorPD.pesquisaDesligamento && colaboradorPD.pesquisaDesligamento.respondida) || false,
+        respostas: (colaboradorPD.pesquisaDesligamento && colaboradorPD.pesquisaDesligamento.respostas) || null
+      });
+      modalLinkPesquisaDesligamento(colaboradorPD);
+    }).catch(err=>{
+      showToast(err.message || 'Não foi possível gerar o link agora.', true);
+    });
     return;
   }
 
@@ -8869,8 +9685,10 @@ async function roteirizarPaginaPublica(){
   const clienteIdDenuncia = getHashDenunciaId();
   const clienteIdClima = getHashClimaId();
   const pesquisaIdRapida = getHashRapidaId();
+  const tokenDesligamento = getHashDesligamentoToken();
 
   if(cargoIdPublico){ await renderPublicApplication(cargoIdPublico); return true; }
+  if(tokenDesligamento){ await renderPesquisaDesligamentoPublica(tokenDesligamento); return true; }
   if(candidatoIdAvaliacao){ await renderAvaliacaoComportamental(candidatoIdAvaliacao); return true; }
   if(clienteIdCultura){ await renderDiagnosticoCultura(clienteIdCultura); return true; }
   if(clienteIdDenuncia){ await renderCanalDenuncia(clienteIdDenuncia); return true; }
