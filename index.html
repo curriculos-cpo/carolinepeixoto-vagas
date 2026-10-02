@@ -1634,7 +1634,7 @@ function modalEventoAgenda(evento, dataPreSelecionada){
   document.getElementById('sel-tipo-agenda').addEventListener('change', e=>{
     document.getElementById('secao-ata-reuniao').style.display = (e.target.value === 'Reunião') ? 'block' : 'none';
   });
-  document.getElementById('form-agenda').addEventListener('submit', e=>{
+  document.getElementById('form-agenda').addEventListener('submit', async e=>{
     e.preventDefault();
     const f = new FormData(e.target);
     const dados = {
@@ -1651,11 +1651,29 @@ function modalEventoAgenda(evento, dataPreSelecionada){
         proximosPassos: f.get('ataProximosPassos').trim()
       }
     };
-    if(editando){ Object.assign(evento, dados); }
-    else { db.agenda.push(Object.assign({id:uid('ag')}, dados)); }
+    const btnSalvar = e.target.querySelector('button[type=submit]');
+    btnSalvar.disabled = true; btnSalvar.textContent = 'Salvando…';
+
+    let compromissoAlvo;
+    if(editando){ Object.assign(evento, dados); compromissoAlvo = evento; }
+    else { compromissoAlvo = Object.assign({id:uid('ag')}, dados); db.agenda.push(compromissoAlvo); }
+
+    let avisoSync = '';
+    if(appsScriptConfigurado()){
+      try{
+        const resp = await chamarAppsScriptPost('sincronizarCompromissoGoogleAgenda', {compromisso: compromissoAlvo});
+        if(resp.ok && resp.googleEventId) compromissoAlvo.googleEventId = resp.googleEventId;
+      }catch(err){
+        avisoSync = ' (salvo no painel, mas não sincronizado com a Google Agenda agora: '+(err.message||'erro desconhecido')+')';
+      }
+    }
+
     state.agendaDiaSelecionado = dados.data;
     state.agendaMes = dados.data.slice(0,7);
-    closeModal(); saveDB(); renderView();
+    const salvouOk = await saveDB();
+    closeModal();
+    renderView();
+    if(salvouOk) showToast('Compromisso salvo.'+avisoSync, !!avisoSync);
   });
 }
 
@@ -7112,10 +7130,13 @@ async function renderPortalVagas(){
     const filtradas = termo ? vagas.filter(v=> (v.titulo+' '+v.modalidade+' '+v.localTrabalho+' '+v.clienteNome).toLowerCase().includes(termo)) : vagas;
     if(filtradas.length===0) return '<div class="card empty-state" style="margin-top:20px;"><h3>Nenhuma vaga encontrada</h3><p>Tente outro termo de busca.</p></div>';
     return filtradas.map(v=>`
-      <div class="card" style="padding:20px 24px;margin-bottom:12px;cursor:pointer;" onclick="window.location.hash='inscricao-${v.id}'">
-        <h3 style="font-size:17px;margin-bottom:6px;">${esc(v.titulo)}</h3>
-        <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:10px;">${[v.clienteNome, v.modalidade, v.localTrabalho].filter(Boolean).map(esc).join(' · ')}</p>
-        <span class="btn btn-primary btn-sm">Ver vaga e candidatar-se</span>
+      <div class="card" style="padding:20px 24px;margin-bottom:12px;cursor:pointer;display:flex;gap:16px;align-items:flex-start;" onclick="window.location.hash='inscricao-${v.id}'">
+        ${v.clienteLogoUrl ? '<img src="'+esc(v.clienteLogoUrl)+'" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:6px;border:1px solid var(--border);padding:4px;flex-shrink:0;">' : ''}
+        <div style="flex:1;min-width:0;">
+          <h3 style="font-size:17px;margin-bottom:6px;">${esc(v.titulo)}</h3>
+          <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:10px;">${[v.clienteNome, v.modalidade, v.localTrabalho].filter(Boolean).map(esc).join(' · ')}</p>
+          <span class="btn btn-primary btn-sm">Ver vaga e candidatar-se</span>
+        </div>
       </div>
     `).join('');
   }
@@ -9023,8 +9044,14 @@ function onGlobalClick(e){
   }
   if(action === 'agenda-excluir'){
     if(confirm('Excluir este compromisso?')){
+      const compromissoExcluido = db.agenda.find(e=>e.id===id);
       db.agenda = db.agenda.filter(e=>e.id!==id);
       closeModal(); saveDB(); renderView();
+      if(compromissoExcluido && compromissoExcluido.googleEventId && appsScriptConfigurado()){
+        chamarAppsScriptPost('excluirCompromissoGoogleAgenda', {googleEventId: compromissoExcluido.googleEventId}).catch(()=>{
+          // silencioso: o compromisso já foi removido do painel, que é o que mais importa pro fluxo de trabalho.
+        });
+      }
     }
     return;
   }
