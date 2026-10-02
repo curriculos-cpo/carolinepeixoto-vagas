@@ -7131,7 +7131,7 @@ async function renderPortalVagas(){
     if(filtradas.length===0) return '<div class="card empty-state" style="margin-top:20px;"><h3>Nenhuma vaga encontrada</h3><p>Tente outro termo de busca.</p></div>';
     return filtradas.map(v=>`
       <div class="card" style="padding:20px 24px;margin-bottom:12px;cursor:pointer;display:flex;gap:16px;align-items:flex-start;" onclick="window.location.hash='inscricao-${v.id}'">
-        ${v.clienteLogoUrl ? '<img src="'+esc(v.clienteLogoUrl)+'" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:6px;border:1px solid var(--border);padding:4px;flex-shrink:0;">' : ''}
+        ${v.clienteLogoUrl ? '<img src="'+esc(v.clienteLogoUrl)+'" alt="" style="width:88px;height:88px;object-fit:contain;border-radius:8px;border:1px solid var(--border);padding:6px;flex-shrink:0;">' : ''}
         <div style="flex:1;min-width:0;">
           <h3 style="font-size:17px;margin-bottom:6px;">${esc(v.titulo)}</h3>
           <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:10px;">${[v.clienteNome, v.modalidade, v.localTrabalho].filter(Boolean).map(esc).join(' · ')}</p>
@@ -7565,7 +7565,12 @@ function modalCliente(cliente){
     if(editando){ Object.assign(cliente, dados); }
     else { db.clientes.push(Object.assign({id:clienteId}, dados)); }
     state.viewClienteId = clienteId;
-    closeModal(); saveDB(); renderView();
+    closeModal();
+    await saveDB();
+    renderView();
+    // Re-sincroniza as vagas públicas abertas deste cliente — assim, uma logo ou nome
+    // atualizado aparece nas vagas já existentes, sem precisar reabrir e salvar cada uma.
+    cargosDoCliente(clienteId).filter(v=>v.vagaPublicaAtiva && v.status==='aberta').forEach(v=>{ sincronizarVagaPublica(v); });
   });
 }
 
