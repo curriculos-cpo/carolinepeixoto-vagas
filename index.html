@@ -1359,9 +1359,34 @@ function renderView(){
   afterRenderView();
 }
 
+function wireFormatacaoParecer(){
+  const editor = document.getElementById('texto-parecer-editavel');
+  if(!editor) return;
+  document.querySelectorAll('[data-cmd]').forEach(btn=>{
+    btn.addEventListener('mousedown', e=>e.preventDefault()); // evita perder a seleção de texto ao clicar no botão
+    btn.addEventListener('click', ()=>{
+      editor.focus();
+      document.execCommand(btn.dataset.cmd, false, null);
+    });
+  });
+  const selFamilia = document.getElementById('parecer-fonte-familia');
+  if(selFamilia) selFamilia.addEventListener('change', e=>{
+    editor.focus();
+    document.execCommand('fontName', false, e.target.value);
+  });
+  const selTamanho = document.getElementById('parecer-fonte-tamanho');
+  if(selTamanho) selTamanho.addEventListener('change', e=>{
+    editor.focus();
+    document.execCommand('fontSize', false, e.target.value);
+  });
+}
+
 function afterRenderView(){
   if(state.tab === 'dashboard'){
     requestAnimationFrame(()=>{ requestAnimationFrame(drawDashboardSparklines); });
+  }
+  if(state.tab === 'parecerCandidato'){
+    wireFormatacaoParecer();
   }
   if(state.tab === 'indicadores'){
     requestAnimationFrame(()=>{ requestAnimationFrame(drawIndicadoresCharts); });
@@ -6941,11 +6966,40 @@ function viewParecerCandidato(){
       <p style="margin-bottom:4px;"><strong>Data:</strong> ${formatDate(candidato.parecerIA.data)}</p>
       <p style="margin-bottom:24px;"><strong>Candidato(a):</strong> ${esc(candidato.nome)}</p>
 
+      <div class="no-print" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:10px;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+        <select id="parecer-fonte-familia" style="font-size:12.5px;padding:5px 6px;border-radius:4px;border:1px solid var(--border);">
+          <option value="Georgia, serif">Georgia</option>
+          <option value="Arial, sans-serif">Arial</option>
+          <option value="'Times New Roman', serif">Times New Roman</option>
+          <option value="Verdana, sans-serif">Verdana</option>
+          <option value="'Courier New', monospace">Courier New</option>
+        </select>
+        <select id="parecer-fonte-tamanho" style="font-size:12.5px;padding:5px 6px;border-radius:4px;border:1px solid var(--border);">
+          <option value="2">Pequeno</option>
+          <option value="3" selected>Normal</option>
+          <option value="4">Médio</option>
+          <option value="5">Grande</option>
+          <option value="6">Muito grande</option>
+        </select>
+        <span style="width:1px;height:20px;background:var(--border);margin:0 2px;"></span>
+        <span class="btn btn-ghost btn-sm" data-cmd="bold" title="Negrito" style="font-weight:700;padding:5px 10px;">N</span>
+        <span class="btn btn-ghost btn-sm" data-cmd="italic" title="Itálico" style="font-style:italic;padding:5px 10px;">I</span>
+        <span class="btn btn-ghost btn-sm" data-cmd="underline" title="Sublinhado" style="text-decoration:underline;padding:5px 10px;">S</span>
+        <span style="width:1px;height:20px;background:var(--border);margin:0 2px;"></span>
+        <span class="btn btn-ghost btn-sm" data-cmd="justifyLeft" title="Alinhar à esquerda" style="padding:5px 10px;">⬅</span>
+        <span class="btn btn-ghost btn-sm" data-cmd="justifyCenter" title="Centralizar" style="padding:5px 10px;">↔</span>
+        <span class="btn btn-ghost btn-sm" data-cmd="justifyFull" title="Justificado" style="padding:5px 10px;">☰</span>
+        <span class="btn btn-ghost btn-sm" data-cmd="justifyRight" title="Alinhar à direita" style="padding:5px 10px;">➡</span>
+        <span style="width:1px;height:20px;background:var(--border);margin:0 2px;"></span>
+        <span class="btn btn-ghost btn-sm" data-cmd="indent" title="Aumentar recuo (tabulação)" style="padding:5px 10px;">→|</span>
+        <span class="btn btn-ghost btn-sm" data-cmd="outdent" title="Diminuir recuo" style="padding:5px 10px;">|←</span>
+      </div>
+
       <div id="texto-parecer-editavel" contenteditable="true" style="outline:none;">
         ${paragrafos.map(p=>'<p style="margin-bottom:16px;white-space:pre-line;">'+esc(p)+'</p>').join('')}
       </div>
 
-      <p class="hint no-print" style="margin-top:8px;">Você pode clicar no texto acima para revisar ou ajustar antes de enviar ao cliente.</p>
+      <p class="hint no-print" style="margin-top:8px;">Selecione um trecho do texto acima pra usar os botões de formatação, ou clique pra editar direto.</p>
 
       <p style="margin:40px 0 6px 0;">Atenciosamente,</p>
       <div style="text-align:center;margin-top:40px;">
