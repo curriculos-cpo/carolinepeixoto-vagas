@@ -1018,6 +1018,8 @@ function garantirConfiguracoes(){
     if(c.historicoFuncao.length===0 && c.funcaoId && c.dataAdmissao){
       c.historicoFuncao.push({ id:uid('hf'), funcaoId:c.funcaoId, dataInicio:c.dataAdmissao, tipo:'Admissão', observacao:'' });
     }
+    if(!Array.isArray(c.avaliacoesDesempenho)) c.avaliacoesDesempenho = [];
+    if(!Array.isArray(c.avaliacoesPotencial)) c.avaliacoesPotencial = [];
   });
   if(!Array.isArray(db.funcoes)) db.funcoes = [];
   if(!Array.isArray(db.descritivosCargo)) db.descritivosCargo = [];
@@ -3498,6 +3500,38 @@ function viewIndicadores(){
     <div class="card chart-card" style="margin-bottom:22px;"><h3>Horas-homem de treinamento por mês</h3><div class="chart-wrap"><canvas id="chart-hht-ind"></canvas></div></div>
 
     ${(()=>{
+      const colabsCliente = colaboradoresDoCliente(cliente.id).filter(c=>statusColaborador(c)!=='desligado');
+      const posicionados = colabsCliente.map(c=>({ colaborador:c, pos:calcularPosicaoNineBox(c) })).filter(x=>x.pos);
+      const semDados = colabsCliente.filter(c=>!calcularPosicaoNineBox(c));
+      if(colabsCliente.length===0) return '';
+      const grid = [[[],[],[]],[[],[],[]],[[],[],[]]]; // [linha 2-potencial..0][coluna desempenho]
+      posicionados.forEach(({colaborador,pos})=>{ grid[2-pos.linhaPotencial][pos.colDesempenho].push(colaborador); });
+      const rotuloLinha = ['Alto Potencial','Médio Potencial','Baixo Potencial'];
+      const rotuloColuna = ['Baixo Desempenho','Médio Desempenho','Alto Desempenho'];
+      const corCelula = (lin,col)=>{ const score = (2-lin)+col; return score>=3?'var(--green-soft)':(score>=2?'var(--amber-soft)':'var(--red-soft)'); };
+      return `
+      <div class="section-title" style="margin:18px 0 10px 0;">Nine Box — Performance x Potencial</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:12px;">Cruza a média da última Avaliação de Desempenho concluída com a última Avaliação de Potencial de cada colaborador ativo.</p>
+      <div class="card" style="padding:16px;margin-bottom:14px;overflow-x:auto;">
+        <div style="display:grid;grid-template-columns:110px repeat(3, minmax(140px,1fr));gap:6px;min-width:560px;">
+          <div></div>
+          ${rotuloColuna.map(r=>'<div style="text-align:center;font-size:12px;font-weight:600;color:var(--ink-soft);">'+r+'</div>').join('')}
+          ${[0,1,2].map(lin=>`
+            <div style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--ink-soft);text-align:center;">${rotuloLinha[lin]}</div>
+            ${[0,1,2].map(col=>`
+              <div style="background:${corCelula(lin,col)};border-radius:6px;padding:8px;min-height:70px;">
+                <div class="hint" style="font-weight:600;margin-bottom:4px;">${esc(ROTULOS_NINE_BOX[lin][col])}</div>
+                ${grid[lin][col].map(c=>'<div style="font-size:12.5px;cursor:pointer;" data-action="abrir-prontuario-alerta" data-id="'+c.id+'">'+esc(c.nome)+'</div>').join('')}
+              </div>
+            `).join('')}
+          `).join('')}
+        </div>
+      </div>
+      ${semDados.length>0 ? `<p class="hint" style="margin-bottom:18px;">Sem dados suficientes pra posicionar (falta avaliação de desempenho concluída e/ou de potencial): ${semDados.map(c=>esc(c.nome)).join(', ')}</p>` : ''}
+      `;
+    })()}
+
+    ${(()=>{
       const td = calcularTiposDesligamento(cliente.id, mesIni, mesFim);
       if(td.total===0) return '';
       return `
@@ -3849,6 +3883,12 @@ function ehHashBancoCurriculos(){
 function getHashDesligamentoToken(){
   const h = window.location.hash || '';
   const m = h.match(/^#desligamento-(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function getHashAvaliacaoDesempenhoToken(){
+  const h = window.location.hash || '';
+  const m = h.match(/^#avaliacao-desempenho-(.+)$/);
   return m ? decodeURIComponent(m[1]) : null;
 }
 
@@ -4689,6 +4729,105 @@ function modalMensagemAutomatica(candidato, statusNovo){
   });
 }
 
+async function renderAvaliacaoDesempenhoPublica(token){
+  document.title = 'Avaliação de Desempenho · Caroline Peixoto DHO';
+  document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando…</div></div><div id="toast-slot"></div>';
+  const root = document.getElementById('public-root');
+
+  if(!appsScriptConfigurado()){
+    root.innerHTML = paginaPublicaIndisponivel('A integração desta página ainda não foi concluída por quem administra o painel.');
+    return;
+  }
+
+  let info;
+  try{
+    info = await chamarAppsScriptGet('action=avaliacaoDesempenhoInfo&token=' + encodeURIComponent(token));
+  }catch(err){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Não foi possível carregar</h2>
+      <p class="hint" style="margin-bottom:16px;">${esc(err.message || 'Ocorreu um erro ao carregar a avaliação.')}</p>
+      <span class="btn btn-primary" id="btn-tentar-novamente-ad">Tentar novamente</span>
+    </div>`;
+    const btn = document.getElementById('btn-tentar-novamente-ad');
+    if(btn) btn.addEventListener('click', ()=> renderAvaliacaoDesempenhoPublica(token));
+    return;
+  }
+
+  if(!info || !info.ok){
+    root.innerHTML = paginaPublicaIndisponivel('Não encontramos esta avaliação. Confira o link recebido.');
+    return;
+  }
+
+  if(info.jaRespondeu){
+    root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+      <h2 style="margin-bottom:10px;">Avaliação já respondida</h2>
+      <p class="hint">Obrigado! Identificamos que você já respondeu esta avaliação anteriormente.</p>
+    </div>`;
+    return;
+  }
+
+  const comportamentais = info.competencias.filter(c=>c.categoria==='comportamental');
+  const tecnicas = info.competencias.filter(c=>c.categoria==='tecnica');
+  const papelLabel = PAPEIS_AVALIADOR[info.papel] ? PAPEIS_AVALIADOR[info.papel].label : 'Avaliador';
+
+  function blocoCompetencia(comp){
+    return `<div style="margin-bottom:20px;"><p style="font-size:14px;margin:0 0 6px 0;font-weight:600;">${esc(comp.nome)}</p>
+      <p class="hint" style="margin:0 0 8px 0;">1 = muito abaixo do esperado · 5 = muito acima do esperado</p>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+        ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:12px;color:var(--ink-soft);gap:2px;font-weight:400;">
+          <input type="radio" name="comp_${esc(comp.nome)}" value="${n}" required>${n}
+        </label>`).join('')}
+      </div></div>`;
+  }
+
+  root.innerHTML = `
+    <div class="card" style="max-width:680px;margin:32px auto;padding:0;overflow:hidden;">
+      <div style="background:var(--spine);padding:26px 32px;text-align:center;">
+        <img src="data:image/png;base64,${LOGO_COLORIDO_B64}" alt="Caroline Peixoto DHO" style="max-width:260px;width:100%;height:auto;display:inline-block;">
+      </div>
+      <div style="padding:32px;">
+        <h1 style="font-size:22px;margin-bottom:6px;">Avaliação de Desempenho</h1>
+        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 6px 0;">Você está avaliando <strong>${esc(info.colaboradorNome)}</strong> como <strong>${esc(papelLabel)}</strong>${info.periodoReferencia?' — '+esc(info.periodoReferencia):''}.</p>
+        <p style="color:var(--ink-soft);font-size:13px;margin:0 0 24px 0;">Para cada competência, avalie o quanto a pessoa demonstra isso no dia a dia. Suas respostas serão tratadas com confidencialidade.</p>
+
+        <form id="form-avaliacao-desempenho">
+          ${comportamentais.length ? '<div class="section-title">Competências comportamentais</div>' + comportamentais.map(blocoCompetencia).join('') : ''}
+          ${tecnicas.length ? '<div class="section-title">Competências técnicas</div>' + tecnicas.map(blocoCompetencia).join('') : ''}
+
+          <div class="section-title">Comentário geral (opcional)</div>
+          <div class="field full"><textarea name="comentarioGeral" style="min-height:90px;" placeholder="Algo que queira destacar sobre o desempenho desta pessoa..."></textarea></div>
+
+          <p class="hint" id="erro-ad" style="color:var(--red);display:none;"></p>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;" id="btn-enviar-ad">Enviar avaliação</button>
+        </form>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--ink-soft);font-size:12px;margin-top:16px;">Caroline Peixoto DHO · Desenvolvimento Humano e Organizacional</p>
+  `;
+
+  document.getElementById('form-avaliacao-desempenho').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-ad');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const notas = {};
+    info.competencias.forEach(comp=>{ notas[comp.nome] = f.get('comp_'+comp.nome) || ''; });
+    const btn = document.getElementById('btn-enviar-ad');
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try{
+      await chamarAppsScriptPost('salvarRespostaAvaliacaoDesempenho', { token: token, notas: notas, comentarioGeral: f.get('comentarioGeral').trim() });
+      root.innerHTML = `<div class="card" style="max-width:520px;margin:60px auto;padding:36px;text-align:center;">
+        <h2 style="margin-bottom:10px;">Obrigado!</h2>
+        <p class="hint">Sua avaliação foi registrada com sucesso.</p>
+      </div>`;
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível enviar agora. Tente novamente.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Enviar avaliação';
+    }
+  });
+}
+
 async function renderPesquisaDesligamentoPublica(token){
   document.title = 'Pesquisa de Desligamento · Caroline Peixoto DHO';
   document.body.innerHTML = '<div id="public-root" style="padding:16px;"><div class="card" style="max-width:640px;margin:40px auto;padding:32px;text-align:center;color:var(--ink-soft);">Carregando…</div></div><div id="toast-slot"></div>';
@@ -5149,6 +5288,31 @@ function abrirProntuario(colaboradorId){
     </div>
     <p class="hint">Nenhuma função vinculada.</p>
     `}
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Avaliação de Desempenho</span>
+      <span class="btn btn-secondary btn-sm" data-action="nova-avaliacao-desempenho" data-id="${c.id}">+ Nova avaliação</span>
+    </div>
+    ${(c.avaliacoesDesempenho||[]).length===0 ? '<p class="hint">Nenhuma avaliação de desempenho realizada ainda.</p>' : `
+    <div class="table-wrap" style="margin-bottom:10px;"><table><thead><tr><th>Período</th><th>Criada em</th><th>Avaliadores</th><th>Status</th><th></th></tr></thead><tbody>
+      ${(c.avaliacoesDesempenho||[]).slice().reverse().map(av=>`<tr>
+        <td>${esc(av.periodoReferencia||'—')}</td>
+        <td>${formatDate(av.dataCriacao)}</td>
+        <td>${av.avaliadores.filter(a=>a.respondida).length} de ${av.avaliadores.length} responderam</td>
+        <td>${av.status==='concluida'?'<span class="badge badge-green">Concluída</span>':'<span class="badge badge-amber">Em andamento</span>'}</td>
+        <td><span class="btn btn-ghost btn-sm" data-action="ver-avaliacao-desempenho" data-id="${c.id}" data-avaliacao-id="${av.id}">Ver</span></td>
+      </tr>`).join('')}
+    </tbody></table></div>
+    `}
+
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Potencial (Nine Box)</span>
+      <span class="btn btn-secondary btn-sm" data-action="avaliar-potencial" data-id="${c.id}">+ Avaliar potencial</span>
+    </div>
+    ${(c.avaliacoesPotencial||[]).length===0 ? '<p class="hint">Nenhuma avaliação de potencial registrada ainda.</p>' : (()=>{
+      const ultima = c.avaliacoesPotencial[c.avaliacoesPotencial.length-1];
+      const pos = calcularPosicaoNineBox(c);
+      return `<p class="hint">Última avaliação em ${formatDate(ultima.data)}${ultima.avaliadoPor?' por '+esc(ultima.avaliadoPor):''} — média de potencial: <strong>${ultima.media}</strong>${pos?' · Desempenho: <strong>'+pos.desempenho+'</strong> · Posição no Nine Box: <strong>'+esc(pos.rotulo)+'</strong>':' (ainda sem avaliação de desempenho concluída pra posicionar no grid)'}</p>`;
+    })()}
 
     <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
       <span>Férias</span>
@@ -5250,6 +5414,238 @@ function abrirProntuario(colaboradorId){
   `);
 }
 
+function linhaAvaliador(av){
+  av = av || { papel:'autoavaliacao', nomeAvaliador:'', telefone:'' };
+  return `<div class="form-grid" data-linha-avaliador style="margin-bottom:8px;align-items:end;">
+    <div class="field">
+      <label>Papel</label>
+      <select class="input-aval-papel">
+        ${Object.entries(PAPEIS_AVALIADOR).map(([k,v])=>'<option value="'+k+'" '+(av.papel===k?'selected':'')+'>'+v.icone+' '+v.label+'</option>').join('')}
+      </select>
+    </div>
+    <div class="field"><label>Nome do avaliador</label><input class="input-aval-nome" value="${esc(av.nomeAvaliador)}" placeholder="Nome completo"></div>
+    <div class="field"><label>Telefone (opcional, p/ WhatsApp)</label><input class="input-aval-telefone" value="${esc(av.telefone||'')}" placeholder="(xx) xxxxx-xxxx"></div>
+    <div class="field" style="flex:0;"><span class="btn btn-ghost btn-sm" data-remover-avaliador title="Remover">✕</span></div>
+  </div>`;
+}
+
+function modalNovaAvaliacaoDesempenho(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const funcao = c.funcaoId ? getFuncao(c.funcaoId) : null;
+  const descritivo = funcao ? db.descritivosCargo.find(d=>d.funcaoId===funcao.id) : null;
+  const temCompetencias = descritivo && ((descritivo.habilidadesComportamentais||[]).some(h=>h.nome) || (descritivo.habilidadesTecnicas||[]).some(h=>h.nome));
+
+  if(!temCompetencias){
+    openModal(`
+      <button class="modal-close" data-action="fechar-modal">&times;</button>
+      <h2>Nova Avaliação de Desempenho</h2>
+      <div class="modal-sub">${esc(c.nome)}</div>
+      <p class="hint" style="margin-top:14px;">${!funcao ? 'Este colaborador ainda não tem uma função vinculada.' : 'O descritivo de cargo de "'+esc(funcao.nome)+'" ainda não tem nenhuma competência (técnica ou comportamental) cadastrada.'} Preencha isso primeiro — a avaliação é construída em cima dessas competências.</p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+          ${funcao ? '<span class="btn btn-primary" data-action="descritivo-cargo" data-id="'+funcao.id+'">Ir para o descritivo de cargo</span>' : ''}
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Nova Avaliação de Desempenho</h2>
+    <div class="modal-sub">${esc(c.nome)} · ${esc(funcao.nome)}</div>
+    <form id="form-nova-avaliacao">
+      <div class="field full"><label>Período de referência</label><input name="periodoReferencia" placeholder="Ex.: 2026 - 2º semestre"></div>
+      <div class="section-title">Avaliadores</div>
+      <p class="hint" style="margin-top:-4px;">Para 180°, use Autoavaliação + Gestor. Para 360°, inclua também Pares e Subordinados.</p>
+      <div id="lista-avaliadores">${linhaAvaliador({papel:'autoavaliacao',nomeAvaliador:c.nome,telefone:c.telefone||''})}${linhaAvaliador({papel:'gestor'})}</div>
+      <span class="btn btn-secondary btn-sm" id="btn-add-avaliador" type="button">+ Adicionar avaliador</span>
+      <p class="hint" id="erro-nova-avaliacao" style="color:var(--red);display:none;margin-top:10px;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Criar avaliação e gerar links</button>
+        </div>
+      </div>
+    </form>
+  `);
+
+  document.getElementById('btn-add-avaliador').addEventListener('click', ()=>{
+    document.getElementById('lista-avaliadores').insertAdjacentHTML('beforeend', linhaAvaliador());
+  });
+  document.getElementById('form-nova-avaliacao').addEventListener('click', e=>{
+    if(e.target.matches('[data-remover-avaliador]')){
+      const linha = e.target.closest('[data-linha-avaliador]');
+      if(document.querySelectorAll('[data-linha-avaliador]').length > 1) linha.remove();
+    }
+  });
+
+  document.getElementById('form-nova-avaliacao').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-nova-avaliacao');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const avaliadores = Array.from(document.querySelectorAll('[data-linha-avaliador]')).map(linha=>({
+      papel: linha.querySelector('.input-aval-papel').value,
+      nomeAvaliador: linha.querySelector('.input-aval-nome').value.trim(),
+      telefone: linha.querySelector('.input-aval-telefone').value.trim()
+    })).filter(a=>a.nomeAvaliador);
+
+    if(avaliadores.length===0){ erroEl.textContent = 'Adicione ao menos um avaliador com nome preenchido.'; erroEl.style.display = 'block'; return; }
+
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Criando…';
+    try{
+      const resp = await chamarAppsScriptPost('criarAvaliacaoDesempenho', { colaboradorId: colaboradorId, periodoReferencia: f.get('periodoReferencia').trim(), avaliadores: avaliadores });
+      // injeta o telefone de volta (o servidor não guarda telefone, só usamos aqui pra montar os links de WhatsApp)
+      resp.avaliacao.avaliadores.forEach((av,i)=>{ av.telefone = avaliadores[i] ? avaliadores[i].telefone : ''; });
+      if(!Array.isArray(c.avaliacoesDesempenho)) c.avaliacoesDesempenho = [];
+      c.avaliacoesDesempenho.push(resp.avaliacao);
+      closeModal();
+      modalLinksAvaliacaoDesempenho(c, resp.avaliacao);
+      showToast('Avaliação criada! Envie os links para os avaliadores.');
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível criar a avaliação agora.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Criar avaliação e gerar links';
+    }
+  });
+}
+
+function modalLinksAvaliacaoDesempenho(colaborador, avaliacao){
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Links da avaliação</h2>
+    <div class="modal-sub">${esc(colaborador.nome)} · ${esc(avaliacao.periodoReferencia||'')}</div>
+    <p class="hint" style="margin-bottom:14px;">Envie o link de cada avaliador pra pessoa certa. Cada um responde só uma vez.</p>
+    ${avaliacao.avaliadores.map(av=>{
+      const link = window.location.origin + window.location.pathname + '#avaliacao-desempenho-' + av.token;
+      const mensagem = 'Olá, '+av.nomeAvaliador+'! Você foi convidado(a) a participar da avaliação de desempenho de '+colaborador.nome+'. Pode responder por este link: '+link;
+      return `<div class="card" style="padding:12px 14px;margin-bottom:10px;">
+        <p style="margin:0 0 6px 0;"><strong>${PAPEIS_AVALIADOR[av.papel].icone} ${esc(PAPEIS_AVALIADOR[av.papel].label)}</strong> — ${esc(av.nomeAvaliador)}</p>
+        <input type="text" readonly value="${esc(link)}" style="margin-bottom:8px;" onclick="this.select()">
+        <span class="btn btn-secondary btn-sm" data-action="copiar-link-generico" data-link="${esc(link)}">Copiar link</span>
+        ${av.telefone ? '<span class="btn btn-secondary btn-sm" data-action="whatsapp-link-generico" data-telefone="'+esc(av.telefone)+'" data-mensagem="'+esc(mensagem)+'">💬 WhatsApp</span>' : ''}
+      </div>`;
+    }).join('')}
+    <div class="modal-footer">
+      <span></span>
+      <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div>
+    </div>
+  `);
+}
+
+function modalAvaliarPotencial(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Avaliar Potencial</h2>
+    <div class="modal-sub">${esc(c.nome)}</div>
+    <p class="hint" style="margin-bottom:14px;">Avalie de 1 a 5 cada critério, pensando no comportamento observado no dia a dia. Isso alimenta o eixo "Potencial" do Nine Box.</p>
+    <form id="form-potencial">
+      ${CRITERIOS_POTENCIAL.map(crit=>`
+        <div style="margin-bottom:18px;">
+          <p style="font-size:14px;margin:0 0 2px 0;font-weight:600;">${esc(crit.nome)}</p>
+          <p class="hint" style="margin:0 0 8px 0;">${esc(crit.pergunta)}</p>
+          <div style="display:flex;gap:14px;align-items:center;">
+            ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:12px;color:var(--ink-soft);gap:2px;font-weight:400;">
+              <input type="radio" name="crit_${crit.chave}" value="${n}" required>${n}
+            </label>`).join('')}
+          </div>
+        </div>
+      `).join('')}
+      <div class="form-grid">
+        <div class="field"><label>Avaliado por</label><input name="avaliadoPor" placeholder="Seu nome ou do(a) gestor(a)"></div>
+        <div class="field"><label>Data</label><input type="date" name="data" value="${todayISO()}"></div>
+      </div>
+      <div class="field full"><label>Observações (opcional)</label><textarea name="observacoes" placeholder="Algo que embase a avaliação..."></textarea></div>
+      <p class="hint" id="erro-potencial" style="color:var(--red);display:none;"></p>
+      <div class="modal-footer">
+        <span></span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar avaliação</button>
+        </div>
+      </div>
+    </form>
+  `);
+  document.getElementById('form-potencial').addEventListener('submit', e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-potencial');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const notas = {};
+    let soma = 0;
+    CRITERIOS_POTENCIAL.forEach(crit=>{ const v = parseFloat(f.get('crit_'+crit.chave)); notas[crit.nome] = v; soma += v; });
+    const media = Math.round((soma/CRITERIOS_POTENCIAL.length)*10)/10;
+    if(!Array.isArray(c.avaliacoesPotencial)) c.avaliacoesPotencial = [];
+    c.avaliacoesPotencial.push({ id:uid('pot'), data: f.get('data'), avaliadoPor: f.get('avaliadoPor').trim(), notas, media, observacoes: f.get('observacoes').trim() });
+    closeModal();
+    saveDB();
+    abrirProntuario(colaboradorId);
+    showToast('Avaliação de potencial salva. Média: '+media+'.');
+  });
+}
+
+function modalVerAvaliacaoDesempenho(colaboradorId, avaliacaoId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const avaliacao = (c.avaliacoesDesempenho||[]).find(a=>a.id===avaliacaoId);
+  if(!avaliacao) return;
+  const resultado = calcularResultadoAvaliacaoDesempenho(avaliacao);
+  const papeisComDados = Object.keys(PAPEIS_AVALIADOR).filter(p=>avaliacao.avaliadores.some(a=>a.papel===p));
+
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Avaliação de Desempenho</h2>
+    <div class="modal-sub">${esc(c.nome)} · ${esc(avaliacao.periodoReferencia||'')} · ${resultado.respondidos} de ${resultado.total} responderam</div>
+
+    <div class="section-title">Avaliadores</div>
+    <div class="table-wrap" style="margin-bottom:14px;"><table><thead><tr><th>Papel</th><th>Nome</th><th>Status</th><th></th></tr></thead><tbody>
+      ${avaliacao.avaliadores.map(av=>`<tr>
+        <td>${PAPEIS_AVALIADOR[av.papel].icone} ${esc(PAPEIS_AVALIADOR[av.papel].label)}</td>
+        <td>${esc(av.nomeAvaliador)}</td>
+        <td>${av.respondida?'<span class="badge badge-green">Respondido</span>':'<span class="badge badge-amber">Pendente</span>'}</td>
+        <td>${!av.respondida?'<span class="btn btn-ghost btn-sm" data-action="copiar-link-generico" data-link="'+esc(window.location.origin+window.location.pathname+'#avaliacao-desempenho-'+av.token)+'">Copiar link</span>':''}</td>
+      </tr>`).join('')}
+    </tbody></table></div>
+
+    ${resultado.respondidos===0 ? '<p class="hint">Assim que o primeiro avaliador responder, o comparativo por competência aparece aqui.</p>' : `
+    <div class="section-title">Resultado por competência</div>
+    <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Nota esperada calculada a partir da prioridade cadastrada no descritivo de cargo (Obrigatório≈4, Desejável≈3, Desenvolvimento≈2). Vermelho = média abaixo do esperado (gap).</p>
+    <div class="table-wrap" style="margin-bottom:14px;"><table><thead><tr>
+      <th>Competência</th><th>Esperado</th>${papeisComDados.map(p=>'<th>'+PAPEIS_AVALIADOR[p].icone+'</th>').join('')}<th>Média geral</th><th>Gap</th>
+    </tr></thead><tbody>
+      ${resultado.competencias.map(comp=>`<tr ${comp.gap!==null && comp.gap<0 ? 'style="background:var(--red-soft);"' : ''}>
+        <td>${esc(comp.nome)}<div class="hint">${comp.categoria==='tecnica'?'Técnica':'Comportamental'}</div></td>
+        <td>${comp.notaEsperada}</td>
+        ${papeisComDados.map(p=>'<td>'+(comp.medias[p]!==null?comp.medias[p]:'—')+'</td>').join('')}
+        <td><strong>${comp.mediaGeral!==null?comp.mediaGeral:'—'}</strong></td>
+        <td>${comp.gap!==null ? (comp.gap<0?'🔴 ':(comp.gap>0?'🟢 ':'')) + (comp.gap>0?'+':'') + comp.gap : '—'}</td>
+      </tr>`).join('')}
+    </tbody></table></div>
+
+    <div class="section-title">Comentários dos avaliadores</div>
+    ${avaliacao.avaliadores.filter(a=>a.respondida && a.comentarioGeral).map(a=>`
+      <div class="card" style="padding:10px 14px;margin-bottom:8px;">
+        <p class="hint" style="margin:0 0 4px 0;">${PAPEIS_AVALIADOR[a.papel].icone} ${esc(PAPEIS_AVALIADOR[a.papel].label)} — ${esc(a.nomeAvaliador)}</p>
+        <p style="margin:0;font-size:13.5px;white-space:pre-line;">${esc(a.comentarioGeral)}</p>
+      </div>
+    `).join('') || '<p class="hint">Nenhum comentário deixado ainda.</p>'}
+    `}
+
+    <div class="modal-footer">
+      <span></span>
+      <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div>
+    </div>
+  `);
+}
+
 function modalRegistrarFerias(colaboradorId){
   const c = getColaborador(colaboradorId);
   if(!c) return;
@@ -5293,6 +5689,87 @@ function modalRegistrarFerias(colaboradorId){
 }
 
 const TIPOS_MUDANCA_FUNCAO = ['Promoção', 'Transferência de área', 'Mudança de função (lateral)', 'Ajuste de cargo'];
+
+const PAPEIS_AVALIADOR = {
+  autoavaliacao: { label:'Autoavaliação', icone:'🙋' },
+  gestor: { label:'Gestor(a)', icone:'👔' },
+  par: { label:'Par / Colega', icone:'🤝' },
+  subordinado: { label:'Subordinado(a)', icone:'👥' }
+};
+// Nível de prioridade do descritivo de cargo (1=Obrigatório, 2=Desejável, 3=Desenvolvimento) convertido numa nota
+// esperada de 1 a 5, só pra servir de referência visual na comparação com o que os avaliadores deram.
+const NIVEL_ESPERADO_POR_PRIORIDADE = { '1': 4, '2': 3, '3': 2 };
+
+/* ---------------- NINE BOX (Performance x Potencial) ---------------- */
+
+const CRITERIOS_POTENCIAL = [
+  { chave:'agilidade', nome:'Agilidade de aprendizado', pergunta:'Aprende rápido com situações novas e aplica esse aprendizado em contextos diferentes?' },
+  { chave:'ambicao', nome:'Ambição / Aspiração', pergunta:'Demonstra interesse genuíno em crescer e assumir mais responsabilidade?' },
+  { chave:'adaptabilidade', nome:'Adaptabilidade', pergunta:'Lida bem com mudança, pressão ou ambiguidade, sem travar ou resistir?' },
+  { chave:'influencia', nome:'Influência e relacionamento', pergunta:'Constrói boas relações e influencia positivamente colegas, mesmo sem cargo de liderança formal?' },
+  { chave:'visao', nome:'Visão além do cargo atual', pergunta:'Pensa no impacto do trabalho pro time/empresa, não só na própria tarefa?' }
+];
+
+// Rótulos clássicos do Nine Box: [linha de potencial (alto→baixo)][coluna de desempenho (baixo→médio→alto)]
+const ROTULOS_NINE_BOX = [
+  ['Enigma', 'Alto Potencial', 'Estrela'],
+  ['Questionável', 'Mantenedor', 'Forte Desempenho'],
+  ['Insuficiente', 'Eficiente', 'Especialista']
+];
+
+function classificarTercoNineBox(media){
+  if(media===null || media===undefined) return null;
+  if(media < 2.34) return 0; // baixo
+  if(media < 3.68) return 1; // médio
+  return 2; // alto
+}
+
+function mediaUltimaAvaliacaoDesempenho(colaborador){
+  const avals = (colaborador.avaliacoesDesempenho||[]).filter(a=>a.avaliadores.some(av=>av.respondida));
+  if(avals.length===0) return null;
+  const ultima = avals[avals.length-1];
+  const resultado = calcularResultadoAvaliacaoDesempenho(ultima);
+  const medias = resultado.competencias.map(c=>c.mediaGeral).filter(m=>m!==null);
+  if(medias.length===0) return null;
+  return Math.round((medias.reduce((a,b)=>a+b,0)/medias.length)*10)/10;
+}
+
+function mediaUltimaAvaliacaoPotencial(colaborador){
+  const avals = colaborador.avaliacoesPotencial||[];
+  if(avals.length===0) return null;
+  return avals[avals.length-1].media;
+}
+
+function calcularPosicaoNineBox(colaborador){
+  const desempenho = mediaUltimaAvaliacaoDesempenho(colaborador);
+  const potencial = mediaUltimaAvaliacaoPotencial(colaborador);
+  const colDesempenho = classificarTercoNineBox(desempenho);
+  const linhaPotencial = classificarTercoNineBox(potencial);
+  if(colDesempenho===null || linhaPotencial===null) return null;
+  return { desempenho, potencial, colDesempenho, linhaPotencial, rotulo: ROTULOS_NINE_BOX[2-linhaPotencial][colDesempenho] };
+}
+
+function calcularResultadoAvaliacaoDesempenho(avaliacao){
+  const porPapel = {};
+  Object.keys(PAPEIS_AVALIADOR).forEach(p=>{ porPapel[p] = []; });
+  avaliacao.avaliadores.forEach(av=>{ if(av.respondida && porPapel[av.papel]) porPapel[av.papel].push(av); });
+
+  const competencias = avaliacao.competencias.map(comp=>{
+    const notaEsperada = NIVEL_ESPERADO_POR_PRIORIDADE[comp.nivelPrioridade] || 3;
+    const medias = {};
+    let somaGeral = 0, qtdGeral = 0;
+    Object.keys(PAPEIS_AVALIADOR).forEach(papel=>{
+      const notas = porPapel[papel].map(av=>parseFloat(av.notas[comp.nome])).filter(n=>!isNaN(n));
+      medias[papel] = notas.length ? Math.round((notas.reduce((a,b)=>a+b,0)/notas.length)*10)/10 : null;
+      if(notas.length){ somaGeral += notas.reduce((a,b)=>a+b,0); qtdGeral += notas.length; }
+    });
+    const mediaGeral = qtdGeral ? Math.round((somaGeral/qtdGeral)*10)/10 : null;
+    return { nome:comp.nome, categoria:comp.categoria, notaEsperada, medias, mediaGeral, gap: mediaGeral!==null ? Math.round((mediaGeral-notaEsperada)*10)/10 : null };
+  });
+
+  const respondidos = avaliacao.avaliadores.filter(a=>a.respondida).length;
+  return { competencias, respondidos, total: avaliacao.avaliadores.length };
+}
 function modalRegistrarMudancaFuncao(colaboradorId){
   const c = getColaborador(colaboradorId);
   if(!c) return;
@@ -9089,6 +9566,25 @@ function onGlobalClick(e){
   if(action === 'ver-trilha-colaborador'){ modalTrilhaColaborador(id); return; }
   if(action === 'registrar-mudanca-funcao'){ modalRegistrarMudancaFuncao(id); return; }
   if(action === 'registrar-ferias'){ modalRegistrarFerias(id); return; }
+  if(action === 'nova-avaliacao-desempenho'){ modalNovaAvaliacaoDesempenho(id); return; }
+  if(action === 'avaliar-potencial'){ modalAvaliarPotencial(id); return; }
+  if(action === 'ver-avaliacao-desempenho'){ modalVerAvaliacaoDesempenho(id, el.dataset.avaliacaoId); return; }
+  if(action === 'copiar-link-generico'){
+    const link = el.dataset.link;
+    const finalizar = ()=> showToast('Link copiado!');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(finalizar).catch(()=>{
+        const tmp = document.createElement('input'); tmp.value = link; document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); tmp.remove(); finalizar();
+      });
+    } else {
+      const tmp = document.createElement('input'); tmp.value = link; document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); tmp.remove(); finalizar();
+    }
+    return;
+  }
+  if(action === 'whatsapp-link-generico'){
+    window.open(linkWhatsApp(el.dataset.telefone, el.dataset.mensagem), '_blank');
+    return;
+  }
   if(action === 'excluir-colaborador'){
     if(confirm('Excluir este colaborador? Esta ação não pode ser desfeita.')){
       db.colaboradores = db.colaboradores.filter(c=>c.id!==id);
@@ -9776,9 +10272,11 @@ async function roteirizarPaginaPublica(){
   const clienteIdClima = getHashClimaId();
   const pesquisaIdRapida = getHashRapidaId();
   const tokenDesligamento = getHashDesligamentoToken();
+  const tokenAvaliacaoDesempenho = getHashAvaliacaoDesempenhoToken();
 
   if(cargoIdPublico){ await renderPublicApplication(cargoIdPublico); return true; }
   if(tokenDesligamento){ await renderPesquisaDesligamentoPublica(tokenDesligamento); return true; }
+  if(tokenAvaliacaoDesempenho){ await renderAvaliacaoDesempenhoPublica(tokenAvaliacaoDesempenho); return true; }
   if(candidatoIdAvaliacao){ await renderAvaliacaoComportamental(candidatoIdAvaliacao); return true; }
   if(clienteIdCultura){ await renderDiagnosticoCultura(clienteIdCultura); return true; }
   if(clienteIdDenuncia){ await renderCanalDenuncia(clienteIdDenuncia); return true; }
