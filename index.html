@@ -276,7 +276,7 @@ async function chamarAppsScriptPost(action, payload, timeoutMs, tentativa){
     res = await fetch(APPS_SCRIPT_URL, {
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify(Object.assign({action:action, adminToken: localStorage.getItem('painelAdminToken')||''}, payload)),
+      body: JSON.stringify(Object.assign({action:action, adminToken: localStorage.getItem('painelAdminToken')||'', portalToken: portalToken}, payload)),
       signal: controller.signal
     });
   }catch(err){
@@ -299,6 +299,7 @@ async function chamarAppsScriptPost(action, payload, timeoutMs, tentativa){
   }
   if(!data.ok){
     if(data.tokenInvalido){ localStorage.removeItem('painelAdminToken'); renderTelaLoginAdmin('Sua sessão expirou. Faça login de novo.'); }
+    if(data.tokenPortalInvalido){ portalToken = ''; renderPortalLogin('Sua sessão expirou. Entre novamente.'); }
     const erro = new Error(data.error || 'Falha na integração.'); erro.dados = data; throw erro;
   }
   return data;
@@ -311,7 +312,7 @@ async function chamarAppsScriptGet(query, timeoutMs, tentativa){
   const timer = setTimeout(()=>controller.abort(), timeoutMs || 35000);
   let res;
   try{
-    res = await fetch(APPS_SCRIPT_URL + '?' + query + '&adminToken=' + encodeURIComponent(localStorage.getItem('painelAdminToken')||''), { signal: controller.signal });
+    res = await fetch(APPS_SCRIPT_URL + '?' + query + '&adminToken=' + encodeURIComponent(localStorage.getItem('painelAdminToken')||'') + '&portalToken=' + encodeURIComponent(portalToken), { signal: controller.signal });
   }catch(err){
     clearTimeout(timer);
     if(err.name === 'AbortError'){
@@ -338,6 +339,7 @@ async function chamarAppsScriptGet(query, timeoutMs, tentativa){
   }
   if(!data.ok){
     if(data.tokenInvalido){ localStorage.removeItem('painelAdminToken'); renderTelaLoginAdmin('Sua sessão expirou. Faça login de novo.'); }
+    if(data.tokenPortalInvalido){ portalToken = ''; renderPortalLogin('Sua sessão expirou. Entre novamente.'); }
     throw new Error(data.error || 'Falha na integração.');
   }
   return data;
@@ -563,14 +565,11 @@ const GRUPOS_NAV = [
     {tab:'colaboradores', colabAba:'funcoes', label:'Cadastro de Função'}
   ]},
   { id:'gestaoColab', label:'Gestão de Colaboradores', icone:'👥', itens:[
-    {tab:'colaboradores', colabAba:'colaboradores', label:'Colaboradores Cadastrados'},
-    {tab:'colaboradores', colabAba:'colaboradores', label:'Férias'},
-    {tab:'colaboradores', colabAba:'colaboradores', label:'Registros (feedbacks, 1:1…)'},
-    {tab:'aniversarios', label:'Aniversários'},
-    {tab:'colaboradores', colabAba:'colaboradores', label:'Desligamentos'}
+    {tab:'colaboradores', colabAba:'colaboradores', label:'Colaboradores'},
+    {tab:'aniversarios', label:'Aniversários'}
   ]},
   { id:'performance', label:'Performance', icone:'📈', itens:[
-    {tab:'colaboradores', colabAba:'colaboradores', label:'Avaliação de Desempenho'},
+    {tab:'avaliacaoDesempenhoLista', label:'Avaliação de Desempenho'},
     {tab:'avaliacaoExperienciaLista', label:'Avaliação de Experiência'},
     {label:'PDI', emBreve:true},
     {tab:'colaboradores', colabAba:'treinamentos', label:'Treinamentos'},
@@ -1463,6 +1462,7 @@ function renderView(){
   else if(state.tab === 'propostaComercial') view.innerHTML = viewPropostaComercial();
   else if(state.tab === 'parecerCandidato') view.innerHTML = viewParecerCandidato();
   else if(state.tab === 'portalAcessos') view.innerHTML = viewPortalAcessos();
+  else if(state.tab === 'avaliacaoDesempenhoLista') view.innerHTML = viewAvaliacaoDesempenhoLista();
   else if(state.tab === 'relatorio') view.innerHTML = viewRelatorio();
   view.classList.remove('view-animar');
   void view.offsetWidth; // força o navegador a recalcular, pra animação tocar de novo a cada troca
@@ -1543,13 +1543,85 @@ function drawDashboardSparklines(){
 const TIPOS_AGENDA = ['Reunião', 'Entrevista', 'Ligação', 'Tarefa', 'Lembrete', 'Outro'];
 const CORES_TIPO_AGENDA = { 'Reunião':'#B2573D', 'Entrevista':'#8C6A4B', 'Ligação':'#4C8C6B', 'Tarefa':'#C9A24B', 'Lembrete':'#6B7C93', 'Outro':'#8C8C8C' };
 
+const DIAS_SEMANA_CURTO = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+// Um compromisso que se repete é guardado UMA vez só (com a regra de repetição) e as datas são calculadas na hora de mostrar.
+function ocorreEmData(ev, dataISO){
+  const r = ev.repeticao;
+  if(!r || !r.tipo) return ev.data === dataISO;
+  if(dataISO < ev.data) return false;
+  if(r.ate && dataISO > r.ate) return false;
+  if((ev.excecoes||[]).includes(dataISO)) return false;
+  const d = new Date(dataISO+'T00:00:00'), ini = new Date(ev.data+'T00:00:00');
+  if(r.tipo==='semanal' || r.tipo==='quinzenal'){
+    const dias = (r.diasSemana && r.diasSemana.length) ? r.diasSemana : [ini.getDay()];
+    if(!dias.includes(d.getDay())) return false;
+    const semanaIni = new Date(ini); semanaIni.setDate(ini.getDate() - ini.getDay());
+    const semanaD = new Date(d); semanaD.setDate(d.getDate() - d.getDay());
+    const semanas = Math.round((semanaD - semanaIni) / (7*86400000));
+    return semanas % (r.tipo==='quinzenal' ? 2 : 1) === 0;
+  }
+  if(r.tipo==='mensal') return d.getDate() === ini.getDate(); // meses sem esse dia (ex.: 31) são pulados, igual ao Google Agenda
+  if(r.tipo==='anual') return d.getMonth() === ini.getMonth() && d.getDate() === ini.getDate();
+  return false;
+}
+function descricaoRepeticao(e){
+  const r = e.repeticao;
+  if(!r || !r.tipo) return '';
+  let txt = {semanal:'Toda semana', quinzenal:'A cada 2 semanas', mensal:'Todo mês', anual:'Todo ano'}[r.tipo] || '';
+  if((r.tipo==='semanal' || r.tipo==='quinzenal') && r.diasSemana && r.diasSemana.length) txt += ' ('+r.diasSemana.map(d=>DIAS_SEMANA_CURTO[d]).join(', ')+')';
+  if(r.ate) txt += ' até '+formatDate(r.ate);
+  return txt;
+}
 function eventosDoDia(dataISO){
-  return db.agenda.filter(e=>e.data===dataISO).sort((a,b)=> (a.hora||'99:99').localeCompare(b.hora||'99:99'));
+  return db.agenda.filter(e=>ocorreEmData(e, dataISO)).map(e=>{
+    if(!e.repeticao || !e.repeticao.tipo) return e;
+    return Object.assign({}, e, { data: dataISO, concluido: (e.concluidasEm||[]).includes(dataISO) }); // cópia só para exibição
+  }).sort((a,b)=> (a.hora||'99:99').localeCompare(b.hora||'99:99'));
 }
 function proximosEventos(diasLimite){
   const hoje = todayISO();
-  const fim = dataMaisDias(hoje, diasLimite);
-  return db.agenda.filter(e=> !e.concluido && e.data>=hoje && e.data<=fim).sort((a,b)=> a.data.localeCompare(b.data) || (a.hora||'99:99').localeCompare(b.hora||'99:99'));
+  const lista = [];
+  for(let i=0; i<=diasLimite; i++){
+    eventosDoDia(dataMaisDias(hoje, i)).filter(e=>!e.concluido).forEach(e=>lista.push(e));
+  }
+  return lista;
+}
+async function ressincronizarCompromissoGoogle(ev){
+  if(!appsScriptConfigurado()) return;
+  try{
+    const r = await chamarAppsScriptPost('sincronizarCompromissoGoogleAgenda', {compromisso: ev});
+    if(r.googleEventId && r.googleEventId !== ev.googleEventId){ ev.googleEventId = r.googleEventId; saveDB(); }
+  }catch(err){ /* a agenda do painel já foi atualizada; a do Google tenta de novo na próxima edição */ }
+}
+function modalExcluirRecorrente(id, dataOcorrencia){
+  const ev = db.agenda.find(e=>e.id===id);
+  if(!ev) return;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Excluir compromisso que se repete</h2>
+    <div class="modal-sub">${esc(ev.titulo)}</div>
+    <p class="hint" style="margin-bottom:6px;">${esc(descricaoRepeticao(ev))}</p>
+    <p>O que você quer excluir?</p>
+    <div class="modal-footer">
+      <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+      <div class="right">
+        ${dataOcorrencia ? '<span class="btn btn-secondary" data-action="agenda-excluir-ocorrencia" data-id="'+id+'" data-data="'+dataOcorrencia+'">Só o de '+formatDate(dataOcorrencia)+'</span>' : ''}
+        <span class="btn btn-danger" data-action="agenda-excluir-serie" data-id="${id}">Toda a série</span>
+      </div>
+    </div>
+  `);
+}
+function excluirCompromissoAgenda(id, semConfirmar){
+  if(!semConfirmar && !confirm('Excluir este compromisso?')) return;
+  const excluido = db.agenda.find(e=>e.id===id);
+  db.agenda = db.agenda.filter(e=>e.id!==id);
+  closeModal(); saveDB(); renderView();
+  if(excluido && excluido.googleEventId && appsScriptConfigurado()){
+    chamarAppsScriptPost('excluirCompromissoGoogleAgenda', {googleEventId: excluido.googleEventId}).catch(()=>{
+      // silencioso: o compromisso já foi removido do painel, que é o que mais importa pro fluxo de trabalho.
+    });
+  }
 }
 function primeiroDiaSemanaDoMes(mesRef){
   const [y,m] = mesRef.split('-').map(Number);
@@ -1618,14 +1690,14 @@ function viewAgenda(){
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:start;">
         <div>
           <strong>${e.hora?esc(e.hora)+' · ':''}${esc(e.titulo)}</strong>
-          <div class="hint">${esc(e.tipo)}${cliente?' · '+esc(cliente.nome):''}${e.data!==diaSelecionado?' · '+formatDate(e.data):''}</div>
+          <div class="hint">${esc(e.tipo)}${cliente?' · '+esc(cliente.nome):''}${e.data!==diaSelecionado?' · '+formatDate(e.data):''}${e.repeticao&&e.repeticao.tipo?' · 🔁 '+esc(descricaoRepeticao(e)):''}</div>
           ${e.descricao ? '<p style="margin:6px 0 0 0;font-size:13px;white-space:pre-line;">'+esc(e.descricao)+'</p>' : ''}
         </div>
         <div style="white-space:nowrap;">
           ${e.tipo==='Reunião' ? '<span class="btn btn-ghost btn-sm" data-action="abrir-ata" data-id="'+e.id+'">📄 Ata</span>' : ''}
-          <span class="btn btn-ghost btn-sm" data-action="agenda-concluir" data-id="${e.id}">${e.concluido?'↺ Reabrir':'✓ Concluir'}</span>
+          <span class="btn btn-ghost btn-sm" data-action="agenda-concluir" data-id="${e.id}" data-data="${e.data}">${e.concluido?'↺ Reabrir':'✓ Concluir'}</span>
           <span class="btn btn-ghost btn-sm" data-action="agenda-editar" data-id="${e.id}">Editar</span>
-          <span class="btn btn-ghost btn-sm" data-action="agenda-excluir" data-id="${e.id}">Excluir</span>
+          <span class="btn btn-ghost btn-sm" data-action="agenda-excluir" data-id="${e.id}" data-data="${e.data}">Excluir</span>
         </div>
       </div>
     </div>`;
@@ -1711,6 +1783,7 @@ function modalEventoAgenda(evento, dataPreSelecionada){
   if(!evento.ata) evento.ata = {participantes:'', decisoes:'', proximosPassos:''};
   const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(evento.clienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
   const ehReuniao = evento.tipo === 'Reunião';
+  const rep = evento.repeticao || {tipo:'', diasSemana:[], ate:''};
   openModal(`
     <button class="modal-close" data-action="fechar-modal">&times;</button>
     <h2>${editando ? 'Editar compromisso' : 'Novo compromisso'}</h2>
@@ -1723,6 +1796,23 @@ function modalEventoAgenda(evento, dataPreSelecionada){
         <div class="field"><label>Cliente relacionado (opcional)</label><select name="clienteId"><option value="">Nenhum</option>${clientesOpts}</select></div>
         <div class="field full"><label>Descrição / Pauta (opcional)</label><textarea name="descricao">${esc(evento.descricao||'')}</textarea></div>
       </div>
+
+      <div class="section-title">Repetição</div>
+      <div class="form-grid">
+        <div class="field"><label>Repetir</label>
+          <select name="repeticaoTipo" id="sel-repeticao">
+            <option value="">Não repete</option>
+            <option value="semanal" ${rep.tipo==='semanal'?'selected':''}>Semanalmente</option>
+            <option value="quinzenal" ${rep.tipo==='quinzenal'?'selected':''}>Quinzenalmente</option>
+            <option value="mensal" ${rep.tipo==='mensal'?'selected':''}>Mensalmente</option>
+            <option value="anual" ${rep.tipo==='anual'?'selected':''}>Anualmente</option>
+          </select></div>
+        <div class="field" id="bloco-repeticao-ate" style="display:none;"><label>Repetir até (vazio = sem data final)</label><input type="date" name="repeticaoAte" value="${rep.ate||''}"></div>
+        <div class="field full" id="bloco-dias-semana" style="display:none;"><label>Nos dias da semana</label>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">${DIAS_SEMANA_CURTO.map((n,i)=>'<label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" name="repeticaoDia" value="'+i+'" '+((rep.diasSemana||[]).includes(i)?'checked':'')+'>'+n+'</label>').join('')}</div>
+          <div class="hint">Ex.: para aulas às terças, quintas e sextas, marque Ter, Qui e Sex — um único compromisso cobre todas as datas.</div></div>
+      </div>
+      ${editando && rep.tipo ? '<p class="hint">Este compromisso se repete — as alterações valem para toda a série.</p>' : ''}
 
       <div id="secao-ata-reuniao" style="display:${ehReuniao?'block':'none'};">
         <div class="section-title">Ata da reunião</div>
@@ -1745,6 +1835,22 @@ function modalEventoAgenda(evento, dataPreSelecionada){
   document.getElementById('sel-tipo-agenda').addEventListener('change', e=>{
     document.getElementById('secao-ata-reuniao').style.display = (e.target.value === 'Reunião') ? 'block' : 'none';
   });
+  const selRep = document.getElementById('sel-repeticao');
+  const atualizarBlocosRepeticao = ()=>{
+    const t = selRep.value;
+    document.getElementById('bloco-repeticao-ate').style.display = t ? 'block' : 'none';
+    document.getElementById('bloco-dias-semana').style.display = (t==='semanal' || t==='quinzenal') ? 'block' : 'none';
+    if((t==='semanal' || t==='quinzenal') && !document.querySelector('#form-agenda input[name="repeticaoDia"]:checked')){
+      const dataEscolhida = document.querySelector('#form-agenda [name="data"]').value;
+      if(dataEscolhida){
+        const cb = document.querySelector('#form-agenda input[name="repeticaoDia"][value="'+new Date(dataEscolhida+'T00:00:00').getDay()+'"]');
+        if(cb) cb.checked = true;
+      }
+    }
+  };
+  selRep.addEventListener('change', atualizarBlocosRepeticao);
+  atualizarBlocosRepeticao();
+
   document.getElementById('form-agenda').addEventListener('submit', async e=>{
     e.preventDefault();
     const f = new FormData(e.target);
@@ -1762,6 +1868,23 @@ function modalEventoAgenda(evento, dataPreSelecionada){
         proximosPassos: f.get('ataProximosPassos').trim()
       }
     };
+    const tipoRep = f.get('repeticaoTipo') || '';
+    if(tipoRep){
+      const ate = f.get('repeticaoAte') || '';
+      if(ate && ate < dados.data){ showToast('A data final da repetição não pode ser antes da data de início.', true); return; }
+      const comDias = (tipoRep==='semanal' || tipoRep==='quinzenal');
+      let dias = comDias ? f.getAll('repeticaoDia').map(Number).sort() : [];
+      if(comDias){
+        if(dias.length===0) dias = [new Date(dados.data+'T00:00:00').getDay()];
+        // se a data escolhida não cai num dos dias marcados, a série começa no primeiro dia marcado a partir dela
+        let cursor = dados.data;
+        for(let i=0; i<7 && !dias.includes(new Date(cursor+'T00:00:00').getDay()); i++) cursor = dataMaisDias(cursor, 1);
+        dados.data = cursor;
+      }
+      dados.repeticao = { tipo: tipoRep, diasSemana: dias, ate };
+    } else {
+      dados.repeticao = null;
+    }
     const btnSalvar = e.target.querySelector('button[type=submit]');
     btnSalvar.disabled = true; btnSalvar.textContent = 'Salvando…';
 
@@ -1905,6 +2028,76 @@ function viewPortalAcessos(){
         <tbody>${linhas}</tbody>
       </table></div>`}
       <p class="hint" style="margin-top:10px;">Por segurança, as senhas não aparecem aqui — abra "Gerenciar acessos" para ver ou trocar.</p>
+    </div>
+  `;
+}
+
+function htmlTabelaAvaliacoesDesempenho(c){
+  const avs = c.avaliacoesDesempenho || [];
+  if(avs.length===0) return '<p class="hint">Nenhuma avaliação de desempenho realizada ainda.</p>';
+  return `<div class="table-wrap" style="margin-bottom:10px;"><table><thead><tr><th>Período</th><th>Criada em</th><th>Avaliadores</th><th>Status</th><th></th></tr></thead><tbody>
+    ${avs.slice().reverse().map(av=>`<tr>
+      <td>${esc(av.periodoReferencia||'—')}</td><td>${formatDate(av.dataCriacao)}</td>
+      <td>${av.avaliadores.filter(a=>a.respondida).length} de ${av.avaliadores.length} responderam</td>
+      <td>${av.status==='concluida'?'<span class="badge badge-green">Concluída</span>':'<span class="badge badge-amber">Em andamento</span>'}</td>
+      <td><span class="btn btn-ghost btn-sm" data-action="ver-avaliacao-desempenho" data-id="${c.id}" data-avaliacao-id="${av.id}">Ver</span></td>
+    </tr>`).join('')}
+  </tbody></table></div>`;
+}
+
+function modalAvaliacoesColaborador(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const fn = getFuncao(c.funcaoId), cl = getCliente(c.clienteId);
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Avaliações de desempenho</h2>
+    <div class="modal-sub">${esc(c.nome)}${fn?' · '+esc(fn.nome):''}${cl?' · '+esc(cl.nome):''}</div>
+    ${htmlTabelaAvaliacoesDesempenho(c)}
+    <div class="modal-footer">
+      <span><span class="btn btn-ghost btn-sm" data-action="abrir-prontuario" data-id="${c.id}">📋 Abrir prontuário</span></span>
+      <div class="right">
+        <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+        <span class="btn btn-primary" data-action="nova-avaliacao-desempenho" data-id="${c.id}">+ Nova avaliação</span>
+      </div>
+    </div>
+  `);
+}
+
+function viewAvaliacaoDesempenhoLista(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.adClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  let colabs = db.colaboradores.filter(c=>statusColaborador(c)!=='desligado');
+  if(state.adClienteId) colabs = colabs.filter(c=>c.clienteId===state.adClienteId);
+  colabs = colabs.slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const linhas = colabs.map(c=>{
+    const cl = getCliente(c.clienteId), fn = getFuncao(c.funcaoId);
+    const avs = c.avaliacoesDesempenho || [];
+    const ultima = avs[avs.length-1];
+    const status = !ultima ? '<span class="badge badge-gray">Nunca avaliado</span>' : (ultima.status==='concluida' ? '<span class="badge badge-green">Concluída</span>' : '<span class="badge badge-amber">Em andamento</span>');
+    return `<tr>
+      <td><span class="btn-link" data-action="abrir-avaliacoes-colaborador" data-id="${c.id}" style="cursor:pointer;font-weight:600;color:var(--accent);">${esc(c.nome)}</span></td>
+      <td>${esc(cl?cl.nome:'—')}</td><td>${esc(fn?fn.nome:'—')}</td>
+      <td>${ultima ? esc(ultima.periodoReferencia||'—')+' <span class="hint">('+formatDate(ultima.dataCriacao)+')</span>' : '—'}</td>
+      <td>${ultima ? ultima.avaliadores.filter(a=>a.respondida).length+' de '+ultima.avaliadores.length : '—'}</td>
+      <td>${status}</td>
+      <td class="no-print" style="white-space:nowrap;">
+        ${ultima ? '<span class="btn btn-ghost btn-sm" data-action="ver-avaliacao-desempenho" data-id="'+c.id+'" data-avaliacao-id="'+ultima.id+'">Ver resultado</span>' : ''}
+        <span class="btn btn-secondary btn-sm" data-action="nova-avaliacao-desempenho" data-id="${c.id}">+ Nova avaliação</span>
+      </td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="topbar">
+      <div><h1>Avaliação de Desempenho</h1><p>Avaliações 180°/360° de cada colaborador ativo, com base nas competências do cargo</p></div>
+    </div>
+    <div class="filters-row"><select data-role="ad-cliente"><option value="">Todas as empresas</option>${clientesOpts}</select></div>
+    <div class="card">
+      ${colabs.length===0 ? '<p class="hint">Nenhum colaborador ativo encontrado para este filtro.</p>' : `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Colaborador</th><th>Empresa</th><th>Cargo</th><th>Última avaliação</th><th>Respostas</th><th>Status</th><th></th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table></div>`}
+      <p class="hint" style="margin-top:10px;">Clique no nome para ver o histórico completo de avaliações da pessoa.</p>
     </div>
   `;
 }
@@ -2829,6 +3022,7 @@ function viewColaboradores(){
       <td>${statusColaboradorBadge(c)}${statusColaborador(c)==='afastado'&&c.tipoAfastamento?'<div class="hint">'+esc(c.tipoAfastamento)+'</div>':''}</td>
       <td class="no-print" style="white-space:nowrap;">
         <span class="btn btn-ghost btn-sm" data-action="abrir-prontuario" data-id="${c.id}">📋 Prontuário</span>
+        <span class="btn btn-ghost btn-sm" data-action="abrir-avaliacoes-colaborador" data-id="${c.id}">📊 Avaliação</span>
         <span class="btn btn-ghost btn-sm" data-action="editar-colaborador" data-id="${c.id}">Editar</span>
         <span class="btn btn-ghost btn-sm" data-action="excluir-colaborador" data-id="${c.id}">Excluir</span>
       </td>
@@ -5826,6 +6020,7 @@ function modalNovaAvaliacaoDesempenho(colaboradorId){
       if(!Array.isArray(c.avaliacoesDesempenho)) c.avaliacoesDesempenho = [];
       c.avaliacoesDesempenho.push(resp.avaliacao);
       closeModal();
+      renderView();
       modalLinksAvaliacaoDesempenho(c, resp.avaliacao);
       showToast('Avaliação criada! Envie os links para os avaliadores.');
     }catch(err){
@@ -7109,6 +7304,7 @@ async function renderPesquisaRapidaPublica(pesquisaId){
 }
 
 let portalClienteId = null;
+let portalToken = ''; // chave de sessão assinada que o servidor entrega no login do portal
 
 async function renderPortalCliente(){
   document.title = 'Portal do Cliente · Caroline Peixoto DHO';
@@ -7142,6 +7338,7 @@ function renderPortalLogin(erro){
     try{
       const resp = await chamarAppsScriptPost('portalLogin', {usuario: f.get('usuario').trim(), senha: f.get('senha')});
       portalClienteId = resp.clienteId;
+      portalToken = resp.portalToken || '';
       await carregarDadosPortal();
       state.portalTab = 'visaoGeral';
       renderPortalShell();
@@ -7152,7 +7349,7 @@ function renderPortalLogin(erro){
 }
 
 async function carregarDadosPortal(){
-  const resp = await chamarAppsScriptGet('action=portalDados&clienteId=' + encodeURIComponent(portalClienteId));
+  const resp = await chamarAppsScriptGet('action=portalDados');
   db = {
     clientes: [resp.cliente],
     colaboradores: resp.colaboradores || [],
@@ -9903,19 +10100,32 @@ function onGlobalClick(e){
   if(action === 'agenda-editar'){ modalEventoAgenda(db.agenda.find(e=>e.id===id)); return; }
   if(action === 'agenda-concluir'){
     const ev = db.agenda.find(e=>e.id===id);
-    if(ev){ ev.concluido = !ev.concluido; saveDB(); renderView(); }
+    if(ev){
+      if(ev.repeticao && ev.repeticao.tipo){ // série: cada data é concluída separadamente
+        const dt = el.dataset.data;
+        ev.concluidasEm = ev.concluidasEm || [];
+        const pos = ev.concluidasEm.indexOf(dt);
+        if(pos > -1) ev.concluidasEm.splice(pos, 1); else ev.concluidasEm.push(dt);
+      } else { ev.concluido = !ev.concluido; }
+      saveDB(); renderView();
+    }
     return;
   }
   if(action === 'agenda-excluir'){
-    if(confirm('Excluir este compromisso?')){
-      const compromissoExcluido = db.agenda.find(e=>e.id===id);
-      db.agenda = db.agenda.filter(e=>e.id!==id);
+    const alvo = db.agenda.find(e=>e.id===id);
+    if(alvo && alvo.repeticao && alvo.repeticao.tipo){ modalExcluirRecorrente(id, el.dataset.data || ''); return; }
+    excluirCompromissoAgenda(id);
+    return;
+  }
+  if(action === 'agenda-excluir-serie'){ excluirCompromissoAgenda(id, true); return; }
+  if(action === 'agenda-excluir-ocorrencia'){
+    const ev = db.agenda.find(e=>e.id===id);
+    if(ev){
+      ev.excecoes = ev.excecoes || [];
+      if(!ev.excecoes.includes(el.dataset.data)) ev.excecoes.push(el.dataset.data);
       closeModal(); saveDB(); renderView();
-      if(compromissoExcluido && compromissoExcluido.googleEventId && appsScriptConfigurado()){
-        chamarAppsScriptPost('excluirCompromissoGoogleAgenda', {googleEventId: compromissoExcluido.googleEventId}).catch(()=>{
-          // silencioso: o compromisso já foi removido do painel, que é o que mais importa pro fluxo de trabalho.
-        });
-      }
+      showToast('Só o compromisso de '+formatDate(el.dataset.data)+' foi removido.');
+      ressincronizarCompromissoGoogle(ev);
     }
     return;
   }
@@ -9949,6 +10159,7 @@ function onGlobalClick(e){
   if(action === 'registrar-mudanca-funcao'){ modalRegistrarMudancaFuncao(id); return; }
   if(action === 'registrar-ferias'){ modalRegistrarFerias(id); return; }
   if(action === 'nova-avaliacao-desempenho'){ modalNovaAvaliacaoDesempenho(id); return; }
+  if(action === 'abrir-avaliacoes-colaborador'){ modalAvaliacoesColaborador(id); return; }
   if(action === 'avaliar-potencial'){ modalAvaliarPotencial(id); return; }
   if(action === 'ver-avaliacao-desempenho'){ modalVerAvaliacaoDesempenho(id, el.dataset.avaliacaoId); return; }
   if(action === 'copiar-link-generico'){
@@ -10602,6 +10813,7 @@ function onGlobalChange(e){
   if(t.dataset.role === 'serv-tipo'){ state.servTipo = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-mes'){ state.servMes = t.value; renderView(); return; }
   if(t.dataset.role === 'fat-mes-geral'){ state.fatMesGeral = t.value; renderView(); return; }
+  if(t.dataset.role === 'ad-cliente'){ state.adClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-status'){ state.servStatus = t.value; renderView(); return; }
   if(t.dataset.role === 'ind-cliente'){ state.indClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'den-cliente'){ state.denClienteId = t.value; renderView(); return; }
