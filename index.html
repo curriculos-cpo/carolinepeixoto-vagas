@@ -549,7 +549,8 @@ const LOGO_CLARO_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAbgAAACMCAYAAAAOVry8AACYI0lEQVR4
 const GRUPOS_NAV = [
   { id:'clientes', label:'Cadastro de Clientes', icone:'🏢', itens:[
     {tab:'clientes', label:'Clientes e Vagas'},
-    {href:'#portal', label:'Portal do Cliente', externo:true}
+    {tab:'portalAcessos', label:'Acessos ao Portal do Cliente'},
+    {href:'#portal', label:'Portal do Cliente (tela de login)', externo:true}
   ]},
   { id:'talentos', label:'Atração de Talentos', icone:'🎯', itens:[
     {tab:'clientes', label:'Cadastro de Vagas'},
@@ -1144,7 +1145,12 @@ function garantirConfiguracoes(){
     else { BENEFICIOS_PADRAO.forEach(b=>{ if(!cl.beneficios[b.chave]) cl.beneficios[b.chave] = {ativo:false, valor:''}; }); }
     if(!cl.canalDenuncia) cl.canalDenuncia = {ativo:false, emails:[], valorMensalidade:''};
     if(!cl.pesquisaClima) cl.pesquisaClima = {ativo:false, dataInicio:'', dataFim:'', areas:[], valorMensalidade:''};
-    if(!cl.portalAcesso) cl.portalAcesso = {ativo:false, usuario:'', senha:''};
+    if(!cl.portalAcesso) cl.portalAcesso = {ativo:false, usuarios:[]};
+    if(!Array.isArray(cl.portalAcesso.usuarios)) cl.portalAcesso.usuarios = [];
+    if(cl.portalAcesso.usuario){ // formato antigo (um único acesso): vira o primeiro da lista
+      cl.portalAcesso.usuarios.push({id:uid('pu'), nome:'Acesso principal', usuario:cl.portalAcesso.usuario, senha:cl.portalAcesso.senha||''});
+    }
+    delete cl.portalAcesso.usuario; delete cl.portalAcesso.senha;
     if(cl.dataDescontinuacaoBPO===undefined) cl.dataDescontinuacaoBPO = '';
     if(!cl.produtosContratados) cl.produtosContratados = [];
     if(!cl.notificacoesLidasPortal) cl.notificacoesLidasPortal = [];
@@ -1456,6 +1462,7 @@ function renderView(){
   else if(state.tab === 'rapidas') view.innerHTML = viewPesquisasRapidasAdmin();
   else if(state.tab === 'propostaComercial') view.innerHTML = viewPropostaComercial();
   else if(state.tab === 'parecerCandidato') view.innerHTML = viewParecerCandidato();
+  else if(state.tab === 'portalAcessos') view.innerHTML = viewPortalAcessos();
   else if(state.tab === 'relatorio') view.innerHTML = viewRelatorio();
   view.classList.remove('view-animar');
   void view.offsetWidth; // força o navegador a recalcular, pra animação tocar de novo a cada troca
@@ -1865,6 +1872,41 @@ function renderPainelAtencao(alertas, lidos, acaoLido){
         ${aniversariosProximos.map(linhaItem).join('')}
       </div>` : ''}
     </div>`;
+}
+
+function viewPortalAcessos(){
+  const clientes = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const linkPortal = window.location.origin + window.location.pathname + '#portal';
+  const linhas = clientes.map(cl=>{
+    const pa = cl.portalAcesso || {ativo:false, usuarios:[]};
+    const us = pa.usuarios || [];
+    const situacao = us.length===0 ? '<span class="badge badge-gray">Sem acesso cadastrado</span>' : (pa.ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-amber">Desativado</span>');
+    return `<tr>
+      <td><strong>${esc(cl.nome)}</strong></td>
+      <td>${cl.tipoServico==='bpo' ? 'BPO' : 'R&amp;S'}</td>
+      <td>${situacao}</td>
+      <td>${us.length===0 ? '—' : us.map(u=>esc(u.nome||'Sem nome')+' <span class="hint">('+esc(u.usuario)+')</span>').join('<br>')}</td>
+      <td class="no-print"><span class="btn btn-secondary btn-sm" data-action="config-portal-cliente" data-id="${cl.id}">🔑 Gerenciar acessos</span></td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="topbar">
+      <div><h1>Acessos ao Portal do Cliente</h1><p>Quem pode entrar no portal de cada empresa — um acesso por gestor</p></div>
+    </div>
+    <div class="card" style="margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span>Link do portal (o mesmo para todas as empresas):</span>
+      <input type="text" readonly value="${esc(linkPortal)}" style="flex:1;min-width:240px;" onclick="this.select()">
+      <span class="btn btn-secondary btn-sm" data-action="copiar-link-generico" data-link="${esc(linkPortal)}">Copiar link</span>
+    </div>
+    <div class="card">
+      ${clientes.length===0 ? '<p class="hint">Nenhuma empresa cadastrada ainda.</p>' : `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Empresa</th><th>Tipo</th><th>Situação</th><th>Acessos (usuário)</th><th></th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table></div>`}
+      <p class="hint" style="margin-top:10px;">Por segurança, as senhas não aparecem aqui — abra "Gerenciar acessos" para ver ou trocar.</p>
+    </div>
+  `;
 }
 
 const MODULOS_STANDALONE = [
@@ -8735,22 +8777,43 @@ function modalLinkPesquisaClima(cliente){
   `);
 }
 
+function gerarSenhaAleatoria(){
+  const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; // sem letras/números parecidos (0 O 1 l I)
+  let r = '';
+  for(let i=0;i<8;i++){
+    const n = (window.crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint32Array(1))[0] : Math.floor(Math.random()*4294967296);
+    r += alfabeto[n % alfabeto.length];
+  }
+  return r;
+}
+
+function linhaAcessoPortal(u){
+  u = u || {id:'', nome:'', usuario:'', senha:''};
+  return `<div data-linha-acesso data-uid="${esc(u.id||'')}" style="display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;">
+    <div class="field"><label>Nome do gestor</label><input class="acesso-nome" value="${esc(u.nome||'')}" placeholder="Ex.: Maria (RH)" autocomplete="off"></div>
+    <div class="field"><label>Usuário</label><input class="acesso-usuario" value="${esc(u.usuario||'')}" autocomplete="off"></div>
+    <div class="field"><label>Senha</label><input class="acesso-senha" value="${esc(u.senha||'')}" autocomplete="off"></div>
+    <div class="field" style="white-space:nowrap;"><span class="btn btn-ghost btn-sm" data-gerar-senha title="Gerar uma senha aleatória">🎲</span><span class="btn btn-ghost btn-sm" data-remover-acesso title="Remover este acesso">✕</span></div>
+  </div>`;
+}
+
 function modalConfigPortalCliente(cliente){
-  const pa = cliente.portalAcesso || {ativo:false, usuario:'', senha:''};
+  const pa = cliente.portalAcesso || {ativo:false, usuarios:[]};
+  const usuarios = (pa.usuarios && pa.usuarios.length) ? pa.usuarios : [null];
   const linkPortal = window.location.origin + window.location.pathname + '#portal';
   openModal(`
     <button class="modal-close" data-action="fechar-modal">&times;</button>
-    <h2>Portal do Cliente</h2>
+    <h2>Acessos ao Portal do Cliente</h2>
     <div class="modal-sub">${esc(cliente.nome)}</div>
-    <p class="hint" style="margin-bottom:10px;">O cliente acessa com usuário e senha e vê (e edita) só os dados desta empresa: Colaboradores cadastrados, Materiais (só leitura) e Indicadores (só leitura).</p>
+    <p class="hint" style="margin-bottom:10px;">Cada gestor da empresa pode ter o próprio usuário e senha. Todos veem (e editam) só os dados desta empresa.</p>
     <form id="form-config-portal">
-      <div class="checkbox-row"><input type="checkbox" id="chk-portal-ativo" ${pa.ativo?'checked':''}><label for="chk-portal-ativo">Acesso ativo para este cliente</label></div>
-      <div class="form-grid" style="margin-top:10px;">
-        <div class="field"><label>Usuário</label><input name="usuario" value="${esc(pa.usuario)}" autocomplete="off"></div>
-        <div class="field"><label>Senha</label><input name="senha" value="${esc(pa.senha)}" autocomplete="off"></div>
-      </div>
-      <div class="field full">
-        <label>Link do portal (o mesmo para todos os clientes — cada um entra com seu próprio usuário/senha)</label>
+      <div class="checkbox-row"><input type="checkbox" id="chk-portal-ativo" ${pa.ativo?'checked':''}><label for="chk-portal-ativo">Acesso ativo para esta empresa</label></div>
+      <div class="section-title">Acessos</div>
+      <div id="lista-acessos-portal">${usuarios.map(linhaAcessoPortal).join('')}</div>
+      <span class="btn btn-secondary btn-sm" id="btn-add-acesso-portal">+ Adicionar outro acesso</span>
+      <p class="hint" id="erro-config-portal" style="color:var(--red);display:none;margin-top:10px;"></p>
+      <div class="field full" style="margin-top:14px;">
+        <label>Link do portal (o mesmo para todas as empresas — cada gestor entra com o próprio usuário/senha)</label>
         <input type="text" readonly value="${esc(linkPortal)}" id="link-portal-input" onclick="this.select()">
       </div>
       <div class="modal-footer">
@@ -8762,16 +8825,47 @@ function modalConfigPortalCliente(cliente){
       </div>
     </form>
   `);
-  document.getElementById('form-config-portal').addEventListener('submit', e=>{
+  const form = document.getElementById('form-config-portal');
+  document.getElementById('btn-add-acesso-portal').addEventListener('click', ()=>{
+    document.getElementById('lista-acessos-portal').insertAdjacentHTML('beforeend', linhaAcessoPortal());
+  });
+  form.addEventListener('click', e=>{
+    const linha = e.target.closest ? e.target.closest('[data-linha-acesso]') : null;
+    if(!linha) return;
+    if(e.target.matches('[data-gerar-senha]')){ linha.querySelector('.acesso-senha').value = gerarSenhaAleatoria(); }
+    if(e.target.matches('[data-remover-acesso]')){
+      if(document.querySelectorAll('[data-linha-acesso]').length > 1) linha.remove();
+      else linha.querySelectorAll('input').forEach(i=>{ i.value = ''; });
+    }
+  });
+  form.addEventListener('submit', e=>{
     e.preventDefault();
-    const f = new FormData(e.target);
-    cliente.portalAcesso = {
-      ativo: document.getElementById('chk-portal-ativo').checked,
-      usuario: f.get('usuario').trim(),
-      senha: f.get('senha')
-    };
+    const erroEl = document.getElementById('erro-config-portal');
+    const falhar = msg => { erroEl.textContent = msg; erroEl.style.display = 'block'; };
+    erroEl.style.display = 'none';
+    const novos = [];
+    for(const linha of document.querySelectorAll('[data-linha-acesso]')){
+      const nome = linha.querySelector('.acesso-nome').value.trim();
+      const usuario = linha.querySelector('.acesso-usuario').value.trim();
+      const senha = linha.querySelector('.acesso-senha').value.trim();
+      if(!nome && !usuario && !senha) continue; // linha em branco: ignora
+      if(!usuario || !senha) return falhar('Preencha usuário e senha de cada acesso (ou remova a linha).');
+      novos.push({ id: linha.dataset.uid || uid('pu'), nome, usuario, senha });
+    }
+    for(let i=0;i<novos.length;i++){
+      for(let j=i+1;j<novos.length;j++){
+        if(novos[i].usuario.toLowerCase()===novos[j].usuario.toLowerCase()) return falhar('O usuário "'+novos[i].usuario+'" aparece duas vezes. Cada gestor precisa de um usuário diferente.');
+      }
+    }
+    for(const n of novos){
+      const outra = db.clientes.find(o=>o.id!==cliente.id && ((o.portalAcesso&&o.portalAcesso.usuarios)||[]).some(x=>String(x.usuario).trim().toLowerCase()===n.usuario.toLowerCase()));
+      if(outra) return falhar('O usuário "'+n.usuario+'" já é usado pela empresa "'+outra.nome+'". Escolha outro (o login não pergunta a empresa, então o usuário precisa ser único).');
+    }
+    const ativo = document.getElementById('chk-portal-ativo').checked;
+    if(ativo && novos.length===0) return falhar('Cadastre ao menos um acesso, ou desmarque "Acesso ativo".');
+    cliente.portalAcesso = { ativo, usuarios: novos };
     closeModal(); saveDB(); renderView();
-    showToast('Configuração do portal salva.');
+    showToast('Acessos do portal salvos.');
   });
 }
 
