@@ -573,7 +573,7 @@ const GRUPOS_NAV = [
     {tab:'avaliacaoExperienciaLista', label:'Avaliação de Experiência'},
     {label:'PDI', emBreve:true},
     {tab:'colaboradores', colabAba:'treinamentos', label:'Treinamentos'},
-    {tab:'indicadores', label:'9Box'}
+    {tab:'ninebox', label:'9Box'}
   ]},
   { id:'engajamento', label:'Engajamento', icone:'💬', itens:[
     {tab:'cultura', label:'Diagnóstico de Cultura Organizacional'},
@@ -1462,6 +1462,7 @@ function renderView(){
   else if(state.tab === 'propostaComercial') view.innerHTML = viewPropostaComercial();
   else if(state.tab === 'parecerCandidato') view.innerHTML = viewParecerCandidato();
   else if(state.tab === 'portalAcessos') view.innerHTML = viewPortalAcessos();
+  else if(state.tab === 'ninebox') view.innerHTML = viewNineBox();
   else if(state.tab === 'avaliacaoDesempenhoLista') view.innerHTML = viewAvaliacaoDesempenhoLista();
   else if(state.tab === 'relatorio') view.innerHTML = viewRelatorio();
   view.classList.remove('view-animar');
@@ -1995,6 +1996,49 @@ function renderPainelAtencao(alertas, lidos, acaoLido){
         ${aniversariosProximos.map(linhaItem).join('')}
       </div>` : ''}
     </div>`;
+}
+
+function htmlNineBox(colabsAtivos, acaoClique){
+  if(colabsAtivos.length===0) return '<div class="card empty-state"><h3>Nenhum colaborador ativo</h3></div>';
+  const posicionados = colabsAtivos.map(c=>({ colaborador:c, pos:calcularPosicaoNineBox(c) })).filter(x=>x.pos);
+  const semDados = colabsAtivos.filter(c=>!calcularPosicaoNineBox(c));
+  const grid = [[[],[],[]],[[],[],[]],[[],[],[]]];
+  posicionados.forEach(({colaborador,pos})=>{ grid[2-pos.linhaPotencial][pos.colDesempenho].push(colaborador); });
+  const rotuloLinha = ['Alto Potencial','Médio Potencial','Baixo Potencial'];
+  const rotuloColuna = ['Baixo Desempenho','Médio Desempenho','Alto Desempenho'];
+  const corCelula = (lin,col)=>{ const score = (2-lin)+col; return score>=3?'var(--green-soft)':(score>=2?'var(--amber-soft)':'var(--red-soft)'); };
+  return `
+    <p class="hint" style="margin-bottom:12px;">Cruza a média da última Avaliação de Desempenho com a última Avaliação de Potencial de cada colaborador ativo.</p>
+    <div class="card" style="padding:16px;margin-bottom:14px;overflow-x:auto;">
+      <div style="display:grid;grid-template-columns:110px repeat(3, minmax(140px,1fr));gap:6px;min-width:560px;">
+        <div></div>
+        ${rotuloColuna.map(r=>'<div style="text-align:center;font-size:12px;font-weight:600;color:var(--ink-soft);">'+r+'</div>').join('')}
+        ${[0,1,2].map(lin=>`
+          <div style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--ink-soft);text-align:center;">${rotuloLinha[lin]}</div>
+          ${[0,1,2].map(col=>`
+            <div style="background:${corCelula(lin,col)};border-radius:6px;padding:8px;min-height:70px;">
+              <div class="hint" style="font-weight:600;margin-bottom:4px;">${esc(ROTULOS_NINE_BOX[lin][col])}</div>
+              ${grid[lin][col].map(c=>'<div style="font-size:12.5px;cursor:pointer;" data-action="'+acaoClique+'" data-id="'+c.id+'">'+esc(c.nome)+'</div>').join('')}
+            </div>
+          `).join('')}
+        `).join('')}
+      </div>
+    </div>
+    ${semDados.length>0 ? `<p class="hint" style="margin-bottom:18px;">Sem dados suficientes pra posicionar (falta avaliação de desempenho e/ou de potencial): ${semDados.map(c=>esc(c.nome)).join(', ')}</p>` : ''}
+  `;
+}
+
+function viewNineBox(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+((state.nbClienteId||'')===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  const cid = state.nbClienteId || (db.clientes.length===1 ? db.clientes[0].id : '');
+  const corpo = cid
+    ? htmlNineBox(colaboradoresDoCliente(cid).filter(c=>statusColaborador(c)!=='desligado'), 'abrir-prontuario-alerta')
+    : '<div class="card empty-state"><h3>Selecione uma empresa</h3><p>O Nine Box é montado por empresa.</p></div>';
+  return `
+    <div class="topbar"><div><h1>Nine Box</h1><p>Desempenho x Potencial dos colaboradores ativos</p></div></div>
+    <div class="filters-row"><select data-role="nb-cliente"><option value="">Selecione uma empresa…</option>${clientesOpts}</select></div>
+    ${corpo}
+  `;
 }
 
 function viewPortalAcessos(){
@@ -4013,37 +4057,7 @@ function viewIndicadores(){
     </div>
     <div class="card chart-card" style="margin-bottom:22px;"><h3>Horas-homem de treinamento por mês</h3><div class="chart-wrap"><canvas id="chart-hht-ind"></canvas></div></div>
 
-    ${(()=>{
-      const colabsCliente = colaboradoresDoCliente(cliente.id).filter(c=>statusColaborador(c)!=='desligado');
-      const posicionados = colabsCliente.map(c=>({ colaborador:c, pos:calcularPosicaoNineBox(c) })).filter(x=>x.pos);
-      const semDados = colabsCliente.filter(c=>!calcularPosicaoNineBox(c));
-      if(colabsCliente.length===0) return '';
-      const grid = [[[],[],[]],[[],[],[]],[[],[],[]]]; // [linha 2-potencial..0][coluna desempenho]
-      posicionados.forEach(({colaborador,pos})=>{ grid[2-pos.linhaPotencial][pos.colDesempenho].push(colaborador); });
-      const rotuloLinha = ['Alto Potencial','Médio Potencial','Baixo Potencial'];
-      const rotuloColuna = ['Baixo Desempenho','Médio Desempenho','Alto Desempenho'];
-      const corCelula = (lin,col)=>{ const score = (2-lin)+col; return score>=3?'var(--green-soft)':(score>=2?'var(--amber-soft)':'var(--red-soft)'); };
-      return `
-      <div class="section-title" style="margin:18px 0 10px 0;">Nine Box — Performance x Potencial</div>
-      <p class="hint" style="margin-top:-4px;margin-bottom:12px;">Cruza a média da última Avaliação de Desempenho concluída com a última Avaliação de Potencial de cada colaborador ativo.</p>
-      <div class="card" style="padding:16px;margin-bottom:14px;overflow-x:auto;">
-        <div style="display:grid;grid-template-columns:110px repeat(3, minmax(140px,1fr));gap:6px;min-width:560px;">
-          <div></div>
-          ${rotuloColuna.map(r=>'<div style="text-align:center;font-size:12px;font-weight:600;color:var(--ink-soft);">'+r+'</div>').join('')}
-          ${[0,1,2].map(lin=>`
-            <div style="display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--ink-soft);text-align:center;">${rotuloLinha[lin]}</div>
-            ${[0,1,2].map(col=>`
-              <div style="background:${corCelula(lin,col)};border-radius:6px;padding:8px;min-height:70px;">
-                <div class="hint" style="font-weight:600;margin-bottom:4px;">${esc(ROTULOS_NINE_BOX[lin][col])}</div>
-                ${grid[lin][col].map(c=>'<div style="font-size:12.5px;cursor:pointer;" data-action="abrir-prontuario-alerta" data-id="'+c.id+'">'+esc(c.nome)+'</div>').join('')}
-              </div>
-            `).join('')}
-          `).join('')}
-        </div>
-      </div>
-      ${semDados.length>0 ? `<p class="hint" style="margin-bottom:18px;">Sem dados suficientes pra posicionar (falta avaliação de desempenho concluída e/ou de potencial): ${semDados.map(c=>esc(c.nome)).join(', ')}</p>` : ''}
-      `;
-    })()}
+
 
     ${(()=>{
       const td = calcularTiposDesligamento(cliente.id, mesIni, mesFim);
@@ -7387,6 +7401,8 @@ function renderPortalShell(){
         <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
           <span class="btn ${state.portalTab==='visaoGeral'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="visaoGeral">Visão Geral</span>
           <span class="btn ${state.portalTab==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="colaboradores">Colaboradores cadastrados</span>
+          <span class="btn ${state.portalTab==='avaliacoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="avaliacoes">Avaliação de Desempenho</span>
+          <span class="btn ${state.portalTab==='ninebox'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="ninebox">9Box</span>
           <span class="btn ${state.portalTab==='funcoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="funcoes">Funções e cargos</span>
           <span class="btn ${state.portalTab==='treinamentos'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="treinamentos">Treinamentos</span>
           <span class="btn ${state.portalTab==='materiais'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="materiais">Materiais e documentos</span>
@@ -7411,6 +7427,8 @@ function renderPortalView(){
   else if(state.portalTab==='funcoes') view.innerHTML = viewPortalFuncoes();
   else if(state.portalTab==='treinamentos') view.innerHTML = viewPortalTreinamentos();
   else if(state.portalTab==='materiais') view.innerHTML = viewPortalMateriais();
+  else if(state.portalTab==='avaliacoes') view.innerHTML = viewPortalAvaliacoes();
+  else if(state.portalTab==='ninebox') view.innerHTML = viewPortalNineBox();
   else {
     view.innerHTML = viewPortalIndicadores();
     requestAnimationFrame(()=>{ requestAnimationFrame(drawPortalIndicadoresCharts); });
@@ -7420,9 +7438,63 @@ function renderPortalView(){
 function viewPortalVisaoGeral(){
   const cliente = db.clientes[0];
   const alertas = calcularAlertasAtencao(cliente.id);
+  // O cliente não vê quem são os candidatos: o alerta mostra só a vaga e há quantos dias está parado.
+  alertas.candidatosParados = alertas.candidatosParados.map(a=>({ id:a.id, titulo:'Candidato(a) em processo', sub:a.sub, dataAction:'portal-sem-acao', dataId:'' }));
   const painel = renderPainelAtencao(alertas, cliente.notificacoesLidasPortal||[], 'portal-marcar-notificacao-lida');
   if(!painel) return '<div class="card empty-state"><h3>Tudo em dia! ✅</h3><p>Nenhuma pendência no momento.</p></div>';
   return painel;
+}
+
+function viewPortalAvaliacoes(){
+  const cliente = db.clientes[0];
+  const colabs = colaboradoresDoCliente(cliente.id).filter(c=>statusColaborador(c)!=='desligado').slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const linhas = colabs.map(c=>{
+    const f = getFuncao(c.funcaoId);
+    const avs = c.avaliacoesDesempenho || [];
+    const ultima = avs[avs.length-1];
+    const respondidos = ultima ? ultima.avaliadores.filter(a=>a.respondida).length : 0;
+    const status = !ultima ? '<span class="badge badge-gray">Sem avaliação</span>' : (ultima.status==='concluida' ? '<span class="badge badge-green">Concluída</span>' : '<span class="badge badge-amber">Em andamento</span>');
+    return `<tr>
+      <td><strong>${esc(c.nome)}</strong></td><td>${esc(f?f.nome:'—')}</td>
+      <td>${ultima ? esc(ultima.periodoReferencia||'—')+' <span class="hint">('+formatDate(ultima.dataCriacao)+')</span>' : '—'}</td>
+      <td>${ultima ? respondidos+' de '+ultima.avaliadores.length : '—'}</td><td>${status}</td>
+      <td>${ultima && respondidos>0 ? '<span class="btn btn-ghost btn-sm" data-action="portal-ver-avaliacao" data-id="'+c.id+'" data-avaliacao-id="'+ultima.id+'">Ver resultado</span>' : ''}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="topbar" style="margin-bottom:14px;"><div><p class="hint">Resultado das avaliações de desempenho feitas pela consultoria. Os comentários individuais dos avaliadores são confidenciais e não aparecem aqui.</p></div></div>
+    ${colabs.length===0 ? '<div class="card empty-state"><h3>Nenhum colaborador ativo</h3></div>' : `
+    <div class="card table-wrap"><table><thead><tr><th>Colaborador</th><th>Cargo</th><th>Última avaliação</th><th>Respostas</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
+  `;
+}
+
+function modalPortalResultadoAvaliacao(colaboradorId, avaliacaoId){
+  const c = db.colaboradores.find(x=>x.id===colaboradorId);
+  const av = c ? (c.avaliacoesDesempenho||[]).find(a=>a.id===avaliacaoId) : null;
+  if(!av) return;
+  const r = calcularResultadoAvaliacaoDesempenho(av);
+  const papeis = Object.keys(PAPEIS_AVALIADOR).filter(p=>av.avaliadores.some(a=>a.papel===p));
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Avaliação de Desempenho</h2>
+    <div class="modal-sub">${esc(c.nome)} · ${esc(av.periodoReferencia||'')} · ${r.respondidos} de ${r.total} responderam</div>
+    <p class="hint" style="margin-bottom:10px;">Nota esperada a partir da prioridade da competência no descritivo do cargo (Obrigatório≈4, Desejável≈3, Desenvolvimento≈2). Vermelho = média abaixo do esperado.</p>
+    <div class="table-wrap"><table><thead><tr><th>Competência</th><th>Esperado</th>${papeis.map(p=>'<th>'+PAPEIS_AVALIADOR[p].icone+' '+esc(PAPEIS_AVALIADOR[p].label)+'</th>').join('')}<th>Média geral</th><th>Gap</th></tr></thead><tbody>
+      ${r.competencias.map(comp=>`<tr ${comp.gap!==null && comp.gap<0 ? 'style="background:var(--red-soft);"' : ''}>
+        <td>${esc(comp.nome)}<div class="hint">${comp.categoria==='tecnica'?'Técnica':'Comportamental'}</div></td><td>${comp.notaEsperada}</td>
+        ${papeis.map(p=>'<td>'+(comp.medias[p]!==null?comp.medias[p]:'—')+'</td>').join('')}
+        <td><strong>${comp.mediaGeral!==null?comp.mediaGeral:'—'}</strong></td>
+        <td>${comp.gap!==null ? (comp.gap<0?'🔴 ':(comp.gap>0?'🟢 +':'')) + comp.gap : '—'}</td>
+      </tr>`).join('')}
+    </tbody></table></div>
+    <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div></div>
+  `);
+}
+
+function viewPortalNineBox(){
+  const cliente = db.clientes[0];
+  const ativos = colaboradoresDoCliente(cliente.id).filter(c=>statusColaborador(c)!=='desligado');
+  return `<div class="topbar" style="margin-bottom:10px;"><div><h1 style="font-size:19px;">Nine Box</h1><p>Desempenho x Potencial dos colaboradores ativos</p></div></div>` + htmlNineBox(ativos, 'portal-abrir-prontuario');
 }
 
 function viewPortalColaboradores(){
@@ -7755,6 +7827,7 @@ function onPortalClick(e){
   if(action === 'portal-novo-colaborador'){ modalPortalColaborador(null); return; }
   if(action === 'portal-editar-colaborador'){ closeModal(); modalPortalColaborador(db.colaboradores.find(c=>c.id===id)); return; }
   if(action === 'portal-abrir-prontuario'){ abrirProntuarioPortal(id); return; }
+  if(action === 'portal-ver-avaliacao'){ modalPortalResultadoAvaliacao(id, el.dataset.avaliacaoId); return; }
   if(action === 'portal-novo-registro'){ modalPortalNovoRegistro(id); return; }
   if(action === 'portal-nova-funcao'){ modalPortalFuncao(null); return; }
   if(action === 'portal-editar-funcao'){ modalPortalFuncao(db.funcoes.find(f=>f.id===id)); return; }
@@ -10813,6 +10886,7 @@ function onGlobalChange(e){
   if(t.dataset.role === 'serv-tipo'){ state.servTipo = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-mes'){ state.servMes = t.value; renderView(); return; }
   if(t.dataset.role === 'fat-mes-geral'){ state.fatMesGeral = t.value; renderView(); return; }
+  if(t.dataset.role === 'nb-cliente'){ state.nbClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'ad-cliente'){ state.adClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-status'){ state.servStatus = t.value; renderView(); return; }
   if(t.dataset.role === 'ind-cliente'){ state.indClienteId = t.value; renderView(); return; }
