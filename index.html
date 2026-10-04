@@ -276,7 +276,7 @@ async function chamarAppsScriptPost(action, payload, timeoutMs, tentativa){
     res = await fetch(APPS_SCRIPT_URL, {
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify(Object.assign({action:action}, payload)),
+      body: JSON.stringify(Object.assign({action:action, adminToken: localStorage.getItem('painelAdminToken')||''}, payload)),
       signal: controller.signal
     });
   }catch(err){
@@ -297,7 +297,10 @@ async function chamarAppsScriptPost(action, payload, timeoutMs, tentativa){
     }
     throw new Error('O Google não respondeu corretamente depois de algumas tentativas. Tente novamente em instantes, ou peça para tentar em outro navegador (Chrome, de preferência).');
   }
-  if(!data.ok){ const erro = new Error(data.error || 'Falha na integração.'); erro.dados = data; throw erro; }
+  if(!data.ok){
+    if(data.tokenInvalido){ localStorage.removeItem('painelAdminToken'); renderTelaLoginAdmin('Sua sessão expirou. Faça login de novo.'); }
+    const erro = new Error(data.error || 'Falha na integração.'); erro.dados = data; throw erro;
+  }
   return data;
 }
 
@@ -308,7 +311,7 @@ async function chamarAppsScriptGet(query, timeoutMs, tentativa){
   const timer = setTimeout(()=>controller.abort(), timeoutMs || 35000);
   let res;
   try{
-    res = await fetch(APPS_SCRIPT_URL + '?' + query, { signal: controller.signal });
+    res = await fetch(APPS_SCRIPT_URL + '?' + query + '&adminToken=' + encodeURIComponent(localStorage.getItem('painelAdminToken')||''), { signal: controller.signal });
   }catch(err){
     clearTimeout(timer);
     if(err.name === 'AbortError'){
@@ -333,7 +336,10 @@ async function chamarAppsScriptGet(query, timeoutMs, tentativa){
     }
     throw new Error('O Google não respondeu corretamente depois de algumas tentativas. Tente novamente em instantes, ou peça para tentar em outro navegador (Chrome, de preferência).');
   }
-  if(!data.ok) throw new Error(data.error || 'Falha na integração.');
+  if(!data.ok){
+    if(data.tokenInvalido){ localStorage.removeItem('painelAdminToken'); renderTelaLoginAdmin('Sua sessão expirou. Faça login de novo.'); }
+    throw new Error(data.error || 'Falha na integração.');
+  }
   return data;
 }
 
@@ -849,6 +855,11 @@ function gerarMensalidadesDoMes(mesRef){
   return criadas;
 }
 
+function mesesDisponiveisServicosAvulsos(){
+  const set = new Set(db.servicosAvulsos.filter(s=>s.dataServico).map(s=>s.dataServico.slice(0,7)));
+  set.add(mesAtualRef());
+  return Array.from(set).sort().reverse();
+}
 function mesesDisponiveisMensalidadesDenuncia(){
   const set = new Set(db.mensalidadesCanalDenuncia.map(m=>m.mesReferencia));
   set.add(mesAtualRef());
@@ -1342,6 +1353,7 @@ function renderShell(){
         <span class="btn btn-secondary btn-sm" data-action="ver-tamanho-db" style="width:100%;margin-top:6px;">📊 Ver tamanho do banco de dados</span>
         <span class="btn btn-secondary btn-sm" data-action="recuperar-perdidos" style="width:100%;margin-top:6px;">🛟 Recuperar dados perdidos</span>
         <span class="btn btn-secondary btn-sm" data-action="configurar-mensagens" style="width:100%;margin-top:6px;">💬 Mensagens automáticas</span>
+        <span class="btn btn-ghost btn-sm" data-action="logout-admin" style="width:100%;margin-top:10px;">🔒 Sair do painel</span>
       </div>
     </div>
     <main id="main"><div id="view"></div></main>
@@ -2208,6 +2220,40 @@ function viewBancoCurriculos(){
 }
 
 /* ============================= FATURAMENTO ============================= */
+function mesesDisponiveisFaturamentoGeral(){
+  const set = new Set();
+  db.cargos.forEach(v=>{ if(v.dataPagamento) set.add(v.dataPagamento.slice(0,7)); });
+  db.mensalidadesBPO.forEach(m=>{ if(m.mesReferencia) set.add(m.mesReferencia); });
+  db.servicosAvulsos.forEach(s=>{ if(s.dataServico) set.add(s.dataServico.slice(0,7)); });
+  db.mensalidadesCanalDenuncia.forEach(m=>{ if(m.mesReferencia) set.add(m.mesReferencia); });
+  db.mensalidadesPesquisaClima.forEach(m=>{ if(m.mesReferencia) set.add(m.mesReferencia); });
+  set.add(mesAtualRef());
+  return Array.from(set).sort().reverse();
+}
+
+function calcularTotalGeralFaturamento(mesRef){
+  let recebido = 0, previsto = 0;
+  const combinaMes = (dataOuMes) => !mesRef || dataOuMes === mesRef;
+
+  // Vagas de R&S: usa o mês do pagamento (quando recebido) — vagas sem data de pagamento só entram no total "sem filtro de mês"
+  db.cargos.forEach(v=>{
+    const mesPagto = v.dataPagamento ? v.dataPagamento.slice(0,7) : '';
+    if(mesRef){ if(mesPagto===mesRef) recebido += valorRecebidoCargo(v); }
+    else { recebido += valorRecebidoCargo(v); previsto += valorPendenteCargo(v); }
+  });
+
+  [db.mensalidadesBPO, db.servicosAvulsos, db.mensalidadesCanalDenuncia, db.mensalidadesPesquisaClima].forEach((lista, idx)=>{
+    lista.forEach(item=>{
+      const mesItem = idx===1 ? (item.dataServico ? item.dataServico.slice(0,7) : '') : item.mesReferencia; // serviços avulsos usa dataServico; os demais usam mesReferencia
+      if(mesRef && mesItem!==mesRef) return;
+      const valor = parseFloat(item.valor)||0;
+      if(item.statusPagamento==='pago') recebido += valor; else previsto += valor;
+    });
+  });
+
+  return { recebido, previsto, total: recebido+previsto };
+}
+
 function viewFaturamento(){
   const clientesOpts = db.clientes.map(c=>'<option value="'+c.id+'" '+(state.fatClienteId===c.id?'selected':'')+'>'+esc(c.nome)+'</option>').join('');
 
@@ -2236,10 +2282,27 @@ function viewFaturamento(){
     </tr>`;
   }).join('');
 
+  const mesesOptsGeral = mesesDisponiveisFaturamentoGeral().map(m=>'<option value="'+m+'" '+(state.fatMesGeral===m?'selected':'')+'>'+formatMesRef(m)+'</option>').join('');
+  const totalGeral = calcularTotalGeralFaturamento(state.fatMesGeral||'');
+
   return `
     <div class="topbar">
       <div><h1>Faturamento</h1><p>Acompanhamento do valor dos serviços por vaga e por cliente</p></div>
     </div>
+
+    <div class="card" style="margin-bottom:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+        <h3 style="font-size:15px;margin:0;">Total geral — todos os serviços</h3>
+        <select data-role="fat-mes-geral"><option value="">Todos os meses</option>${mesesOptsGeral}</select>
+      </div>
+      <p class="hint" style="margin-top:-6px;margin-bottom:12px;">Soma vagas de R&S, mensalidades de BPO, outros serviços avulsos, canal de denúncia e pesquisa de clima.</p>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="label">Total geral${state.fatMesGeral?' no mês':''}</div><div class="value" style="font-size:24px;">${formatMoeda(totalGeral.total)}</div></div>
+        <div class="kpi c-green"><div class="label">Recebido</div><div class="value" style="font-size:22px;">${formatMoeda(totalGeral.recebido)}</div></div>
+        <div class="kpi c-red"><div class="label">A receber</div><div class="value" style="font-size:22px;">${formatMoeda(totalGeral.previsto)}</div></div>
+      </div>
+    </div>
+
     <div class="filters-row">
       <select data-role="fat-cliente"><option value="">Todos os clientes</option>${clientesOpts}</select>
       <select data-role="fat-status">
@@ -2351,10 +2414,12 @@ function viewServicosAvulsos(){
   if(db.clientes.length===0) return '';
   const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.servClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
   const tiposOpts = TIPOS_SERVICO_AVULSO.map(t=>'<option '+(state.servTipo===t?'selected':'')+'>'+t+'</option>').join('');
+  const mesesOptsServ = mesesDisponiveisServicosAvulsos().map(m=>'<option value="'+m+'" '+(state.servMes===m?'selected':'')+'>'+formatMesRef(m)+'</option>').join('');
 
   let lista = db.servicosAvulsos.slice();
   if(state.servClienteId) lista = lista.filter(s=>s.clienteId===state.servClienteId);
   if(state.servTipo) lista = lista.filter(s=>s.tipoServico===state.servTipo);
+  if(state.servMes) lista = lista.filter(s=>s.dataServico && s.dataServico.slice(0,7)===state.servMes);
   if(state.servStatus) lista = lista.filter(s=>s.statusPagamento===state.servStatus);
   lista = lista.slice().sort((a,b)=> (b.dataServico||'').localeCompare(a.dataServico||''));
 
@@ -2387,6 +2452,7 @@ function viewServicosAvulsos(){
     <div class="filters-row">
       <select data-role="serv-cliente"><option value="">Todos os clientes</option>${clientesOpts}</select>
       <select data-role="serv-tipo"><option value="">Todos os tipos</option>${tiposOpts}</select>
+      <select data-role="serv-mes"><option value="">Todos os meses</option>${mesesOptsServ}</select>
       <select data-role="serv-status">
         <option value="">Todos os status</option>
         <option value="pendente" ${state.servStatus==='pendente'?'selected':''}>Pendente</option>
@@ -10337,6 +10403,13 @@ function onGlobalClick(e){
     return;
   }
   if(action === 'configurar-mensagens'){ modalConfigurarMensagens(); return; }
+  if(action === 'logout-admin'){
+    if(confirm('Sair do painel? Você vai precisar digitar a senha de novo pra entrar.')){
+      localStorage.removeItem('painelAdminToken');
+      renderTelaLoginAdmin();
+    }
+    return;
+  }
   if(action === 'recuperar-dados-antigos'){
     showToast('Procurando dados antigos…');
     lerStorageAntigo().then(dadosAntigos=>{
@@ -10433,6 +10506,8 @@ function onGlobalChange(e){
   if(t.dataset.role === 'mens-status'){ state.mensStatus = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-cliente'){ state.servClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-tipo'){ state.servTipo = t.value; renderView(); return; }
+  if(t.dataset.role === 'serv-mes'){ state.servMes = t.value; renderView(); return; }
+  if(t.dataset.role === 'fat-mes-geral'){ state.fatMesGeral = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-status'){ state.servStatus = t.value; renderView(); return; }
   if(t.dataset.role === 'ind-cliente'){ state.indClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'den-cliente'){ state.denClienteId = t.value; renderView(); return; }
@@ -10513,14 +10588,62 @@ async function roteirizarPaginaPublica(){
   return false;
 }
 
+function renderTelaLoginAdmin(mensagem){
+  document.title = 'Login · Caroline Peixoto DHO';
+  document.body.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:16px;">
+      <div class="card" style="max-width:380px;width:100%;padding:0;overflow:hidden;">
+        <div style="background:var(--spine);padding:26px;text-align:center;">
+          <img src="data:image/png;base64,${LOGO_COLORIDO_B64}" alt="Caroline Peixoto DHO" style="max-width:200px;width:100%;height:auto;">
+        </div>
+        <div style="padding:28px;">
+          <h2 style="margin-bottom:6px;">Acesso ao Painel</h2>
+          ${mensagem ? '<p class="hint" style="color:var(--amber);margin-bottom:14px;">'+esc(mensagem)+'</p>' : '<p class="hint" style="margin-bottom:14px;">Digite sua senha para continuar.</p>'}
+          <form id="form-login-admin">
+            <div class="field full"><label>Senha</label><input required type="password" name="senha" autofocus></div>
+            <p class="hint" id="erro-login-admin" style="color:var(--red);display:none;margin-top:8px;"></p>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:14px;">Entrar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('form-login-admin').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-login-admin');
+    erroEl.style.display = 'none';
+    const f = new FormData(e.target);
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Entrando…';
+    try{
+      const resp = await chamarAppsScriptPost('adminLogin', {senha: f.get('senha')});
+      localStorage.setItem('painelAdminToken', resp.token);
+      await iniciarPainelAutenticado();
+    }catch(err){
+      erroEl.textContent = err.message || 'Não foi possível entrar agora.';
+      erroEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  });
+}
+
+async function iniciarPainelAutenticado(){
+  document.body.innerHTML = '<div id="aviso-armazenamento-slot"></div><div id="app"><div id="boot-loading">Carregando painel…</div></div><div id="modal-slot"></div><div id="toast-slot"></div>';
+  db = await loadDB();
+  garantirConfiguracoes();
+  registrarBaseDoBanco();
+  renderShell();
+  verificarPersistenciaInicial();
+}
+
 (async function init(){
   const tratouComoPublica = await roteirizarPaginaPublica();
   if(!tratouComoPublica){
-    db = await loadDB();
-    garantirConfiguracoes();
-    registrarBaseDoBanco();
-    renderShell();
-    verificarPersistenciaInicial();
+    if(!localStorage.getItem('painelAdminToken')){
+      renderTelaLoginAdmin();
+    } else {
+      await iniciarPainelAutenticado();
+    }
   } else {
     // Dentro das páginas públicas, links internos (ex.: do Portal de Vagas para uma vaga específica,
     // ou para o Banco de Currículos) só trocam o hash da URL — precisamos escutar essa troca pra
