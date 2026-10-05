@@ -568,6 +568,7 @@ const GRUPOS_NAV = [
   ]},
   { id:'gestaoColab', label:'Gestão de Colaboradores', icone:'👥', itens:[
     {tab:'colaboradores', colabAba:'colaboradores', label:'Colaboradores'},
+    {tab:'registros', label:'Registros (1:1, reuniões, advertências…)'},
     {tab:'aniversarios', label:'Aniversários'}
   ]},
   { id:'performance', label:'Performance', icone:'📈', itens:[
@@ -1466,6 +1467,7 @@ function renderView(){
   else if(state.tab === 'parecerCandidato') view.innerHTML = viewParecerCandidato();
   else if(state.tab === 'portalAcessos') view.innerHTML = viewPortalAcessos();
   else if(state.tab === 'ninebox') view.innerHTML = viewNineBox();
+  else if(state.tab === 'registros') view.innerHTML = viewRegistros();
   else if(state.tab === 'pdiLista') view.innerHTML = viewPdiLista();
   else if(state.tab === 'carreiraLista') view.innerHTML = viewCarreiraLista();
   else if(state.tab === 'avaliacaoDesempenhoLista') view.innerHTML = viewAvaliacaoDesempenhoLista();
@@ -2383,6 +2385,72 @@ function viewCarreiraLista(){
       ${colabs.length===0 ? '<p class="hint">Nenhum colaborador ativo encontrado para este filtro.</p>' : `
       <div class="table-wrap"><table><thead><tr><th>Colaborador</th><th>Empresa</th><th>Cargo atual</th><th>Tempo no cargo</th><th>Cargo-alvo</th><th>Prontidão</th><th>Pendências</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
       <p class="hint" style="margin-top:10px;">A trilha (próximo cargo, tempo e desempenho mínimos) é definida em Cadastro de Função → editar a função → "Trilha de carreira". As competências cobradas vêm do descritivo do cargo-alvo.</p>
+    </div>`;
+}
+
+function corBadgeRegistro(tipo){
+  if(/Advertência|Suspensão/.test(tipo)) return 'red';
+  if(/positivo|Elogio/.test(tipo)) return 'green';
+  return 'gray';
+}
+
+function modalEscolherColaboradorRegistro(){
+  const ativos = db.colaboradores.filter(c=>statusColaborador(c)!=='desligado');
+  const porEmpresa = {};
+  ativos.forEach(c=>{ (porEmpresa[c.clienteId] = porEmpresa[c.clienteId] || []).push(c); });
+  const grupos = Object.keys(porEmpresa).map(id=>({ cl:getCliente(id), lista:porEmpresa[id].slice().sort((a,b)=>a.nome.localeCompare(b.nome)) })).sort((a,b)=>((a.cl&&a.cl.nome)||'').localeCompare((b.cl&&b.cl.nome)||''));
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Novo registro</h2>
+    <p class="hint" style="margin-bottom:10px;">Escolha com quem foi a conversa. Em seguida você informa o tipo (1:1, reunião, feedback, advertência, suspensão…) e o que foi tratado.</p>
+    ${ativos.length===0 ? '<p class="hint">Nenhum colaborador ativo cadastrado ainda.</p>' : `
+    <form id="form-escolher-colab-registro">
+      <div class="field full"><label>Colaborador *</label>
+        <select required name="colaborador"><option value="">Selecione…</option>
+          ${grupos.map(g=>'<optgroup label="'+esc(g.cl?g.cl.nome:'Sem empresa')+'">'+g.lista.map(c=>'<option value="'+c.id+'">'+esc(c.nome)+'</option>').join('')+'</optgroup>').join('')}
+        </select></div>
+      <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Continuar</button></div></div>
+    </form>`}
+  `);
+  const form = document.getElementById('form-escolher-colab-registro');
+  if(form) form.addEventListener('submit', e=>{ e.preventDefault(); const id = new FormData(e.target).get('colaborador'); closeModal(); modalNovoRegistro(id); });
+}
+
+function viewRegistros(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.regClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  const tiposOpts = TIPOS_REGISTRO_COLABORADOR.map(t=>'<option '+(state.regTipo===t?'selected':'')+'>'+t+'</option>').join('');
+  const linhas = [];
+  db.colaboradores.forEach(c=>{
+    if(state.regClienteId && c.clienteId!==state.regClienteId) return;
+    (c.registros||[]).forEach(r=>{ if(state.regTipo && r.tipo!==state.regTipo) return; linhas.push({ c, r }); });
+  });
+  linhas.sort((a,b)=>(b.r.data||'').localeCompare(a.r.data||''));
+  const corpo = linhas.map(({c,r})=>{
+    const cl = getCliente(c.clienteId), desc = r.descricao || '';
+    return `<tr>
+      <td style="white-space:nowrap;">${formatDate(r.data)}</td>
+      <td><strong>${esc(c.nome)}</strong>${statusColaborador(c)==='desligado'?' <span class="hint">(desligado)</span>':''}</td>
+      <td>${esc(cl?cl.nome:'—')}</td>
+      <td><span class="badge badge-${corBadgeRegistro(r.tipo)}">${esc(r.tipo)}</span></td>
+      <td title="${esc(desc)}">${esc(desc.length>160 ? desc.slice(0,160)+'…' : desc)}</td>
+      <td>${esc(r.registradoPor||'—')}</td>
+      <td class="no-print"><span class="btn btn-ghost btn-sm" data-action="abrir-prontuario" data-id="${c.id}">📋 Prontuário</span></td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="topbar">
+      <div><h1>Registros</h1><p>Conversas e ocorrências com os colaboradores: 1:1, reuniões, feedbacks, elogios, advertências e suspensões</p></div>
+      <div style="display:flex;gap:8px;"><button class="btn btn-primary" data-action="novo-registro-geral">+ Novo registro</button></div>
+    </div>
+    <div class="filters-row">
+      <select data-role="reg-cliente"><option value="">Todas as empresas</option>${clientesOpts}</select>
+      <select data-role="reg-tipo"><option value="">Todos os tipos</option>${tiposOpts}</select>
+    </div>
+    <div class="card">
+      ${linhas.length===0 ? '<p class="hint">Nenhum registro encontrado para este filtro. Use "+ Novo registro" para lançar o primeiro.</p>' : `
+      <p class="hint" style="margin-bottom:8px;">${linhas.length} registro(s), do mais recente para o mais antigo.</p>
+      <div class="table-wrap"><table><thead><tr><th>Data</th><th>Colaborador</th><th>Empresa</th><th>Tipo</th><th>O que foi tratado</th><th>Registrado por</th><th></th></tr></thead><tbody>${corpo}</tbody></table></div>`}
+      <p class="hint" style="margin-top:10px;">Os registros também aparecem no Prontuário de cada pessoa (seção "Registros"), de onde você pode lançar novos.</p>
     </div>`;
 }
 
@@ -3414,6 +3482,7 @@ function viewColaboradores(){
         <span class="btn btn-ghost btn-sm" data-action="abrir-prontuario" data-id="${c.id}">📋 Prontuário</span>
         <span class="btn btn-ghost btn-sm" data-action="abrir-avaliacoes-colaborador" data-id="${c.id}">📊 Avaliação</span>
         <span class="btn btn-ghost btn-sm" data-action="abrir-pdi" data-id="${c.id}">🎯 PDI</span>
+        <span class="btn btn-ghost btn-sm" data-action="novo-registro-colaborador" data-id="${c.id}">💬 Registro</span>
         <span class="btn btn-ghost btn-sm" data-action="editar-colaborador" data-id="${c.id}">Editar</span>
         <span class="btn btn-ghost btn-sm" data-action="excluir-colaborador" data-id="${c.id}">Excluir</span>
       </td>
@@ -6023,7 +6092,7 @@ function linhaHistoricoSalarial(item){
   </div>`;
 }
 
-const TIPOS_REGISTRO_COLABORADOR = ['Feedback positivo', 'Feedback de melhoria', 'Conversa 1:1', 'Elogio formal', 'Advertência verbal', 'Advertência escrita', 'Suspensão', 'Outro'];
+const TIPOS_REGISTRO_COLABORADOR = ['Feedback positivo', 'Feedback de melhoria', 'Conversa 1:1', 'Elogio formal', 'Advertência verbal', 'Advertência escrita', 'Suspensão', 'Reunião', 'Outro'];
 
 const CRITERIOS_EXPERIENCIA = [
   {chave:'fitCultural', nome:'Fit Cultural', desc:'Adaptação à cultura da empresa, compreensão dos valores e missão, comportamento alinhado com os princípios da empresa.'},
@@ -6787,7 +6856,7 @@ function modalNovoRegistro(colaboradorId){
     c.registros.push({id:uid('reg'), tipo:f.get('tipo'), data:f.get('data'), descricao:f.get('descricao').trim(), registradoPor:f.get('registradoPor').trim()});
     saveDB();
     showToast('Registro salvo.');
-    abrirProntuario(colaboradorId);
+    if(state.tab === 'registros'){ closeModal(); renderView(); } else abrirProntuario(colaboradorId);
   });
 }
 
@@ -10670,6 +10739,7 @@ function onGlobalClick(e){
   if(action === 'editar-colaborador'){ modalColaborador(getColaborador(id)); return; }
   if(action === 'abrir-prontuario'){ abrirProntuario(id); return; }
   if(action === 'novo-registro-colaborador'){ modalNovoRegistro(id); return; }
+  if(action === 'novo-registro-geral'){ modalEscolherColaboradorRegistro(); return; }
   if(action === 'abrir-avaliacao-experiencia'){ modalAvaliacaoExperiencia(id, el.dataset.periodo); return; }
   if(action === 'abrir-prontuario-alerta'){ abrirProntuario(id); return; }
   if(action === 'ver-trilha-colaborador'){ modalTrilhaColaborador(id); return; }
@@ -11342,6 +11412,8 @@ function onGlobalChange(e){
   if(t.dataset.role === 'fat-mes-geral'){ state.fatMesGeral = t.value; renderView(); return; }
   if(t.dataset.role === 'pdi-cliente'){ state.pdiClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'cr-cliente'){ state.crClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'reg-cliente'){ state.regClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'reg-tipo'){ state.regTipo = t.value; renderView(); return; }
   if(t.dataset.role === 'nb-cliente'){ state.nbClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'ad-cliente'){ state.adClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-status'){ state.servStatus = t.value; renderView(); return; }
