@@ -540,10 +540,12 @@ async function verificarPersistenciaInicial(){
   return ok;
 }
 
+let toastTimer = null;
 function showToast(msg, isErr){
   const slot = document.getElementById('toast-slot');
   slot.innerHTML = '<div class="toast '+(isErr?'err':'')+'">'+esc(msg)+'</div>';
-  setTimeout(()=>{ slot.innerHTML=''; }, 3200);
+  clearTimeout(toastTimer); // cancela o "apagar" do aviso anterior, para ele não sumir com o aviso novo antes da hora
+  toastTimer = setTimeout(()=>{ slot.innerHTML=''; }, 3200);
 }
 
 
@@ -2738,6 +2740,7 @@ function viewCandidatos(){
       <span class="btn btn-secondary btn-sm" data-action="lote-avancar">▶ Avançar etapa</span>
       <span class="btn btn-secondary btn-sm" data-action="lote-nao-avancou">✕ Marcar não avançou</span>
       <span class="btn btn-secondary btn-sm" data-action="lote-banco">🗂 Adicionar ao banco</span>
+      ${appsScriptConfigurado() ? '<span class="btn btn-secondary btn-sm" data-action="lote-analisar-ia" title="A IA compara só os candidatos selecionados com o critério da vaga e calcula o match">✨ Analisar com IA</span>' : ''}
       <span class="btn btn-danger btn-sm" data-action="lote-excluir">Excluir selecionados</span>
       <span class="btn btn-ghost btn-sm" data-action="lote-limpar" style="margin-left:auto;">Limpar seleção</span>
     </div>` : '';
@@ -9785,6 +9788,90 @@ function modalTransferirCandidato(candidato){
 }
 
 let analiseIAEmAndamento = false;
+let analiseSelecionadosPendente = null;
+
+// Análise por IA só dos candidatos selecionados (em vez de a vaga inteira).
+function iniciarAnaliseIASelecionados(){
+  if(analiseIAEmAndamento){ showToast('Já tem uma análise em andamento — aguarde terminar.', true); return; }
+  const marcados = [...state.candidatosSelecionados].map(id=>db.candidatos.find(c=>c.id===id)).filter(Boolean);
+  const semVaga = [], semCriterio = [], semCurriculo = [], analisaveis = [];
+  marcados.forEach(c=>{
+    const vaga = c.cargoId ? getCargo(c.cargoId) : null;
+    if(!vaga) semVaga.push(c);
+    else if(!vaga.criterioObrigatorioIA) semCriterio.push(c);
+    else if(!c.curriculoUrl) semCurriculo.push(c);
+    else analisaveis.push(c);
+  });
+  const avisos = [];
+  if(semCurriculo.length) avisos.push(semCurriculo.length+' sem currículo anexado');
+  if(semCriterio.length) avisos.push(semCriterio.length+' em vaga sem critério da IA configurado');
+  if(semVaga.length) avisos.push(semVaga.length+' sem vaga');
+  const avisoIgnorados = avisos.length ? avisos.join(', ')+' (ignorado(s))' : '';
+  if(analisaveis.length===0){ showToast('Nenhum dos selecionados pode ser analisado agora'+(avisoIgnorados?': '+avisoIgnorados+'.':'.'), true); return; }
+  const jaAnalisados = analisaveis.filter(c=>c.avaliacaoIA), novos = analisaveis.filter(c=>!c.avaliacaoIA);
+  const plano = { todos: analisaveis, novos, jaAnalisados, avisoIgnorados };
+  if(jaAnalisados.length){ modalEscolhaReanalise(plano); return; }
+  if(!confirm('Isso vai analisar '+novos.length+' candidato(s) selecionado(s) com IA, comparando com o critério de cada vaga. Quem não atender é sinalizado e o status muda para "Não avançou" (sempre revisável).'+(avisoIgnorados?'\n\nIgnorados: '+avisoIgnorados+'.':'')+'\n\nContinuar?')) return;
+  executarAnaliseIASelecionados(novos, false, avisoIgnorados);
+}
+
+function modalEscolhaReanalise(plano){
+  analiseSelecionadosPendente = plano;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Analisar com IA</h2>
+    <p>Dos <strong>${plano.todos.length}</strong> candidato(s) selecionado(s) que dá para analisar, <strong>${plano.jaAnalisados.length}</strong> já tinha(m) análise.</p>
+    <p class="hint">Refazer vale a pena quando você acrescentou as anotações da entrevista ou o DISC depois da primeira análise — o match considera isso. Cada candidato analisado usa uma consulta à IA. Quem não atender ao critério é sinalizado e fica como "Não avançou" (sempre revisável); quem passar a atender deixa de ser sinalizado.</p>
+    ${plano.avisoIgnorados ? '<p class="hint">Ignorados: '+esc(plano.avisoIgnorados)+'.</p>' : ''}
+    <div class="modal-footer">
+      <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+      <div class="right">
+        ${plano.novos.length ? '<span class="btn btn-secondary" data-action="lote-ia-so-novos">Só os '+plano.novos.length+' ainda não analisados</span>' : ''}
+        <span class="btn btn-primary" data-action="lote-ia-refazer">Analisar os ${plano.todos.length} (refazendo ${plano.jaAnalisados.length})</span>
+      </div>
+    </div>
+  `);
+}
+
+async function executarAnaliseIASelecionados(candidatos, reanalisar, avisoIgnorados){
+  analiseIAEmAndamento = true;
+  const porVaga = {};
+  candidatos.forEach(c=>{ (porVaga[c.cargoId] = porVaga[c.cargoId] || []).push(c.id); });
+  let feitos = 0, analisados = 0, sinalizados = 0, reativados = 0, erros = 0, parada = false;
+  try{
+    for(const cargoId of Object.keys(porVaga)){
+      const ids = porVaga[cargoId];
+      for(let i=0; i<ids.length; i+=8){
+        const lote = ids.slice(i, i+8);
+        showToast('Analisando com IA… '+feitos+' de '+candidatos.length+' selecionado(s).');
+        let resp;
+        try{
+          resp = await chamarAppsScriptPost('analisarCandidatosIA', { cargoId, candidatoIds: lote, reanalisar, limite: 8 }, 100000);
+        }catch(err){
+          showToast('A análise parou: '+(err.message||'erro desconhecido')+'. O que já foi analisado está salvo — selecione os restantes e tente de novo.', true);
+          parada = true; break;
+        }
+        analisados += resp.analisados; sinalizados += resp.sinalizados; reativados += (resp.reativados||0);
+        erros += (resp.comErro ? resp.comErro.length : 0); feitos += lote.length;
+      }
+      if(parada) break;
+    }
+  } finally {
+    analiseIAEmAndamento = false;
+  }
+  const recarregado = await loadDB();
+  if(dbCarregadoComSucesso){ Object.keys(db).forEach(k=>{ delete db[k]; }); Object.assign(db, recarregado); garantirConfiguracoes(); registrarBaseDoBanco(); }
+  if(!parada) state.candidatosSelecionados.clear();
+  renderView();
+  if(!parada){
+    let msg = analisados+' candidato(s) analisado(s), '+sinalizados+' sinalizado(s).';
+    if(reativados) msg += ' '+reativados+' deixou(aram) de ser sinalizado(s) na nova análise.';
+    if(erros) msg += ' '+erros+' não puderam ser lidos (confira manualmente).';
+    if(avisoIgnorados) msg += ' Ignorados: '+avisoIgnorados+'.';
+    showToast(msg);
+  }
+}
+
 async function executarAnaliseIAEmLotes(cargoId){
   analiseIAEmAndamento = true;
   let totalAnalisados = 0, totalSinalizados = 0, totalErros = 0, totalGeral = 0, primeiraChamada = true, paradaPorErro = false;
@@ -11080,6 +11167,9 @@ function onGlobalClick(e){
     showToast(n+' candidato(s) marcados como não avançou.');
     return;
   }
+  if(action === 'lote-analisar-ia'){ iniciarAnaliseIASelecionados(); return; }
+  if(action === 'lote-ia-so-novos'){ const pl = analiseSelecionadosPendente; closeModal(); if(pl) executarAnaliseIASelecionados(pl.novos, false, pl.avisoIgnorados); return; }
+  if(action === 'lote-ia-refazer'){ const pl = analiseSelecionadosPendente; closeModal(); if(pl) executarAnaliseIASelecionados(pl.todos, true, pl.avisoIgnorados); return; }
   if(action === 'lote-banco'){
     let n=0;
     state.candidatosSelecionados.forEach(cid=>{
