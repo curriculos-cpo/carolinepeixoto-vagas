@@ -571,7 +571,8 @@ const GRUPOS_NAV = [
   { id:'performance', label:'Performance', icone:'📈', itens:[
     {tab:'avaliacaoDesempenhoLista', label:'Avaliação de Desempenho'},
     {tab:'avaliacaoExperienciaLista', label:'Avaliação de Experiência'},
-    {label:'PDI', emBreve:true},
+    {tab:'pdiLista', label:'PDI'},
+    {tab:'carreiraLista', label:'Plano de Carreira'},
     {tab:'colaboradores', colabAba:'treinamentos', label:'Treinamentos'},
     {tab:'ninebox', label:'9Box'}
   ]},
@@ -1463,6 +1464,8 @@ function renderView(){
   else if(state.tab === 'parecerCandidato') view.innerHTML = viewParecerCandidato();
   else if(state.tab === 'portalAcessos') view.innerHTML = viewPortalAcessos();
   else if(state.tab === 'ninebox') view.innerHTML = viewNineBox();
+  else if(state.tab === 'pdiLista') view.innerHTML = viewPdiLista();
+  else if(state.tab === 'carreiraLista') view.innerHTML = viewCarreiraLista();
   else if(state.tab === 'avaliacaoDesempenhoLista') view.innerHTML = viewAvaliacaoDesempenhoLista();
   else if(state.tab === 'relatorio') view.innerHTML = viewRelatorio();
   view.classList.remove('view-animar');
@@ -1945,7 +1948,13 @@ function calcularAlertasAtencao(clienteIdFiltro){
       return { id:'aniversario-'+e.colaborador.id+'-'+todayISO().slice(0,7), titulo:'🎂 '+e.colaborador.nome, sub:(cl?.nome||'')+' · Aniversário '+situacao+' ('+e.colaborador.dataNascimento.slice(8,10)+'/'+e.colaborador.dataNascimento.slice(5,7)+')', dataAction:'abrir-prontuario-alerta', dataId:e.colaborador.id };
     });
 
-  return { vagasParadas, candidatosParados, experienciaVencendo, feriasVencendo, aniversariosProximos };
+  const pdiVencendo = acoesPdiComPrazoProximo(clienteIdFiltro || null).map(a=>({
+    id:'pdi-'+a.acao.id,
+    titulo: a.colaborador.nome+' — '+(a.acao.competencia || a.acao.acao || 'ação do PDI'),
+    sub: (a.dias<0 ? 'prazo vencido há '+Math.abs(a.dias)+' dia(s)' : a.dias===0 ? 'vence hoje' : 'vence em '+a.dias+' dia(s)')+' ('+formatDate(a.acao.prazo)+')',
+    dataAction:'abrir-pdi', dataId:a.colaborador.id
+  }));
+  return { vagasParadas, candidatosParados, experienciaVencendo, feriasVencendo, aniversariosProximos, pdiVencendo };
 }
 
 function renderPainelAtencao(alertas, lidos, acaoLido){
@@ -1955,7 +1964,8 @@ function renderPainelAtencao(alertas, lidos, acaoLido){
   const experienciaVencendo = alertas.experienciaVencendo.filter(naoLido);
   const feriasVencendo = (alertas.feriasVencendo||[]).filter(naoLido);
   const aniversariosProximos = (alertas.aniversariosProximos||[]).filter(naoLido);
-  const total = vagasParadas.length + candidatosParados.length + experienciaVencendo.length + feriasVencendo.length + aniversariosProximos.length;
+  const pdiVencendo = (alertas.pdiVencendo||[]).filter(naoLido);
+  const total = vagasParadas.length + candidatosParados.length + experienciaVencendo.length + feriasVencendo.length + aniversariosProximos.length + pdiVencendo.length;
   if(total === 0) return '';
 
   function linhaItem(item){
@@ -1994,6 +2004,11 @@ function renderPainelAtencao(alertas, lidos, acaoLido){
       <div>
         <div class="hint" style="margin-bottom:6px;font-weight:600;">Aniversários na próxima semana (${aniversariosProximos.length})</div>
         ${aniversariosProximos.map(linhaItem).join('')}
+      </div>` : ''}
+      ${pdiVencendo.length ? `
+      <div style="margin-top:14px;">
+        <div class="hint" style="margin-bottom:6px;font-weight:600;">Ações de PDI com prazo vencido ou nos próximos ${LIMITE_DIAS_ALERTA_PDI} dias (${pdiVencendo.length})</div>
+        ${pdiVencendo.map(linhaItem).join('')}
       </div>` : ''}
     </div>`;
 }
@@ -2039,6 +2054,305 @@ function viewNineBox(){
     <div class="filters-row"><select data-role="nb-cliente"><option value="">Selecione uma empresa…</option>${clientesOpts}</select></div>
     ${corpo}
   `;
+}
+
+/* ============================= PDI (Plano de Desenvolvimento Individual) ============================= */
+const TIPOS_ACAO_PDI = ['Curso / Treinamento','Mentoria','Prática no dia a dia','Leitura / Estudo','Feedback / Coaching','Projeto especial','Outro'];
+const STATUS_ACAO_PDI = { nao_iniciada:'Não iniciada', em_andamento:'Em andamento', concluida:'Concluída' };
+const LIMITE_DIAS_ALERTA_PDI = 7;
+
+function pdiAtivo(c){ const ativos = (c.pdis||[]).filter(p=>p.status!=='concluido'); return ativos.length ? ativos[ativos.length-1] : null; }
+function progressoPdi(p){ const total = p.acoes.length, concluidas = p.acoes.filter(a=>a.status==='concluida').length; return { total, concluidas, pct: total ? Math.round(concluidas/total*100) : 0 }; }
+function proximoPrazoPdi(p){ const prazos = p.acoes.filter(a=>a.status!=='concluida' && a.prazo).map(a=>a.prazo).sort(); return prazos[0] || ''; }
+function acoesPdiComPrazoProximo(clienteIdFiltro){
+  const hoje = todayISO(), lista = [];
+  db.colaboradores.forEach(c=>{
+    if(statusColaborador(c)==='desligado') return;
+    if(clienteIdFiltro && c.clienteId!==clienteIdFiltro) return;
+    if(!getCliente(c.clienteId)) return;
+    (c.pdis||[]).filter(p=>p.status!=='concluido').forEach(p=>p.acoes.forEach(a=>{
+      if(a.status==='concluida' || !a.prazo) return;
+      const dias = daysBetween(hoje, a.prazo);
+      if(dias <= LIMITE_DIAS_ALERTA_PDI) lista.push({ colaborador:c, pdi:p, acao:a, dias });
+    }));
+  });
+  return lista.sort((x,y)=>x.dias-y.dias);
+}
+// Competências abaixo do esperado na última avaliação de desempenho (a mais crítica primeiro) — é daqui que o PDI nasce.
+function gapsDaUltimaAvaliacao(c){
+  const avs = (c.avaliacoesDesempenho||[]).filter(a=>a.avaliadores.some(v=>v.respondida));
+  if(!avs.length) return { avaliacao:null, gaps:[] };
+  const ultima = avs[avs.length-1];
+  const gaps = calcularResultadoAvaliacaoDesempenho(ultima).competencias
+    .filter(x=>x.gap!==null && x.gap<0).sort((a,b)=>a.gap-b.gap)
+    .map(x=>({ competencia:x.nome, categoria:x.categoria, gap:x.gap, mediaGeral:x.mediaGeral, esperado:x.notaEsperada }));
+  return { avaliacao:ultima, gaps };
+}
+
+function linhaAcaoPdi(a){
+  a = a || {};
+  const temGap = a.gap!==undefined && a.gap!==null && a.gap!=='';
+  return `<div class="card" data-linha-pdi data-aid="${esc(a.id||'')}" data-gap="${temGap?a.gap:''}" style="padding:10px 12px;margin-bottom:8px;">
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
+      <div class="field"><label>Competência${temGap?' <span class="hint">(gap '+String(a.gap).replace('.',',')+')</span>':''}</label><input class="pdi-comp" value="${esc(a.competencia||'')}"></div>
+      <div class="field"><label>Ação</label><input class="pdi-acao" value="${esc(a.acao||'')}" placeholder="O que será feito para desenvolver"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.2fr 130px 1fr 1fr auto;gap:8px;margin-top:6px;align-items:end;">
+      <div class="field"><label>Tipo</label><select class="pdi-tipo">${TIPOS_ACAO_PDI.map(t=>'<option '+((a.tipo||TIPOS_ACAO_PDI[0])===t?'selected':'')+'>'+t+'</option>').join('')}</select></div>
+      <div class="field"><label>Prazo</label><input type="date" class="pdi-prazo" value="${esc(a.prazo||'')}"></div>
+      <div class="field"><label>Responsável</label><input class="pdi-resp" value="${esc(a.responsavel||'')}"></div>
+      <div class="field"><label>Situação</label><select class="pdi-status">${Object.entries(STATUS_ACAO_PDI).map(([k,v])=>'<option value="'+k+'" '+((a.status||'nao_iniciada')===k?'selected':'')+'>'+v+'</option>').join('')}</select></div>
+      <div class="field"><span class="btn btn-ghost btn-sm" data-remover-acao-pdi title="Remover esta ação">✕</span></div>
+    </div>
+  </div>`;
+}
+
+function modalPdi(colaboradorId, pdiId, inicial){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const existente = pdiId ? (c.pdis||[]).find(p=>p.id===pdiId) : null;
+  let aviso = '';
+  if(!existente && !inicial){
+    const g = gapsDaUltimaAvaliacao(c);
+    inicial = { periodo:'PDI '+new Date().getFullYear(), objetivo:'', avaliacaoOrigemId: g.avaliacao ? g.avaliacao.id : '',
+      acoes: g.gaps.map(x=>({ competencia:x.competencia, gap:x.gap, tipo:TIPOS_ACAO_PDI[0], status:'nao_iniciada' })) };
+    if(g.gaps.length) aviso = 'A avaliação de desempenho "'+(g.avaliacao.periodoReferencia||'')+'" apontou '+g.gaps.length+' competência(s) abaixo do esperado. Já deixei uma ação para cada uma — complete o que será feito.';
+    else if(!g.avaliacao) aviso = 'Esta pessoa ainda não tem avaliação de desempenho concluída, então o PDI começa em branco.';
+  } else if(!existente && inicial && inicial.aviso){ aviso = inicial.aviso; }
+  const p = existente || inicial;
+  const acoes = (p.acoes && p.acoes.length) ? p.acoes : [{}];
+  const fn = getFuncao(c.funcaoId), cl = getCliente(c.clienteId);
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${existente?'PDI':'Novo PDI'} — ${esc(c.nome)}</h2>
+    <div class="modal-sub">${esc(fn?fn.nome:'')}${cl?' · '+esc(cl.nome):''}</div>
+    ${aviso ? '<p class="hint" style="background:var(--amber-soft);padding:8px 10px;border-radius:6px;margin-bottom:10px;">'+esc(aviso)+'</p>' : ''}
+    <form id="form-pdi">
+      <div class="form-grid">
+        <div class="field"><label>Período / ciclo</label><input name="periodo" value="${esc(p.periodo||'')}"></div>
+        ${existente ? '<div class="field"><label>Situação do PDI</label><select name="statusPdi"><option value="ativo" '+(existente.status!=='concluido'?'selected':'')+'>Em andamento</option><option value="concluido" '+(existente.status==='concluido'?'selected':'')+'>Concluído</option></select></div>' : ''}
+        <div class="field full"><label>Objetivo geral</label><textarea name="objetivo" placeholder="Aonde esta pessoa quer/precisa chegar com este plano">${esc(p.objetivo||'')}</textarea></div>
+      </div>
+      <div class="section-title">Ações de desenvolvimento</div>
+      <div id="lista-acoes-pdi">${acoes.map(linhaAcaoPdi).join('')}</div>
+      <span class="btn btn-secondary btn-sm" id="btn-add-acao-pdi">+ Adicionar ação</span>
+      ${existente && (existente.acompanhamentos||[]).length ? '<div class="section-title">Acompanhamento</div>'+existente.acompanhamentos.slice().reverse().map(x=>'<p style="margin:0 0 6px 0;font-size:13px;"><strong>'+formatDate(x.data)+'</strong> — '+esc(x.texto)+'</p>').join('') : ''}
+      <div class="section-title">Registrar acompanhamento</div>
+      <div class="form-grid">
+        <div class="field"><label>Data</label><input type="date" name="acompData" value="${todayISO()}"></div>
+        <div class="field full"><textarea name="acompTexto" placeholder="Como está andando? O que foi conversado/combinado? (opcional)"></textarea></div>
+      </div>
+      <p class="hint" id="erro-pdi" style="color:var(--red);display:none;margin-top:8px;"></p>
+      <div class="modal-footer">
+        <span>${existente ? '<span class="btn btn-danger btn-sm" data-action="excluir-pdi" data-id="'+c.id+'" data-pdi-id="'+existente.id+'">Excluir PDI</span>' : ''}</span>
+        <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Salvar PDI</button></div>
+      </div>
+    </form>
+  `);
+  const form = document.getElementById('form-pdi');
+  document.getElementById('btn-add-acao-pdi').addEventListener('click', ()=>{ document.getElementById('lista-acoes-pdi').insertAdjacentHTML('beforeend', linhaAcaoPdi()); });
+  form.addEventListener('click', e=>{
+    if(e.target.matches && e.target.matches('[data-remover-acao-pdi]')){
+      const linha = e.target.closest('[data-linha-pdi]');
+      if(document.querySelectorAll('[data-linha-pdi]').length > 1) linha.remove(); else linha.querySelectorAll('input').forEach(i=>{ i.value=''; });
+    }
+  });
+  form.addEventListener('submit', e=>{
+    e.preventDefault();
+    const erroEl = document.getElementById('erro-pdi'); erroEl.style.display = 'none';
+    const f = new FormData(e.target), hoje = todayISO();
+    const anteriores = {}; ((existente&&existente.acoes)||[]).forEach(a=>{ anteriores[a.id] = a; });
+    const novas = [];
+    document.querySelectorAll('[data-linha-pdi]').forEach(linha=>{
+      const competencia = linha.querySelector('.pdi-comp').value.trim(), acao = linha.querySelector('.pdi-acao').value.trim();
+      if(!competencia && !acao) return;
+      const status = linha.querySelector('.pdi-status').value;
+      const antes = anteriores[linha.dataset.aid];
+      novas.push({ id: linha.dataset.aid || uid('pa'), competencia, acao, tipo: linha.querySelector('.pdi-tipo').value, prazo: linha.querySelector('.pdi-prazo').value, responsavel: linha.querySelector('.pdi-resp').value.trim(), status,
+        gap: linha.dataset.gap!=='' ? Number(linha.dataset.gap) : null, concluidaEm: status==='concluida' ? ((antes&&antes.concluidaEm)||hoje) : '' });
+    });
+    if(novas.length===0){ erroEl.textContent = 'Inclua ao menos uma ação (competência ou o que será feito).'; erroEl.style.display = 'block'; return; }
+    if(novas.some(a=>!a.acao)){ erroEl.textContent = 'Toda ação precisa dizer o que será feito. Preencha o campo "Ação" ou remova a linha.'; erroEl.style.display = 'block'; return; }
+    const alvo = existente || { id: uid('pdi'), criadoEm: hoje, status:'ativo', acompanhamentos:[], avaliacaoOrigemId: p.avaliacaoOrigemId||'' };
+    alvo.periodo = f.get('periodo').trim(); alvo.objetivo = f.get('objetivo').trim(); alvo.acoes = novas;
+    if(existente) alvo.status = f.get('statusPdi') || 'ativo';
+    const texto = (f.get('acompTexto')||'').trim();
+    if(texto){ alvo.acompanhamentos = alvo.acompanhamentos||[]; alvo.acompanhamentos.push({ id: uid('ac'), data: f.get('acompData')||hoje, texto }); }
+    if(!Array.isArray(c.pdis)) c.pdis = [];
+    if(!existente) c.pdis.push(alvo);
+    closeModal(); saveDB(); renderView();
+    showToast('PDI salvo.');
+  });
+}
+
+function viewPdiLista(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.pdiClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  let colabs = db.colaboradores.filter(c=>statusColaborador(c)!=='desligado');
+  if(state.pdiClienteId) colabs = colabs.filter(c=>c.clienteId===state.pdiClienteId);
+  colabs = colabs.slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const hoje = todayISO();
+  const linhas = colabs.map(c=>{
+    const cl = getCliente(c.clienteId), fn = getFuncao(c.funcaoId), p = pdiAtivo(c), todos = c.pdis||[];
+    const gaps = gapsDaUltimaAvaliacao(c).gaps.length;
+    let situacao, progresso = '—', prazo = '—';
+    if(p){
+      const pr = progressoPdi(p), proximo = proximoPrazoPdi(p);
+      progresso = '<div style="min-width:110px;"><div style="background:var(--border);border-radius:4px;height:8px;"><div style="width:'+pr.pct+'%;background:var(--accent);height:8px;border-radius:4px;"></div></div><span class="hint">'+pr.concluidas+' de '+pr.total+' ações</span></div>';
+      prazo = proximo ? formatDate(proximo) : '—';
+      situacao = (proximo && proximo < hoje) ? '<span class="badge badge-red">Ação atrasada</span>' : '<span class="badge badge-amber">Em andamento</span>';
+    } else if(todos.length){ situacao = '<span class="badge badge-green">Concluído</span>'; }
+    else { situacao = '<span class="badge badge-gray">Sem PDI</span>'; }
+    return `<tr>
+      <td><strong>${esc(c.nome)}</strong></td><td>${esc(cl?cl.nome:'—')}</td><td>${esc(fn?fn.nome:'—')}</td>
+      <td>${p ? esc(p.periodo||'—') : '—'}</td><td>${progresso}</td><td>${prazo}</td>
+      <td>${gaps ? gaps+' gap(s)' : '—'}</td><td>${situacao}</td>
+      <td class="no-print" style="white-space:nowrap;">
+        ${p ? '<span class="btn btn-secondary btn-sm" data-action="abrir-pdi" data-id="'+c.id+'">Abrir PDI</span>' : '<span class="btn btn-secondary btn-sm" data-action="novo-pdi" data-id="'+c.id+'">+ Novo PDI</span>'}
+      </td></tr>`;
+  }).join('');
+  return `
+    <div class="topbar"><div><h1>PDI — Plano de Desenvolvimento Individual</h1><p>Ações para fechar os gaps das avaliações e preparar o crescimento de cada pessoa</p></div></div>
+    <div class="filters-row"><select data-role="pdi-cliente"><option value="">Todas as empresas</option>${clientesOpts}</select></div>
+    <div class="card">
+      ${colabs.length===0 ? '<p class="hint">Nenhum colaborador ativo encontrado para este filtro.</p>' : `
+      <div class="table-wrap"><table><thead><tr><th>Colaborador</th><th>Empresa</th><th>Cargo</th><th>PDI atual</th><th>Progresso</th><th>Próximo prazo</th><th>Gaps da avaliação</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
+      <p class="hint" style="margin-top:10px;">"Gaps da avaliação" = competências que ficaram abaixo do esperado na última avaliação de desempenho. Ao criar um PDI, cada gap já entra como uma ação a preencher.</p>
+    </div>`;
+}
+
+/* ============================= PLANO DE CARREIRA ============================= */
+function mesesNoCargo(c){
+  const hf = (c.historicoFuncao||[]).slice().sort((a,b)=>a.dataInicio.localeCompare(b.dataInicio));
+  const inicio = hf.length ? hf[hf.length-1].dataInicio : c.dataAdmissao;
+  if(!inicio) return null;
+  const [y1,m1,d1] = inicio.split('-').map(Number), [y2,m2,d2] = todayISO().split('-').map(Number);
+  return Math.max(0, (y2-y1)*12 + (m2-m1) - (d2<d1 ? 1 : 0)); // meses completos de calendário
+}
+function mediasPorCompetencia(c){ // média geral que a pessoa teve em cada competência na última avaliação de desempenho
+  const mapa = {};
+  const avs = (c.avaliacoesDesempenho||[]).filter(a=>a.avaliadores.some(v=>v.respondida));
+  if(!avs.length) return mapa;
+  calcularResultadoAvaliacaoDesempenho(avs[avs.length-1]).competencias.forEach(x=>{ if(x.mediaGeral!==null) mapa[x.nome.trim().toLowerCase()] = x.mediaGeral; });
+  return mapa;
+}
+const ROTULO_PRONTIDAO = { pronto:['Pronto para promoção','green'], quase:['Quase pronto','amber'], em_desenvolvimento:['Em desenvolvimento','red'], sem_trilha:['Trilha não definida','gray'] };
+function situacaoCarreira(c, alvoOverride){
+  const fn = getFuncao(c.funcaoId);
+  const alvoId = alvoOverride!==undefined ? alvoOverride : ((c.planoCarreira&&c.planoCarreira.alvoFuncaoId) || (fn&&fn.carreira&&fn.carreira.proximaFuncaoId) || '');
+  const alvo = alvoId ? getFuncao(alvoId) : null;
+  const meses = mesesNoCargo(c);
+  if(!fn || !alvo) return { fn, alvo:null, meses, requisitos:[], pendencias:0, status:'sem_trilha' };
+  const req = fn.carreira || {};
+  const requisitos = [];
+  if(req.tempoMinimoMeses!=='' && req.tempoMinimoMeses!==undefined && req.tempoMinimoMeses!==null){
+    const min = Number(req.tempoMinimoMeses);
+    requisitos.push({ tipo:'tempo', nome:'Tempo no cargo', exigido:min+' meses', atual: meses===null ? 'sem data' : meses+' meses', ok: meses!==null && meses>=min, falta: meses===null ? min : Math.max(0, min-meses) });
+  }
+  const media = mediaUltimaAvaliacaoDesempenho(c);
+  if(req.desempenhoMinimo!=='' && req.desempenhoMinimo!==undefined && req.desempenhoMinimo!==null){
+    const min = Number(req.desempenhoMinimo);
+    requisitos.push({ tipo:'desempenho', nome:'Desempenho (média da última avaliação)', exigido:String(min).replace('.',','), atual: media===null ? 'sem avaliação' : String(media).replace('.',','), ok: media!==null && media>=min });
+  }
+  const desc = db.descritivosCargo.find(d=>d.funcaoId===alvo.id);
+  const medias = mediasPorCompetencia(c);
+  if(desc){
+    [].concat((desc.habilidadesComportamentais||[]).map(h=>Object.assign({categoria:'comportamental'},h)), (desc.habilidadesTecnicas||[]).map(h=>Object.assign({categoria:'tecnica'},h))).forEach(h=>{
+      if(!h.nome || h.nivel==='3') return; // "Desenvolvimento" é o que se aprende já no novo cargo — não bloqueia a promoção
+      const esperado = NIVEL_ESPERADO_POR_PRIORIDADE[h.nivel] || 3;
+      const atual = medias[h.nome.trim().toLowerCase()];
+      requisitos.push({ tipo:'competencia', nome:h.nome, categoria:h.categoria, exigido:String(esperado), atual: atual===undefined ? 'ainda não avaliada' : String(atual).replace('.',','), ok: atual!==undefined && atual>=esperado, naoAvaliada: atual===undefined });
+    });
+  }
+  const pendencias = requisitos.filter(r=>!r.ok).length;
+  const status = requisitos.length===0 ? 'em_desenvolvimento' : (pendencias===0 ? 'pronto' : (pendencias<=1 ? 'quase' : 'em_desenvolvimento'));
+  return { fn, alvo, meses, requisitos, pendencias, status };
+}
+function badgeProntidao(status){ const [rotulo,cor] = ROTULO_PRONTIDAO[status] || ROTULO_PRONTIDAO.sem_trilha; return '<span class="badge badge-'+cor+'">'+rotulo+'</span>'; }
+
+function pdiInicialDaCarreira(c, sit){
+  const acoes = sit.requisitos.filter(r=>!r.ok).map(r=>{
+    if(r.tipo==='tempo') return { competencia:'Tempo no cargo', acao:'Completar o tempo mínimo no cargo (faltam '+r.falta+' mês(es)) acumulando experiência e entregas', tipo:'Prática no dia a dia', prazo: dataMaisMeses(todayISO(), r.falta||0), status:'nao_iniciada' };
+    if(r.tipo==='desempenho') return { competencia:'Desempenho geral', acao:'', tipo:'Feedback / Coaching', status:'nao_iniciada' };
+    return { competencia:r.nome, acao:'', tipo:TIPOS_ACAO_PDI[0], status:'nao_iniciada' };
+  });
+  return { periodo:'Rumo a '+sit.alvo.nome, objetivo:'Preparar '+c.nome+' para a promoção a '+sit.alvo.nome+'.', avaliacaoOrigemId:'', acoes,
+    aviso:'PDI montado a partir dos '+acoes.length+' ponto(s) que ainda faltam para a promoção a "'+sit.alvo.nome+'". Complete o que será feito em cada um.' };
+}
+
+function modalPlanoCarreira(colaboradorId){
+  const c = getColaborador(colaboradorId);
+  if(!c) return;
+  const fn = getFuncao(c.funcaoId), cl = getCliente(c.clienteId);
+  const pc = c.planoCarreira || { alvoFuncaoId:'', prazo:'', observacoes:'' };
+  const sit0 = situacaoCarreira(c);
+  const opcoes = funcoesDoCliente(c.clienteId).filter(o=>o.id!==c.funcaoId).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const alvoTrilhaId = fn&&fn.carreira ? fn.carreira.proximaFuncaoId : '';
+  const corpo = (alvoId)=>{
+    const s = situacaoCarreira(c, alvoId);
+    if(!s.alvo) return '<p class="hint">Nenhum cargo-alvo definido. Escolha um acima, ou defina o "Próximo cargo na carreira" no cadastro da função.</p>';
+    return `<p style="margin:0 0 8px 0;">${badgeProntidao(s.status)} <span class="hint">${s.pendencias===0?'Todos os requisitos atendidos.':s.pendencias+' ponto(s) ainda pendente(s).'}</span></p>
+      ${s.requisitos.length===0 ? '<p class="hint">O cargo atual não tem requisitos definidos (tempo/desempenho) e o cargo-alvo não tem competências no descritivo. Configure em Cadastro de Função.</p>' : `
+      <div class="table-wrap"><table><thead><tr><th>Requisito</th><th>Exigido</th><th>Hoje</th><th></th></tr></thead><tbody>
+      ${s.requisitos.map(r=>`<tr ${r.ok?'':'style="background:var(--amber-soft);"'}><td>${esc(r.nome)}${r.tipo==='competencia'?'<div class="hint">Competência do cargo-alvo ('+(r.categoria==='tecnica'?'técnica':'comportamental')+')</div>':''}</td><td>${esc(r.exigido)}</td><td>${esc(r.atual)}</td><td>${r.ok?'✅':(r.naoAvaliada?'🔎 avaliar':'⚠️ falta')}</td></tr>`).join('')}
+      </tbody></table></div>`}`;
+  };
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Plano de Carreira — ${esc(c.nome)}</h2>
+    <div class="modal-sub">${esc(fn?fn.nome:'Sem cargo')}${cl?' · '+esc(cl.nome):''} · ${sit0.meses===null?'tempo no cargo desconhecido':sit0.meses+' mês(es) no cargo atual'}</div>
+    <form id="form-carreira">
+      <div class="form-grid">
+        <div class="field full"><label>Cargo-alvo</label>
+          <select name="alvo" id="sel-alvo-carreira"><option value="">${alvoTrilhaId && getFuncao(alvoTrilhaId) ? 'Seguir a trilha do cargo ('+esc(getFuncao(alvoTrilhaId).nome)+')' : 'Nenhum definido'}</option>${opcoes.map(o=>'<option value="'+o.id+'" '+(pc.alvoFuncaoId===o.id?'selected':'')+'>'+esc(o.nome)+'</option>').join('')}</select></div>
+        <div class="field"><label>Prazo desejado para a promoção</label><input type="date" name="prazo" value="${esc(pc.prazo||'')}"></div>
+        <div class="field full"><label>Aspirações / observações</label><textarea name="observacoes" placeholder="O que a pessoa quer, combinados com o gestor, pontos de atenção...">${esc(pc.observacoes||'')}</textarea></div>
+      </div>
+      <div class="section-title">Onde a pessoa está em relação ao cargo-alvo</div>
+      <div id="corpo-carreira">${corpo(pc.alvoFuncaoId || undefined)}</div>
+      <div class="modal-footer">
+        <span><span class="btn btn-secondary btn-sm" id="btn-pdi-da-carreira">🎯 Salvar e criar PDI com os pontos pendentes</span></span>
+        <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Salvar plano</button></div>
+      </div>
+    </form>
+  `);
+  const sel = document.getElementById('sel-alvo-carreira');
+  sel.addEventListener('change', ()=>{ document.getElementById('corpo-carreira').innerHTML = corpo(sel.value || undefined); });
+  const salvar = ()=>{
+    const f = new FormData(document.getElementById('form-carreira'));
+    c.planoCarreira = { alvoFuncaoId: f.get('alvo')||'', prazo: f.get('prazo')||'', observacoes: (f.get('observacoes')||'').trim(), atualizadoEm: todayISO() };
+    saveDB();
+  };
+  document.getElementById('form-carreira').addEventListener('submit', e=>{ e.preventDefault(); salvar(); closeModal(); renderView(); showToast('Plano de carreira salvo.'); });
+  document.getElementById('btn-pdi-da-carreira').addEventListener('click', ()=>{
+    salvar();
+    const s = situacaoCarreira(c);
+    if(!s.alvo){ showToast('Defina um cargo-alvo primeiro.', true); return; }
+    if(s.pendencias===0){ closeModal(); renderView(); showToast('Nada pendente para a promoção — não há o que desenvolver.'); return; }
+    modalPdi(c.id, null, pdiInicialDaCarreira(c, s));
+  });
+}
+
+function viewCarreiraLista(){
+  const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.crClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('');
+  let colabs = db.colaboradores.filter(c=>statusColaborador(c)!=='desligado');
+  if(state.crClienteId) colabs = colabs.filter(c=>c.clienteId===state.crClienteId);
+  colabs = colabs.slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  const linhas = colabs.map(c=>{
+    const s = situacaoCarreira(c), cl = getCliente(c.clienteId);
+    return `<tr>
+      <td><strong>${esc(c.nome)}</strong></td><td>${esc(cl?cl.nome:'—')}</td><td>${esc(s.fn?s.fn.nome:'—')}</td>
+      <td>${s.meses===null?'—':s.meses+' mês(es)'}</td><td>${s.alvo?esc(s.alvo.nome):'—'}</td>
+      <td>${badgeProntidao(s.status)}</td><td>${s.alvo ? (s.pendencias===0?'—':s.pendencias) : '—'}</td>
+      <td class="no-print"><span class="btn btn-secondary btn-sm" data-action="abrir-plano-carreira" data-id="${c.id}">Abrir plano</span></td></tr>`;
+  }).join('');
+  return `
+    <div class="topbar"><div><h1>Plano de Carreira</h1><p>Para onde cada pessoa pode crescer e o que ainda falta para chegar lá</p></div></div>
+    <div class="filters-row"><select data-role="cr-cliente"><option value="">Todas as empresas</option>${clientesOpts}</select></div>
+    <div class="card">
+      ${colabs.length===0 ? '<p class="hint">Nenhum colaborador ativo encontrado para este filtro.</p>' : `
+      <div class="table-wrap"><table><thead><tr><th>Colaborador</th><th>Empresa</th><th>Cargo atual</th><th>Tempo no cargo</th><th>Cargo-alvo</th><th>Prontidão</th><th>Pendências</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`}
+      <p class="hint" style="margin-top:10px;">A trilha (próximo cargo, tempo e desempenho mínimos) é definida em Cadastro de Função → editar a função → "Trilha de carreira". As competências cobradas vêm do descritivo do cargo-alvo.</p>
+    </div>`;
 }
 
 function viewPortalAcessos(){
@@ -3067,6 +3381,7 @@ function viewColaboradores(){
       <td class="no-print" style="white-space:nowrap;">
         <span class="btn btn-ghost btn-sm" data-action="abrir-prontuario" data-id="${c.id}">📋 Prontuário</span>
         <span class="btn btn-ghost btn-sm" data-action="abrir-avaliacoes-colaborador" data-id="${c.id}">📊 Avaliação</span>
+        <span class="btn btn-ghost btn-sm" data-action="abrir-pdi" data-id="${c.id}">🎯 PDI</span>
         <span class="btn btn-ghost btn-sm" data-action="editar-colaborador" data-id="${c.id}">Editar</span>
         <span class="btn btn-ghost btn-sm" data-action="excluir-colaborador" data-id="${c.id}">Excluir</span>
       </td>
@@ -6693,6 +7008,15 @@ function modalFuncao(funcao, clienteId){
           ${editando ? '<div class="hint">Colaboradores ativos hoje nesta função: <strong>'+ocupacaoAtual+'</strong></div>' : ''}
         </div>
       </div>
+      <div class="section-title">Trilha de carreira</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:8px;">Define para onde este cargo leva e o que se espera para a promoção. Alimenta o Plano de Carreira de cada colaborador. (Só você vê; não aparece no portal do cliente.)</p>
+      <div class="form-grid">
+        <div class="field full"><label>Próximo cargo na carreira</label>
+          <select name="carreiraProxima"><option value="">— nenhum / topo da carreira —</option>${funcoesDoCliente(funcao.clienteId).filter(o=>o.id!==funcao.id).slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(o=>'<option value="'+o.id+'" '+(((funcao.carreira||{}).proximaFuncaoId)===o.id?'selected':'')+'>'+esc(o.nome)+'</option>').join('')}</select></div>
+        <div class="field"><label>Tempo mínimo neste cargo (meses)</label><input type="number" min="0" step="1" name="carreiraMeses" value="${esc((funcao.carreira||{}).tempoMinimoMeses ?? '')}"></div>
+        <div class="field"><label>Desempenho mínimo (média de 1 a 5)</label><input type="number" min="1" max="5" step="0.1" name="carreiraDesempenho" value="${esc((funcao.carreira||{}).desempenhoMinimo ?? '')}"></div>
+        <div class="field full"><label>Observações sobre a promoção</label><input name="carreiraObs" value="${esc((funcao.carreira||{}).observacoes||'')}"></div>
+      </div>
       <div class="modal-footer">
         <span>${editando ? '<span class="btn btn-danger btn-sm" data-action=\"excluir-funcao\" data-id=\"'+funcao.id+'\">Excluir</span>' : ''}</span>
         <div class="right">
@@ -6705,7 +7029,8 @@ function modalFuncao(funcao, clienteId){
   document.getElementById('form-funcao').addEventListener('submit', e=>{
     e.preventDefault();
     const f = new FormData(e.target);
-    const dados = { clienteId: funcao.clienteId, nome: f.get('nome').trim(), subordinadoA: f.get('subordinadoA').trim(), area: f.get('area').trim(), quantidadeAutorizada: f.get('quantidadeAutorizada') || '' };
+    const dados = { clienteId: funcao.clienteId, nome: f.get('nome').trim(), subordinadoA: f.get('subordinadoA').trim(), area: f.get('area').trim(), quantidadeAutorizada: f.get('quantidadeAutorizada') || '',
+      carreira: { proximaFuncaoId: f.get('carreiraProxima') || '', tempoMinimoMeses: f.get('carreiraMeses')===''||f.get('carreiraMeses')===null ? '' : Number(f.get('carreiraMeses')), desempenhoMinimo: f.get('carreiraDesempenho')===''||f.get('carreiraDesempenho')===null ? '' : Number(f.get('carreiraDesempenho')), observacoes: (f.get('carreiraObs')||'').trim() } };
     if(editando){ Object.assign(funcao, dados); }
     else { db.funcoes.push(Object.assign({id:uid('func')}, dados)); }
     closeModal(); saveDB(); renderView();
@@ -10233,6 +10558,13 @@ function onGlobalClick(e){
   if(action === 'registrar-ferias'){ modalRegistrarFerias(id); return; }
   if(action === 'nova-avaliacao-desempenho'){ modalNovaAvaliacaoDesempenho(id); return; }
   if(action === 'abrir-avaliacoes-colaborador'){ modalAvaliacoesColaborador(id); return; }
+  if(action === 'novo-pdi'){ modalPdi(id, null); return; }
+  if(action === 'abrir-pdi'){ const cPdi = getColaborador(id); const pAtivo = el.dataset.pdiId ? (cPdi.pdis||[]).find(x=>x.id===el.dataset.pdiId) : pdiAtivo(cPdi); modalPdi(id, pAtivo ? pAtivo.id : null); return; }
+  if(action === 'excluir-pdi'){
+    if(confirm('Excluir este PDI?')){ const cx = getColaborador(id); cx.pdis = (cx.pdis||[]).filter(x=>x.id!==el.dataset.pdiId); closeModal(); saveDB(); renderView(); showToast('PDI excluído.'); }
+    return;
+  }
+  if(action === 'abrir-plano-carreira'){ modalPlanoCarreira(id); return; }
   if(action === 'avaliar-potencial'){ modalAvaliarPotencial(id); return; }
   if(action === 'ver-avaliacao-desempenho'){ modalVerAvaliacaoDesempenho(id, el.dataset.avaliacaoId); return; }
   if(action === 'copiar-link-generico'){
@@ -10886,6 +11218,8 @@ function onGlobalChange(e){
   if(t.dataset.role === 'serv-tipo'){ state.servTipo = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-mes'){ state.servMes = t.value; renderView(); return; }
   if(t.dataset.role === 'fat-mes-geral'){ state.fatMesGeral = t.value; renderView(); return; }
+  if(t.dataset.role === 'pdi-cliente'){ state.pdiClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'cr-cliente'){ state.crClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'nb-cliente'){ state.nbClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'ad-cliente'){ state.adClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-status'){ state.servStatus = t.value; renderView(); return; }
