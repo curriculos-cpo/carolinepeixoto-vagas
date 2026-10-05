@@ -2136,6 +2136,8 @@ function modalPdi(colaboradorId, pdiId, inicial){
       <div class="section-title">Ações de desenvolvimento</div>
       <div id="lista-acoes-pdi">${acoes.map(linhaAcaoPdi).join('')}</div>
       <span class="btn btn-secondary btn-sm" id="btn-add-acao-pdi">+ Adicionar ação</span>
+      <span class="btn btn-secondary btn-sm" id="btn-sugerir-pdi" title="A IA sugere uma ação para cada competência que ainda está sem ação">✨ Sugerir ações com IA</span>
+      <span class="hint" style="margin-left:6px;">Só entram na consulta o cargo, a área, o objetivo e as competências — nunca o nome da pessoa.</span>
       ${existente && (existente.acompanhamentos||[]).length ? '<div class="section-title">Acompanhamento</div>'+existente.acompanhamentos.slice().reverse().map(x=>'<p style="margin:0 0 6px 0;font-size:13px;"><strong>'+formatDate(x.data)+'</strong> — '+esc(x.texto)+'</p>').join('') : ''}
       <div class="section-title">Registrar acompanhamento</div>
       <div class="form-grid">
@@ -2151,6 +2153,33 @@ function modalPdi(colaboradorId, pdiId, inicial){
   `);
   const form = document.getElementById('form-pdi');
   document.getElementById('btn-add-acao-pdi').addEventListener('click', ()=>{ document.getElementById('lista-acoes-pdi').insertAdjacentHTML('beforeend', linhaAcaoPdi()); });
+  const btnIA = document.getElementById('btn-sugerir-pdi');
+  btnIA.addEventListener('click', async ()=>{
+    const erroEl = document.getElementById('erro-pdi'); erroEl.style.display = 'none';
+    const alvos = [...document.querySelectorAll('[data-linha-pdi]')].filter(l=>l.querySelector('.pdi-comp').value.trim() && !l.querySelector('.pdi-acao').value.trim());
+    if(alvos.length===0){ erroEl.textContent = 'Preencha a competência de pelo menos uma linha que ainda esteja sem ação — a IA sugere só para as linhas sem ação, e não mexe no que você já escreveu.'; erroEl.style.display = 'block'; return; }
+    const rotulo = btnIA.textContent; btnIA.textContent = '✨ Pensando…'; btnIA.style.pointerEvents = 'none';
+    try{
+      const r = await chamarAppsScriptPost('sugerirAcoesPDI', {
+        colaboradorId, objetivo: form.querySelector('[name="objetivo"]').value.trim(),
+        itens: alvos.map(l=>({ competencia: l.querySelector('.pdi-comp').value.trim(), gap: l.dataset.gap!=='' ? Number(l.dataset.gap) : null }))
+      }, 90000);
+      let preenchidas = 0;
+      r.sugestoes.forEach(sg=>{
+        const linha = alvos.find(l=>l.querySelector('.pdi-comp').value.trim().toLowerCase()===sg.competencia.trim().toLowerCase() && !l.querySelector('.pdi-acao').value.trim());
+        if(!linha) return;
+        linha.querySelector('.pdi-acao').value = sg.acao;
+        if(linha.querySelector('.pdi-tipo').value === TIPOS_ACAO_PDI[0]) linha.querySelector('.pdi-tipo').value = sg.tipo;
+        if(!linha.querySelector('.pdi-prazo').value) linha.querySelector('.pdi-prazo').value = dataMaisDias(todayISO(), sg.prazoDias);
+        const rotuloAcao = linha.querySelector('.pdi-acao').closest('.field').querySelector('label');
+        if(!rotuloAcao.querySelector('[data-ia]')) rotuloAcao.insertAdjacentHTML('beforeend', ' <span class="hint" data-ia="1">✨ sugestão da IA — revise</span>');
+        preenchidas++;
+      });
+      showToast(preenchidas+' sugestão(ões) preenchida(s). Revise e ajuste antes de salvar.');
+    }catch(err){
+      erroEl.textContent = 'Não foi possível pedir as sugestões agora: ' + (err.message || 'erro desconhecido') + ' Você pode preencher as ações manualmente.'; erroEl.style.display = 'block';
+    }finally{ btnIA.textContent = rotulo; btnIA.style.pointerEvents = ''; }
+  });
   form.addEventListener('click', e=>{
     if(e.target.matches && e.target.matches('[data-remover-acao-pdi]')){
       const linha = e.target.closest('[data-linha-pdi]');
@@ -7763,9 +7792,12 @@ function renderPortalView(){
 function viewPortalVisaoGeral(){
   const cliente = db.clientes[0];
   const alertas = calcularAlertasAtencao(cliente.id);
-  // O cliente não vê quem são os candidatos: o alerta mostra só a vaga e há quantos dias está parado.
-  alertas.candidatosParados = alertas.candidatosParados.map(a=>({ id:a.id, titulo:'Candidato(a) em processo', sub:a.sub, dataAction:'portal-sem-acao', dataId:'' }));
+  // Sobre candidatos, o cliente só vê números: nada de lista, nem anônima. O alerta vira uma contagem.
+  const candidatosParados = alertas.candidatosParados.length;
+  alertas.candidatosParados = [];
   const painel = renderPainelAtencao(alertas, cliente.notificacoesLidasPortal||[], 'portal-marcar-notificacao-lida');
+  const resumoCandidatos = candidatosParados ? `<div class="card" style="margin-bottom:14px;padding:14px 18px;"><div class="hint" style="font-weight:600;margin-bottom:4px;">Processos seletivos</div><div><strong>${candidatosParados}</strong> candidato(s) em processo sem atualização há mais de ${LIMITE_DIAS_CANDIDATO_PARADO} dias.</div></div>` : '';
+  if(resumoCandidatos) return resumoCandidatos + (painel || '');
   if(!painel) return '<div class="card empty-state"><h3>Tudo em dia! ✅</h3><p>Nenhuma pendência no momento.</p></div>';
   return painel;
 }
