@@ -545,7 +545,7 @@ function showToast(msg, isErr){
   const slot = document.getElementById('toast-slot');
   slot.innerHTML = '<div class="toast '+(isErr?'err':'')+'">'+esc(msg)+'</div>';
   clearTimeout(toastTimer); // cancela o "apagar" do aviso anterior, para ele não sumir com o aviso novo antes da hora
-  toastTimer = setTimeout(()=>{ slot.innerHTML=''; }, 3200);
+  toastTimer = setTimeout(()=>{ slot.innerHTML=''; }, Math.min(15000, Math.max(3200, 2000 + String(msg).length * 55))); // mensagens longas ficam mais tempo na tela
 }
 
 
