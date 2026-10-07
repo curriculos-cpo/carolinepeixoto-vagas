@@ -9070,8 +9070,24 @@ function modalCliente(cliente){
     renderView();
     // Re-sincroniza as vagas públicas abertas deste cliente — assim, uma logo ou nome
     // atualizado aparece nas vagas já existentes, sem precisar reabrir e salvar cada uma.
-    cargosDoCliente(clienteId).filter(v=>v.vagaPublicaAtiva && v.status==='aberta').forEach(v=>{ sincronizarVagaPublica(v); });
+    cargosDoCliente(clienteId).filter(v=>v.vagaPublicaAtiva && v.status!=='fechada').forEach(v=>{ sincronizarVagaPublica(v); });
   });
+}
+
+// Uma vez por sessão do painel, reenvia à página pública todas as vagas com link ativo e não fechadas.
+// Assim, qualquer vaga que tenha ficado fora do ar por falha de sincronização volta sozinha.
+let vagasPublicasRessincronizadas = false;
+async function ressincronizarVagasPublicas(){
+  if(vagasPublicasRessincronizadas || !appsScriptConfigurado() || !db || !Array.isArray(db.cargos)) return;
+  vagasPublicasRessincronizadas = true;
+  for(const v of db.cargos.filter(c=>c.vagaPublicaAtiva && c.status!=='fechada')){
+    try{ await chamarAppsScriptPost('upsertVaga', {
+      cargoId:v.id, ativa:true, status:v.status, titulo:v.titulo,
+      clienteNome: v.exibirNomeCliente ? ((getCliente(v.clienteId)||{}).nome||'') : 'Cliente confidencial',
+      clienteLogoUrl: (v.exibirNomeCliente && getCliente(v.clienteId)) ? (getCliente(v.clienteId).logoUrlPublica||'') : '',
+      modalidade:v.modalidade||'', local:v.localTrabalho||'', salario:v.salario||'', descricao:v.descricaoPublica||'',
+      oQueVaiFazer:v.oQueVaiFazer||'', oQueBuscamos:v.oQueBuscamos||'', beneficios:v.beneficios||{}, beneficiosOutros:v.beneficiosOutros||'' }); }catch(e){}
+  }
 }
 
 async function sincronizarVagaPublica(cargo){
@@ -11542,6 +11558,7 @@ async function iniciarPainelAutenticado(){
   registrarBaseDoBanco();
   renderShell();
   verificarPersistenciaInicial();
+  ressincronizarVagasPublicas();
 }
 
 (async function init(){
