@@ -4248,7 +4248,7 @@ function viewDriveAdmin(){
 
   let materiais = db.materiais.filter(m=>m.clienteId===cliente.id);
   if(state.driveCategoria) materiais = materiais.filter(m=>m.categoria===state.driveCategoria);
-  materiais = materiais.slice().sort((a,b)=>b.dataUpload.localeCompare(a.dataUpload));
+  materiais = materiais.slice().sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR',{sensitivity:'base',numeric:true}));
 
   const linhas = materiais.map(m=>`<tr>
     <td><a href="${esc(m.url)}" target="_blank">${esc(m.nome)}</a></td>
