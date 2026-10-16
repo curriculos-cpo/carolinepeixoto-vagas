@@ -1445,7 +1445,30 @@ function toggleNavGrupo(grupoId){
   if(seta) seta.textContent = abrir ? '▾' : '▸';
 }
 
+// Botão Voltar do navegador: cada troca de tela vira uma entrada no histórico (sem mudar a URL).
+const CHAVES_NAVEGACAO = ['tab','viewClienteId','colabAba','candClienteId','candCargoId','dashClienteId','dashCargoId'];
+let navegandoPeloHistorico = false;
+function fotoDaNavegacao(){ const o={painelNav:true}; CHAVES_NAVEGACAO.forEach(k=>{ o[k]=state[k]; }); return o; }
+function registrarNavegacao(){
+  if(navegandoPeloHistorico) return;
+  try{
+    const foto = fotoDaNavegacao();
+    const atual = history.state;
+    if(!atual || !atual.painelNav){ history.replaceState(foto,'',location.href); return; }
+    if(CHAVES_NAVEGACAO.every(k=>atual[k]===foto[k])) return;
+    history.pushState(foto,'',location.href);
+  }catch(e){}
+}
+window.addEventListener('popstate', ev=>{
+  const h = ev.state;
+  if(!h || !h.painelNav || !document.getElementById('view')) return;
+  CHAVES_NAVEGACAO.forEach(k=>{ state[k]=h[k]; });
+  navegandoPeloHistorico = true;
+  try{ if(typeof closeModal==='function') closeModal(); renderView(); } finally { navegandoPeloHistorico = false; }
+});
+
 function renderView(){
+  registrarNavegacao();
   renderNavActive();
   const view = document.getElementById('view');
   if(state.tab === 'dashboard') view.innerHTML = viewDashboard();
@@ -1697,7 +1720,7 @@ function viewAgenda(){
     return `<div class="card" style="padding:10px 14px;margin-bottom:8px;${e.concluido?'opacity:.6;':''}border-left:3px solid ${CORES_TIPO_AGENDA[e.tipo]||'#B2573D'};">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:start;">
         <div>
-          <strong>${e.hora?esc(e.hora)+' · ':''}${esc(e.titulo)}</strong>
+          <strong>${e.hora?esc(e.hora)+(e.horaFim?'–'+esc(e.horaFim):'')+' · ':'Dia inteiro · '}${esc(e.titulo)}</strong>
           <div class="hint">${esc(e.tipo)}${cliente?' · '+esc(cliente.nome):''}${e.data!==diaSelecionado?' · '+formatDate(e.data):''}${e.repeticao&&e.repeticao.tipo?' · 🔁 '+esc(descricaoRepeticao(e)):''}</div>
           ${e.descricao ? '<p style="margin:6px 0 0 0;font-size:13px;white-space:pre-line;">'+esc(e.descricao)+'</p>' : ''}
         </div>
@@ -1747,7 +1770,7 @@ function montarTextoAta(evento){
   let texto = 'ATA DE REUNIÃO\n';
   texto += '========================================\n\n';
   texto += 'Assunto: ' + evento.titulo + '\n';
-  texto += 'Data: ' + formatDate(evento.data) + (evento.hora ? ' às ' + evento.hora : '') + '\n';
+  texto += 'Data: ' + formatDate(evento.data) + (evento.hora ? ' às ' + evento.hora + (evento.horaFim ? ' às ' + evento.horaFim : '') : '') + '\n';
   if(cliente) texto += 'Cliente: ' + cliente.nome + '\n';
   texto += '\n';
   if(ata.participantes) texto += 'PARTICIPANTES\n' + ata.participantes + '\n\n';
@@ -1799,7 +1822,9 @@ function modalEventoAgenda(evento, dataPreSelecionada){
       <div class="form-grid">
         <div class="field full"><label>Título *</label><input required name="titulo" value="${esc(evento.titulo)}"></div>
         <div class="field"><label>Data *</label><input required type="date" name="data" value="${evento.data}"></div>
-        <div class="field"><label>Horário (opcional)</label><input type="time" name="hora" value="${evento.hora||''}"></div>
+        <div class="field full"><label style="display:flex;align-items:center;gap:8px;font-weight:500;"><input type="checkbox" name="diaInteiro" id="chk-dia-inteiro" ${(!evento.hora)?'checked':''}> Dia inteiro (sem horário)</label></div>
+        <div class="field" data-bloco-horario><label>Início</label><input type="time" name="hora" value="${evento.hora||''}"></div>
+        <div class="field" data-bloco-horario><label>Término (vazio = 1h de duração)</label><input type="time" name="horaFim" value="${evento.horaFim||''}"></div>
         <div class="field"><label>Tipo</label><select name="tipo" id="sel-tipo-agenda">${TIPOS_AGENDA.map(t=>'<option '+(evento.tipo===t?'selected':'')+'>'+t+'</option>').join('')}</select></div>
         <div class="field"><label>Cliente relacionado (opcional)</label><select name="clienteId"><option value="">Nenhum</option>${clientesOpts}</select></div>
         <div class="field full"><label>Descrição / Pauta (opcional)</label><textarea name="descricao">${esc(evento.descricao||'')}</textarea></div>
@@ -1858,6 +1883,16 @@ function modalEventoAgenda(evento, dataPreSelecionada){
   };
   selRep.addEventListener('change', atualizarBlocosRepeticao);
   atualizarBlocosRepeticao();
+  const chkDiaInteiro = document.getElementById('chk-dia-inteiro');
+  const ajustarHorario = ()=>{
+    document.querySelectorAll('[data-bloco-horario]').forEach(b=>{ b.style.display = chkDiaInteiro.checked ? 'none' : ''; });
+    if(!chkDiaInteiro.checked){
+      const h = document.querySelector('#form-agenda [name=hora]');
+      if(h && !h.value){ h.value = '09:00'; }
+    }
+  };
+  chkDiaInteiro.addEventListener('change', ajustarHorario);
+  document.querySelectorAll('[data-bloco-horario]').forEach(b=>{ b.style.display = chkDiaInteiro.checked ? 'none' : ''; });
 
   document.getElementById('form-agenda').addEventListener('submit', async e=>{
     e.preventDefault();
@@ -1865,7 +1900,8 @@ function modalEventoAgenda(evento, dataPreSelecionada){
     const dados = {
       titulo: f.get('titulo').trim(),
       data: f.get('data'),
-      hora: f.get('hora') || '',
+      hora: f.get('diaInteiro') ? '' : (f.get('hora') || ''),
+      horaFim: f.get('diaInteiro') ? '' : (f.get('horaFim') || ''),
       tipo: f.get('tipo'),
       clienteId: f.get('clienteId') || '',
       descricao: f.get('descricao').trim(),
@@ -1876,6 +1912,7 @@ function modalEventoAgenda(evento, dataPreSelecionada){
         proximosPassos: f.get('ataProximosPassos').trim()
       }
     };
+    if(dados.hora && dados.horaFim && dados.horaFim <= dados.hora){ showToast('O horário de término precisa ser depois do início.', true); return; }
     const tipoRep = f.get('repeticaoTipo') || '';
     if(tipoRep){
       const ate = f.get('repeticaoAte') || '';
