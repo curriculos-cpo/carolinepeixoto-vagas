@@ -5618,60 +5618,6 @@ function montarTextoCartaProposta(candidato, cargo, cliente, dadosProposta){
   return texto;
 }
 
-
-/* ============================= DOCUMENTOS EM PDF (impressão da página) ============================= */
-const CSS_DOC_PDF = `
-@page { size: A4; margin: 16mm 18mm 20mm; }
-*{ box-sizing:border-box; }
-body{ font-family: Georgia, 'Noto Serif', 'Times New Roman', serif; color:#3B2924; font-size:12.5pt; line-height:1.55; margin:0; }
-.cab{ display:flex; justify-content:space-between; align-items:center; gap:24px; padding-bottom:14px; border-bottom:2px solid #C66B4E; margin-bottom:26px; }
-.cab img{ max-height:72px; max-width:240px; object-fit:contain; }
-.cab .nome-cli{ font-weight:bold; color:#A5533D; font-size:15pt; text-align:right; }
-h1{ font-size:21pt; letter-spacing:.04em; text-transform:uppercase; color:#A5533D; margin:6px 0 18px; }
-p{ margin:0 0 12px; text-align:justify; }
-p.local{ text-align:right; color:#7a625a; }
-ul{ list-style:none; margin:0 0 16px; padding:12px 16px; background:#F7F1EA; border-left:4px solid #C66B4E; }
-li{ margin:4px 0; }
-.assin{ margin-top:54px; page-break-inside:avoid; }
-.assin .linha{ width:320px; border-top:1px solid #3B2924; }
-.assin .nome{ margin-top:6px; font-weight:bold; }
-.rodape{ position:fixed; bottom:0; left:0; right:0; text-align:center; font-size:9pt; color:#8a746b; border-top:1px solid #E8D4C4; padding-top:6px; }
-`;
-
-function cabecalhoLogosPDF(cliente){
-  const logoCliente = (cliente && cliente.temLogo && cliente.logoUrlPublica)
-    ? '<img src="'+esc(cliente.logoUrlPublica)+'" alt="'+esc(cliente.nome||'')+'">'
-    : '<span class="nome-cli">'+esc(cliente ? cliente.nome : '')+'</span>';
-  return '<div class="cab"><img src="data:image/png;base64,'+LOGO_COLORIDO_B64+'" alt="Caroline Peixoto DHO">'+logoCliente+'</div>';
-}
-
-// Abre o documento numa janela limpa e chama a impressão — no diálogo, o destino "Salvar como PDF" gera o arquivo.
-function abrirDocumentoParaPDF(titulo, corpoHtml, cssExtra){
-  const w = window.open('', '_blank');
-  if(!w){ showToast('O navegador bloqueou a janela do PDF. Libere pop-ups para este site e tente de novo.', true); return false; }
-  w.document.open();
-  w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+esc(titulo)+'</title><style>'+CSS_DOC_PDF+(cssExtra||'')+'</style></head><body>'+corpoHtml+'</body></html>');
-  w.document.close();
-  const prontas = Array.from(w.document.images).map(img => img.complete ? Promise.resolve() : new Promise(r=>{ img.onload=r; img.onerror=r; }));
-  Promise.race([Promise.all(prontas), new Promise(r=>setTimeout(r,5000))]).then(()=>{ w.focus(); w.print(); });
-  return true;
-}
-
-function gerarPdfCartaProposta(candidato, cliente, texto){
-  const blocos = String(texto||'').split(/\n{2,}/).map(b=>b.trim()).filter(Boolean);
-  let corpo = cabecalhoLogosPDF(cliente);
-  blocos.forEach((b, i)=>{
-    const linhas = b.split('\n');
-    if(/^CARTA PROPOSTA$/i.test(b)) corpo += '<h1>Carta Proposta</h1>';
-    else if(/^_{5,}/.test(b)) corpo += '<div class="assin"><div class="linha"></div><div class="nome">'+esc((linhas[1]||'').trim())+'</div></div>';
-    else if(linhas.every(l=>/^- /.test(l))) corpo += '<ul>'+linhas.map(l=>'<li>'+esc(l.replace(/^- /,'')).replace(/^([^:]+):/,'<strong>$1:</strong>')+'</li>').join('')+'</ul>';
-    else if(i===0) corpo += '<p class="local">'+esc(b)+'</p>';
-    else corpo += '<p>'+esc(b).replace(/\n/g,'<br>')+'</p>';
-  });
-  corpo += '<div class="rodape">Caroline Peixoto DHO'+(cliente?' • '+esc(cliente.nome):'')+'</div>';
-  return abrirDocumentoParaPDF('Carta Proposta - '+candidato.nome, corpo);
-}
-
 function modalCartaProposta(candidato){
   const cargo = getCargo(candidato.cargoId);
   const cliente = getCliente(candidato.clienteId);
@@ -5706,8 +5652,7 @@ function modalCartaProposta(candidato){
       <span><span class="btn btn-secondary btn-sm" data-action="cp-copiar">Copiar texto</span></span>
       <div class="right">
         <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
-        <span class="btn btn-primary" id="btn-cp-pdf">📄 Gerar PDF</span>
-        ${candidato.telefone ? '<span class="btn btn-secondary" id="btn-enviar-cp-whatsapp">💬 Enviar por WhatsApp</span>' : ''}
+        ${candidato.telefone ? '<span class="btn btn-primary" id="btn-enviar-cp-whatsapp">💬 Enviar por WhatsApp</span>' : ''}
       </div>
     </div>
   `);
@@ -5723,10 +5668,6 @@ function modalCartaProposta(candidato){
   }
   gerarTexto();
   document.getElementById('btn-gerar-cp').addEventListener('click', gerarTexto);
-
-  document.getElementById('btn-cp-pdf').addEventListener('click', ()=>{
-    gerarPdfCartaProposta(candidato, cliente, document.getElementById('cp-texto').value);
-  });
 
   const btnWpp = document.getElementById('btn-enviar-cp-whatsapp');
   if(btnWpp){
