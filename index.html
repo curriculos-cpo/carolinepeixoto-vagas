@@ -553,6 +553,7 @@ const LOGO_CLARO_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAbgAAACMCAYAAAAOVry8AACYI0lEQVR4
 const GRUPOS_NAV = [
   { id:'clientes', label:'Cadastro de Clientes', icone:'🏢', itens:[
     {tab:'clientes', label:'Clientes e Vagas'},
+    {tab:'visitasBPO', label:'Visitas e relatórios BPO'},
     {tab:'portalAcessos', label:'Acessos ao Portal do Cliente'},
     {href:'#portal', label:'Portal do Cliente (tela de login)', externo:true}
   ]},
@@ -1127,6 +1128,8 @@ function garantirConfiguracoes(){
   if(!Array.isArray(db.funcoes)) db.funcoes = [];
   if(!Array.isArray(db.descritivosCargo)) db.descritivosCargo = [];
   if(!Array.isArray(db.mensalidadesBPO)) db.mensalidadesBPO = [];
+  if(!Array.isArray(db.visitasBPO)) db.visitasBPO = [];
+  if(!Array.isArray(db.relatoriosBPO)) db.relatoriosBPO = [];
   if(!Array.isArray(db.servicosAvulsos)) db.servicosAvulsos = [];
   if(!Array.isArray(db.absenteismo)) db.absenteismo = [];
   if(!Array.isArray(db.treinamentos)) db.treinamentos = [];
@@ -1292,6 +1295,8 @@ let state = {
   colabAba: 'colaboradores',
   colabStatus: '',
   mensClienteId: '',
+  vbClienteId: '',
+  vbMes: mesAtualRef(),
   mensMes: mesAtualRef(),
   mensStatus: '',
   indClienteId: '',
@@ -1489,6 +1494,7 @@ function renderView(){
   else if(state.tab === 'propostaComercial') view.innerHTML = viewPropostaComercial();
   else if(state.tab === 'parecerCandidato') view.innerHTML = viewParecerCandidato();
   else if(state.tab === 'portalAcessos') view.innerHTML = viewPortalAcessos();
+  else if(state.tab === 'visitasBPO') view.innerHTML = viewVisitasBPO();
   else if(state.tab === 'ninebox') view.innerHTML = viewNineBox();
   else if(state.tab === 'registros') view.innerHTML = viewRegistros();
   else if(state.tab === 'pdiLista') view.innerHTML = viewPdiLista();
@@ -5638,23 +5644,23 @@ li{ margin:4px 0; }
 table.pag{ width:100%; border-collapse:collapse; }
 table.pag td{ padding:0; vertical-align:top; }
 .esp-topo{ height:16mm; }
-.esp-base{ height:18mm; }
+.esp-base{ height:18mm; display:flex; align-items:flex-end; justify-content:center; padding-bottom:7mm; font-size:8.5pt; color:#8a746b; }
 td.conteudo{ padding:0 18mm !important; }
 `;
 
-function cabecalhoLogosPDF(cliente){
+function cabecalhoLogosPDF(cliente, comPara){
   const logoCliente = (cliente && cliente.temLogo && cliente.logoUrlPublica)
     ? '<img src="'+esc(cliente.logoUrlPublica)+'" alt="'+esc(cliente.nome||'')+'">'
     : '<span class="nome-cli">'+esc(cliente ? cliente.nome : '')+'</span>';
-  return '<div class="cab"><img src="data:image/png;base64,'+LOGO_COLORIDO_B64+'" alt="Caroline Peixoto DHO">'+logoCliente+'</div>';
+  return '<div class="cab"><img src="data:image/png;base64,'+LOGO_COLORIDO_B64+'" alt="Caroline Peixoto DHO">'+(comPara?'<span class="para">PARA</span>':'')+logoCliente+'</div>';
 }
 
 // Abre o documento numa janela limpa e chama a impressão — no diálogo, o destino "Salvar como PDF" gera o arquivo.
-function abrirDocumentoParaPDF(titulo, corpoHtml, cssExtra){
+function abrirDocumentoParaPDF(titulo, corpoHtml, cssExtra, rodape){
   const w = window.open('', '_blank');
   if(!w){ showToast('O navegador bloqueou a janela do PDF. Libere pop-ups para este site e tente de novo.', true); return false; }
   w.document.open();
-  w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+esc(titulo)+'</title><style>'+CSS_DOC_PDF+(cssExtra||'')+'</style></head><body><table class="pag"><thead><tr><td><div class="esp-topo"></div></td></tr></thead><tfoot><tr><td><div class="esp-base"></div></td></tr></tfoot><tbody><tr><td class="conteudo">'+corpoHtml+'</td></tr></tbody></table></body></html>');
+  w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+esc(titulo)+'</title><style>'+CSS_DOC_PDF+(cssExtra||'')+'</style></head><body><table class="pag"><thead><tr><td><div class="esp-topo"></div></td></tr></thead><tfoot><tr><td><div class="esp-base">'+(rodape?esc(rodape):'')+'</div></td></tr></tfoot><tbody><tr><td class="conteudo">'+corpoHtml+'</td></tr></tbody></table></body></html>');
   w.document.close();
   const prontas = Array.from(w.document.images).map(img => img.complete ? Promise.resolve() : new Promise(r=>{ img.onload=r; img.onerror=r; }));
   Promise.race([Promise.all(prontas), new Promise(r=>setTimeout(r,5000))]).then(()=>{ w.focus(); w.print(); });
@@ -5673,6 +5679,390 @@ function gerarPdfCartaProposta(candidato, cliente, texto){
     else corpo += '<p>'+esc(b).replace(/\n/g,'<br>')+'</p>';
   });
   return abrirDocumentoParaPDF('Carta Proposta - '+candidato.nome, corpo);
+}
+
+/* ============================= VISITAS E RELATÓRIOS BPO ============================= */
+const FRENTES_BPO_PADRAO = ['Gestão Estratégica & Liderança','Estrutura & Processos de DP','Indicadores de RH','Onboarding & Integração','Eventos & Cultura','Recrutamento & Seleção'];
+
+function garantirVisitasBPO(){
+  if(!Array.isArray(db.visitasBPO)) db.visitasBPO = [];
+  if(!Array.isArray(db.relatoriosBPO)) db.relatoriosBPO = [];
+}
+function fmtHorasBPO(min){ min = Math.max(0, Math.round(Number(min)||0)); return Math.floor(min/60)+'h'+String(min%60).padStart(2,'0'); }
+function duracaoParaCampoBPO(min){ min = Math.max(0, Math.round(Number(min)||0)); return Math.floor(min/60)+':'+String(min%60).padStart(2,'0'); }
+// Aceita 1:30, 1h30, 1h, 45min, 1,5 (horas) ou 2 (horas). Devolve minutos ou null.
+function parseDuracaoBPO(txt){
+  const s = String(txt||'').trim().toLowerCase().replace(',', '.').replace(/\s+/g,'');
+  if(!s) return null;
+  let m = s.match(/^(\d+)(?::|h)(\d{1,2})?(?:min)?$/);
+  if(m) return parseInt(m[1],10)*60 + (m[2] ? parseInt(m[2],10) : 0);
+  m = s.match(/^(\d+)min$/);
+  if(m) return parseInt(m[1],10);
+  if(/^\d+(\.\d+)?$/.test(s)) return Math.round(parseFloat(s)*60);
+  return null;
+}
+function mesProximoRefBPO(mesRef){ const [y,m] = mesRef.split('-').map(Number); const d = new Date(y, m, 1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function soMesBPO(mesRef){ return nomeMes(mesRef).split(' de ')[0]; }
+
+function mesesBPO(clienteId){
+  garantirVisitasBPO();
+  const set = new Set([mesAtualRef()]);
+  db.visitasBPO.filter(v=>v.clienteId===clienteId && v.data).forEach(v=>set.add(v.data.slice(0,7)));
+  db.relatoriosBPO.filter(r=>r.clienteId===clienteId).forEach(r=>set.add(r.mesRef));
+  return [...set].sort().reverse();
+}
+function frentesUsadasBPO(clienteId){
+  garantirVisitasBPO();
+  const set = new Set(FRENTES_BPO_PADRAO);
+  db.visitasBPO.filter(v=>v.clienteId===clienteId).forEach(v=>(v.atividades||[]).forEach(a=>{ if(a.frente) set.add(a.frente); }));
+  return [...set];
+}
+
+// Soma as visitas do mês por frente de trabalho.
+function calcularBaseRelatorioBPO(clienteId, mesRef){
+  garantirVisitasBPO();
+  const visitas = db.visitasBPO.filter(v=>v.clienteId===clienteId && (v.data||'').slice(0,7)===mesRef).sort((a,b)=>a.data.localeCompare(b.data));
+  const porFrente = new Map(); const dias = new Set(); let totalMin = 0, nAtiv = 0;
+  visitas.forEach(v=>{
+    (v.atividades||[]).forEach(a=>{
+      const nome = (a.frente||'').trim() || 'Outras atividades';
+      const o = porFrente.get(nome) || {nome, minutos:0, itens:[]};
+      const min = Number(a.minutos)||0;
+      o.minutos += min; totalMin += min; nAtiv++; dias.add(v.data);
+      if((a.descricao||'').trim()) o.itens.push({data:v.data, texto:a.descricao.trim()});
+      porFrente.set(nome, o);
+    });
+  });
+  const frentes = [...porFrente.values()].sort((a,b)=>b.minutos-a.minutos);
+  frentes.forEach(f=>{ f.pct = totalMin ? Math.round(f.minutos*100/totalMin) : 0; });
+  return {frentes, totalMin, dias:dias.size, atividades:nAtiv};
+}
+
+/* ---- Aba "Visitas e relatórios BPO" ---- */
+function viewVisitasBPO(){
+  garantirVisitasBPO();
+  const clientesBPO = db.clientes.filter(cl=>cl.tipoServico==='bpo').slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  if(clientesBPO.length===0){
+    return '<div class="topbar"><div><h1>Visitas e relatórios BPO</h1><p>Registro das atividades e relatório mensal de horas</p></div></div><div class="card empty-state"><h3>Nenhum cliente de BPO cadastrado</h3><p class="hint">Cadastre um cliente com o tipo de serviço BPO de RH em "Clientes e Vagas" para registrar visitas.</p></div>';
+  }
+  if(!state.vbClienteId || !clientesBPO.some(c=>c.id===state.vbClienteId)) state.vbClienteId = clientesBPO[0].id;
+  if(!state.vbMes) state.vbMes = mesAtualRef();
+  const clienteId = state.vbClienteId;
+  const cliente = getCliente(clienteId);
+  const meses = mesesBPO(clienteId); if(!meses.includes(state.vbMes)) meses.unshift(state.vbMes);
+  const base = calcularBaseRelatorioBPO(clienteId, state.vbMes);
+  const visitas = db.visitasBPO.filter(v=>v.clienteId===clienteId && (v.data||'').slice(0,7)===state.vbMes).sort((a,b)=>b.data.localeCompare(a.data));
+  const relMes = db.relatoriosBPO.find(r=>r.clienteId===clienteId && r.mesRef===state.vbMes);
+
+  const linhas = visitas.map(v=>{
+    const min = (v.atividades||[]).reduce((s,a)=>s+(Number(a.minutos)||0),0);
+    const resumo = (v.atividades||[]).map(a=>'<div style="margin-bottom:3px;"><span class="badge badge-gray">'+esc(a.frente)+' · '+fmtHorasBPO(a.minutos)+'</span> '+esc((a.descricao||'').length>140 ? a.descricao.slice(0,140)+'…' : a.descricao)+'</div>').join('');
+    return '<tr><td style="white-space:nowrap;">'+formatDate(v.data)+'</td><td>'+resumo+'</td><td style="white-space:nowrap;"><strong>'+fmtHorasBPO(min)+'</strong></td><td class="no-print"><span class="btn btn-ghost btn-sm" data-action="editar-visita-bpo" data-id="'+v.id+'">Editar</span></td></tr>';
+  }).join('');
+
+  const relatorios = db.relatoriosBPO.filter(r=>r.clienteId===clienteId).sort((a,b)=>b.mesRef.localeCompare(a.mesRef));
+  const linhasRel = relatorios.map(r=>'<tr><td><strong>'+nomeMes(r.mesRef)+'</strong></td><td>'+fmtHorasBPO(r.totalMin)+'</td><td>'+(r.publicado ? '<span class="badge badge-green">Publicado no portal</span>' : '<span class="badge badge-amber">Rascunho</span>')+'</td><td class="no-print" style="white-space:nowrap;"><span class="btn btn-ghost btn-sm" data-action="abrir-relatorio-bpo" data-id="'+r.id+'">Abrir / editar</span> <span class="btn btn-ghost btn-sm" data-action="pdf-relatorio-bpo" data-id="'+r.id+'">📄 PDF</span></td></tr>').join('');
+
+  return `
+    <div class="topbar">
+      <div><h1>Visitas e relatórios BPO</h1><p>Registre o que foi feito em cada visita e gere o relatório mensal de horas para o cliente</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <span class="btn btn-secondary" data-action="relatorio-do-mes-bpo">📄 ${relMes ? 'Abrir' : 'Gerar'} relatório de ${soMesBPO(state.vbMes)}</span>
+        <button class="btn btn-primary" data-action="nova-visita-bpo">+ Registrar visita</button>
+      </div>
+    </div>
+    <div class="filters-row">
+      <select data-role="vb-cliente">${clientesBPO.map(cl=>'<option value="'+cl.id+'" '+(clienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('')}</select>
+      <select data-role="vb-mes">${meses.map(m=>'<option value="'+m+'" '+(state.vbMes===m?'selected':'')+'>'+formatMesRef(m)+'</option>').join('')}</select>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">Horas no mês</div><div class="value" style="font-size:22px;">${fmtHorasBPO(base.totalMin)}</div><div class="sub">${esc(cliente.nome)}</div></div>
+      <div class="kpi"><div class="label">Dias com visita</div><div class="value">${base.dias}</div></div>
+      <div class="kpi"><div class="label">Atividades registradas</div><div class="value">${base.atividades}</div></div>
+      <div class="kpi"><div class="label">Frentes de trabalho</div><div class="value">${base.frentes.length}</div></div>
+    </div>
+    <div class="card" style="margin-bottom:22px;">
+      <h3 style="font-size:15px;margin-bottom:10px;">Visitas de ${formatMesRef(state.vbMes)}</h3>
+      ${visitas.length===0 ? '<p class="hint">Nenhuma visita registrada neste mês. Use "+ Registrar visita" para lançar o que foi feito, com a frente de trabalho e o tempo de cada atividade.</p>' : '<div class="table-wrap"><table><thead><tr><th>Data</th><th>Atividades realizadas</th><th>Tempo</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div>'}
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px;margin-bottom:10px;">Relatórios mensais de ${esc(cliente.nome)}</h3>
+      ${relatorios.length===0 ? '<p class="hint">Nenhum relatório gerado ainda. Com as visitas do mês registradas, clique em "Gerar relatório".</p>' : '<div class="table-wrap"><table><thead><tr><th>Mês</th><th>Horas</th><th>Situação</th><th></th></tr></thead><tbody>'+linhasRel+'</tbody></table></div>'}
+    </div>`;
+}
+
+function linhaAtividadeBPO(a){
+  a = a || {frente:'', duracao:'', descricao:''};
+  return `<div data-vb-linha style="border:1px solid #E8D4C4;border-radius:10px;padding:12px;margin-bottom:10px;">
+    <div class="form-grid">
+      <div class="field"><label>Frente de trabalho *</label><input class="vb-frente" list="vb-frentes" value="${esc(a.frente)}" placeholder="Escolha ou digite uma nova"></div>
+      <div class="field"><label>Tempo *</label><input class="vb-dur" value="${esc(a.duracao)}" placeholder="Ex.: 1:30"></div>
+      <div class="field full"><label>O que foi realizado *</label><textarea class="vb-desc" rows="2" placeholder="Descreva a atividade com suas palavras">${esc(a.descricao)}</textarea></div>
+    </div>
+    <span class="btn btn-ghost btn-sm" data-action="remover-linha-vb">Remover esta atividade</span>
+  </div>`;
+}
+
+function modalVisitaBPO(visita){
+  garantirVisitasBPO();
+  const editando = !!visita;
+  const clienteId = editando ? visita.clienteId : state.vbClienteId;
+  const cliente = getCliente(clienteId);
+  const dataIni = editando ? visita.data : (state.vbMes===mesAtualRef() ? todayISO() : state.vbMes+'-01');
+  const atividades = editando ? (visita.atividades||[]).map(a=>({frente:a.frente, duracao:duracaoParaCampoBPO(a.minutos), descricao:a.descricao})) : [null];
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${editando ? 'Editar visita' : 'Registrar visita'}</h2>
+    <p class="hint" style="margin-bottom:12px;">${esc(cliente.nome)}</p>
+    <form id="form-visita-bpo">
+      <datalist id="vb-frentes">${frentesUsadasBPO(clienteId).map(f=>'<option value="'+esc(f)+'"></option>').join('')}</datalist>
+      <div class="form-grid"><div class="field"><label>Data da visita *</label><input type="date" name="data" required value="${dataIni}"></div></div>
+      <div id="vb-linhas">${atividades.map(linhaAtividadeBPO).join('')}</div>
+      <span class="btn btn-secondary btn-sm" id="btn-add-linha-vb">+ Adicionar outra atividade</span>
+      <p class="hint" style="margin-top:8px;">Tempo: use 1:30, 1h30, 45min ou 1,5 (horas). Se a visita tratou de mais de uma frente, adicione uma atividade para cada.</p>
+      <div class="modal-footer">
+        <span>${editando ? '<span class="btn btn-danger btn-sm" data-action="excluir-visita-bpo" data-id="'+visita.id+'">Excluir visita</span>' : ''}</span>
+        <div class="right">
+          <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
+          <button type="submit" class="btn btn-primary">Salvar visita</button>
+        </div>
+      </div>
+    </form>`);
+  document.getElementById('btn-add-linha-vb').addEventListener('click', ()=>{ document.getElementById('vb-linhas').insertAdjacentHTML('beforeend', linhaAtividadeBPO()); });
+  document.getElementById('form-visita-bpo').addEventListener('submit', e=>{
+    e.preventDefault();
+    const data = e.target.querySelector('[name="data"]').value;
+    if(!data){ showToast('Informe a data da visita.', true); return; }
+    const linhas = [...e.target.querySelectorAll('[data-vb-linha]')].map(l=>({
+      frente: l.querySelector('.vb-frente').value.trim(), dur: l.querySelector('.vb-dur').value.trim(), descricao: l.querySelector('.vb-desc').value.trim()
+    })).filter(l=>l.frente || l.dur || l.descricao);
+    if(linhas.length===0){ showToast('Registre pelo menos uma atividade.', true); return; }
+    const atividadesOk = [];
+    for(const l of linhas){
+      const min = parseDuracaoBPO(l.dur);
+      if(!l.frente || !l.descricao || min===null || min<=0 || min>960){ showToast('Revise cada atividade: frente, tempo (ex.: 1:30, no máximo 16h) e descrição são obrigatórios.', true); return; }
+      atividadesOk.push({frente:l.frente, minutos:min, descricao:l.descricao});
+    }
+    if(editando){ visita.data = data; visita.atividades = atividadesOk; }
+    else db.visitasBPO.push({id:uid('vis'), clienteId, data, atividades:atividadesOk});
+    state.vbMes = data.slice(0,7);
+    closeModal(); saveDB(); renderView();
+  });
+}
+
+/* ---- Relatório do mês ---- */
+function criarRelatorioBPO(clienteId, mesRef){
+  const base = calcularBaseRelatorioBPO(clienteId, mesRef);
+  return {
+    id:uid('rel'), clienteId, mesRef, publicado:false, resumo:'', leitura:'', direcionamento:'', numeros:[],
+    totalMin:base.totalMin, dias:base.dias, atividades:base.atividades,
+    frentes: base.frentes.map(f=>({nome:f.nome, minutos:f.minutos, pct:f.pct, destaque:'', entregas:f.itens.map(i=>i.texto)}))
+  };
+}
+
+function coletarRelatorioBPO(rel, form){
+  const val = sel => { const el = form.querySelector(sel); return el ? el.value.trim() : ''; };
+  rel.resumo = val('[name="resumo"]'); rel.leitura = val('[name="leitura"]'); rel.direcionamento = val('[name="direcionamento"]');
+  rel.frentes.forEach((f,i)=>{
+    f.destaque = val('[data-rel-destaque="'+i+'"]');
+    f.entregas = val('[data-rel-entregas="'+i+'"]').split('\n').map(s=>s.trim()).filter(Boolean);
+  });
+  rel.numeros = [0,1,2].map(n=>({valor:val('[data-rel-nvalor="'+n+'"]'), rotulo:val('[data-rel-nrotulo="'+n+'"]')})).filter(x=>x.valor && x.rotulo);
+  rel.publicado = !!form.querySelector('[name="publicado"]').checked;
+  rel.atualizadoEm = new Date().toISOString();
+}
+
+// Troca nomes de pessoas e da empresa por códigos antes de falar com a IA, e desfaz na volta.
+function criarMascaraNomesBPO(clienteId){
+  const mapa = []; let n = 0;
+  const add = (original, token)=>{
+    original = (original||'').trim();
+    if(original.length<3 || !/^\p{Lu}/u.test(original) || mapa.some(m=>m.original===original)) return;
+    mapa.push({original, token: token || 'PESSOA_'+(++n)});
+  };
+  const cl = getCliente(clienteId);
+  if(cl){ add(cl.nome, 'EMPRESA'); const p = (cl.nome||'').trim().split(/\s+/)[0]; if(p && p.length>=4) add(p, 'EMPRESA'); }
+  colaboradoresDoCliente(clienteId).forEach(c=>{
+    const partes = (c.nome||'').trim().split(/\s+/);
+    add(c.nome); if(partes[0]) add(partes[0]); if(partes.length>1) add(partes[partes.length-1]);
+  });
+  return mapa.sort((a,b)=>b.original.length-a.original.length);
+}
+function mascararTextoBPO(texto, mapa){
+  let r = String(texto||'');
+  mapa.forEach(m=>{ r = r.replace(new RegExp('(?<![\\p{L}\\p{N}])'+m.original.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![\\p{L}\\p{N}])','gu'), m.token); });
+  return r;
+}
+function desmascararTextoBPO(texto, mapa){
+  return String(texto||'').replace(/\b(PESSOA_\d+|EMPRESA)\b/g, tk=>{ const m = mapa.find(x=>x.token===tk); return m ? m.original : tk; });
+}
+
+function modalRelatorioBPO(rel){
+  garantirVisitasBPO();
+  const cliente = getCliente(rel.clienteId);
+  const existe = db.relatoriosBPO.some(r=>r.id===rel.id);
+  const proximo = soMesBPO(mesProximoRefBPO(rel.mesRef));
+  const blocosFrente = rel.frentes.map((f,i)=>`
+    <div style="border:1px solid #E8D4C4;border-radius:10px;padding:12px;margin-bottom:10px;">
+      <strong>${esc(f.nome)}</strong> <span class="hint">— ${fmtHorasBPO(f.minutos)} (${f.pct}%)</span>
+      <div class="field" style="margin-top:8px;"><label>Destaque do mês (frase curta)</label><input data-rel-destaque="${i}" value="${esc(f.destaque||'')}"></div>
+      <div class="field"><label>Entregas (uma por linha)</label><textarea data-rel-entregas="${i}" rows="4">${esc((f.entregas||[]).join('\n'))}</textarea></div>
+    </div>`).join('');
+  const nums = [0,1,2].map(n=>{ const x = (rel.numeros||[])[n] || {valor:'',rotulo:''};
+    return '<div class="form-grid"><div class="field"><label>Número</label><input data-rel-nvalor="'+n+'" value="'+esc(x.valor)+'" placeholder="Ex.: 4"></div><div class="field"><label>O que representa</label><input data-rel-nrotulo="'+n+'" value="'+esc(x.rotulo)+'" placeholder="Ex.: alinhamentos estratégicos"></div></div>'; }).join('');
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Relatório de atividades — ${nomeMes(rel.mesRef)}</h2>
+    <p class="hint" style="margin-bottom:10px;">${esc(cliente.nome)} · ${fmtHorasBPO(rel.totalMin)} trabalhadas · ${rel.dias} dia(s) com visita · ${rel.atividades} atividade(s). O relatório mostra apenas horas, sem valores.</p>
+    <form id="form-relatorio-bpo">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <span class="btn btn-secondary btn-sm" id="btn-ia-rel">✨ Redigir com IA</span>
+        <span class="btn btn-ghost btn-sm" id="btn-recalcular-rel">↻ Recalcular a partir das visitas</span>
+      </div>
+      <div id="erro-rel" class="hint" style="display:none;color:#B3261E;margin-bottom:8px;"></div>
+      <div class="field"><label>Resumo executivo</label><textarea name="resumo" rows="4">${esc(rel.resumo||'')}</textarea></div>
+      <h3 style="font-size:14px;margin:14px 0 8px;">Frentes de trabalho</h3>
+      ${blocosFrente}
+      <h3 style="font-size:14px;margin:14px 0 8px;">Entregas em números (opcional)</h3>
+      ${nums}
+      <div class="field"><label>Leitura estratégica do mês</label><textarea name="leitura" rows="4">${esc(rel.leitura||'')}</textarea></div>
+      <div class="field"><label>Direcionamento para ${proximo}</label><textarea name="direcionamento" rows="3">${esc(rel.direcionamento||'')}</textarea></div>
+      <label style="display:flex;gap:8px;align-items:center;margin:10px 0;"><input type="checkbox" name="publicado" ${rel.publicado?'checked':''}> Disponibilizar este relatório no Portal do Cliente</label>
+      <div class="modal-footer">
+        <span>${existe ? '<span class="btn btn-danger btn-sm" data-action="excluir-relatorio-bpo" data-id="'+rel.id+'">Excluir relatório</span>' : ''}</span>
+        <div class="right">
+          <span class="btn btn-secondary" id="btn-pdf-rel">📄 Gerar PDF</span>
+          <span class="btn btn-secondary" data-action="fechar-modal">Fechar</span>
+          <button type="submit" class="btn btn-primary">Salvar relatório</button>
+        </div>
+      </div>
+    </form>`);
+  const form = document.getElementById('form-relatorio-bpo');
+  const erroEl = document.getElementById('erro-rel');
+
+  const salvar = ()=>{ coletarRelatorioBPO(rel, form); if(!db.relatoriosBPO.some(r=>r.id===rel.id)) db.relatoriosBPO.push(rel); saveDB(); };
+  form.addEventListener('submit', e=>{ e.preventDefault(); salvar(); closeModal(); renderView(); showToast('Relatório salvo.'); });
+  document.getElementById('btn-pdf-rel').addEventListener('click', ()=>{ coletarRelatorioBPO(rel, form); gerarPdfRelatorioBPO(rel, cliente); });
+
+  document.getElementById('btn-recalcular-rel').addEventListener('click', ()=>{
+    if(!confirm('Recalcular horas e entregas a partir das visitas do mês? As entregas voltam ao texto original das visitas; destaques e demais textos são mantidos.')) return;
+    coletarRelatorioBPO(rel, form);
+    const base = calcularBaseRelatorioBPO(rel.clienteId, rel.mesRef);
+    const antigos = new Map(rel.frentes.map(f=>[f.nome.toLowerCase(), f]));
+    rel.totalMin = base.totalMin; rel.dias = base.dias; rel.atividades = base.atividades;
+    rel.frentes = base.frentes.map(f=>({nome:f.nome, minutos:f.minutos, pct:f.pct, destaque:(antigos.get(f.nome.toLowerCase())||{}).destaque||'', entregas:f.itens.map(i=>i.texto)}));
+    modalRelatorioBPO(rel);
+  });
+
+  const btnIA = document.getElementById('btn-ia-rel');
+  btnIA.addEventListener('click', async ()=>{
+    erroEl.style.display = 'none';
+    const base = calcularBaseRelatorioBPO(rel.clienteId, rel.mesRef);
+    if(base.frentes.length===0){ erroEl.textContent = 'Não há atividades registradas neste mês para a IA redigir.'; erroEl.style.display = 'block'; return; }
+    coletarRelatorioBPO(rel, form);
+    const temTexto = rel.resumo || rel.leitura || rel.direcionamento || rel.frentes.some(f=>f.destaque);
+    if(temTexto && !confirm('A IA vai preencher o resumo, os destaques, as entregas, os números, a leitura e o direcionamento, substituindo o que está escrito. Continuar?')) return;
+    const mapa = criarMascaraNomesBPO(rel.clienteId);
+    const rotulo = btnIA.textContent; btnIA.textContent = '✨ Redigindo…'; btnIA.style.pointerEvents = 'none';
+    try{
+      const r = await chamarAppsScriptPost('redigirRelatorioBPOIA', {
+        mesRotulo: nomeMes(rel.mesRef), mesProximoRotulo: nomeMes(mesProximoRefBPO(rel.mesRef)), totalHoras: fmtHorasBPO(base.totalMin),
+        frentes: base.frentes.map(f=>({nome:f.nome, horas:fmtHorasBPO(f.minutos), pct:f.pct, atividades:f.itens.map(i=>mascararTextoBPO(i.texto, mapa))}))
+      }, 90000);
+      const des = t => desmascararTextoBPO(t, mapa);
+      form.querySelector('[name="resumo"]').value = des(r.resumo);
+      form.querySelector('[name="leitura"]').value = des(r.leitura);
+      form.querySelector('[name="direcionamento"]').value = des(r.direcionamento);
+      rel.frentes.forEach((f,i)=>{
+        const ia = (r.frentes||[]).find(x=>String(x.nome||'').trim().toLowerCase()===f.nome.toLowerCase());
+        if(!ia) return;
+        form.querySelector('[data-rel-destaque="'+i+'"]').value = des(ia.destaque);
+        if(ia.entregas && ia.entregas.length) form.querySelector('[data-rel-entregas="'+i+'"]').value = ia.entregas.map(des).join('\n');
+      });
+      [0,1,2].forEach(n=>{ const x = (r.numeros||[])[n] || {valor:'',rotulo:''};
+        form.querySelector('[data-rel-nvalor="'+n+'"]').value = des(x.valor); form.querySelector('[data-rel-nrotulo="'+n+'"]').value = des(x.rotulo); });
+      showToast('Texto redigido pela IA. Revise e ajuste antes de gerar o PDF.');
+    }catch(err){
+      erroEl.textContent = 'Não foi possível pedir à IA agora: ' + (err.message || 'erro desconhecido') + ' Você pode escrever os textos manualmente.'; erroEl.style.display = 'block';
+    }finally{ btnIA.textContent = rotulo; btnIA.style.pointerEvents = ''; }
+  });
+}
+
+const CSS_REL_BPO = `
+.cab{ border-bottom:none; margin-bottom:16px; }
+.cab .para{ margin-right:auto; margin-left:14px; align-self:flex-start; color:#A8905F; font-size:8.5pt; font-weight:bold; letter-spacing:.08em; }
+.rel-sup{ color:#B5593C; font-size:9.5pt; font-weight:bold; letter-spacing:.06em; text-transform:uppercase; }
+.rel-titulo{ font-size:26pt; color:#7A3B2B; font-weight:bold; line-height:1.15; margin:2px 0 0; }
+.rel-mes{ font-size:15pt; color:#A8905F; font-weight:bold; margin:6px 0 16px; }
+table.info{ width:100%; border-collapse:collapse; margin-bottom:10px; }
+table.info td{ border:1px solid #EADCCB; padding:7px 10px; font-size:10.5pt; }
+table.info td.k{ background:#B5593C; color:#fff; font-size:8.5pt; font-weight:bold; width:20%; letter-spacing:.04em; }
+table.info td.v{ background:#FAF6F1; color:#7A3B2B; font-weight:bold; }
+.nota{ font-style:italic; color:#7a625a; font-size:10pt; margin:0 0 16px; text-align:left; }
+table.kpi{ width:100%; border-collapse:separate; border-spacing:2px 0; margin:6px 0 20px; table-layout:fixed; }
+table.kpi td.n{ color:#fff; font-size:17pt; padding:10px; }
+table.kpi td.l{ background:#F2E4E1; font-size:8.5pt; padding:8px 10px; text-transform:uppercase; color:#5a3a32; }
+.c1{ background:#9F4052; } .c2{ background:#7A3B2B; } .c3{ background:#B5593C; }
+h2.sec{ font-family:'Segoe UI',Calibri,Arial,sans-serif; font-size:16pt; color:#7A3B2B; margin:20px 0 8px; }
+h3.sub{ font-family:'Segoe UI',Calibri,Arial,sans-serif; font-size:12.5pt; color:#9F4052; margin:16px 0 6px; }
+table.dados{ width:100%; border-collapse:collapse; font-size:10.5pt; margin-bottom:12px; }
+table.dados th{ background:#7A3B2B; color:#fff; text-align:left; padding:7px 9px; font-size:9.5pt; }
+table.dados td{ padding:8px 9px; border:1px solid #EADCCB; }
+table.dados tr:nth-child(even) td{ background:#FAF6F1; }
+.quebra{ page-break-before:always; }
+.folha{ min-height:256mm; }
+.caixa{ border:2px solid #B5593C; background:#FAF6F1; padding:10px 14px; margin:14px 0; text-align:left; }
+.caixa .tt{ text-transform:uppercase; font-size:10pt; color:#B5593C; margin-bottom:4px; }
+ul.ent{ list-style:disc; background:none; border-left:0; padding:0 0 0 20px; margin:0 0 6px; }
+ul.ent li{ margin:4px 0; }
+.assin-rel{ text-align:right; margin-top:28px; page-break-inside:avoid; }
+.assin-rel b{ color:#7A3B2B; font-size:14pt; }
+.assin-rel div{ color:#7a625a; font-size:10pt; }
+`;
+
+function gerarPdfRelatorioBPO(rel, cliente){
+  const cab = cabecalhoLogosPDF(cliente, true);
+  const mesTxt = nomeMes(rel.mesRef);
+  const proximo = soMesBPO(mesProximoRefBPO(rel.mesRef));
+  const frentes = rel.frentes || [];
+  const kpis = [['c1', fmtHorasBPO(rel.totalMin), 'Horas trabalhadas'], ['c2', String(rel.dias), 'Dias com entrega'], ['c1', String(rel.atividades), 'Atividades registradas'], ['c2', String(frentes.length), 'Frentes de trabalho']];
+  const tabelaKpi = linhas => '<table class="kpi"><tr>'+linhas.map(k=>'<td class="n '+k[0]+'">'+esc(k[1])+'</td>').join('')+'</tr><tr>'+linhas.map(k=>'<td class="l">'+esc(k[2])+'</td>').join('')+'</tr></table>';
+
+  let h = '<div class="folha">'+cab;
+  h += '<div class="rel-sup">Relatório de atividades</div><div class="rel-titulo">Relatório Mensal de Atividades</div><div class="rel-mes">'+esc(mesTxt)+'</div>';
+  h += '<table class="info"><tr><td class="k">PRESTADORA</td><td class="v">Caroline Peixoto Desenvolvimento Humano e Organizacional</td></tr><tr><td class="k">CLIENTE</td><td>'+esc(cliente.nome)+'</td></tr></table>';
+  h += '<p class="nota">Documento de referência das entregas realizadas pela prestadora no mês, para acompanhamento do cliente.</p>';
+  h += tabelaKpi(kpis);
+  if(rel.resumo) h += '<h2 class="sec">Resumo executivo</h2><p>'+esc(rel.resumo)+'</p>';
+  h += '<h3 class="sub">Distribuição do esforço por frente estratégica</h3>';
+  h += '<table class="dados"><thead><tr><th>Frente de trabalho</th><th>%</th><th>Horas</th><th>Destaque do mês</th></tr></thead><tbody>'+frentes.map(f=>'<tr><td>'+esc(f.nome)+'</td><td>'+f.pct+'%</td><td>'+fmtHorasBPO(f.minutos)+'</td><td>'+esc(f.destaque||'')+'</td></tr>').join('')+'</tbody></table>';
+
+  h += '</div><div class="quebra folha">'+cab+'<h2 class="sec">Principais entregas do mês</h2><p class="nota">Registro consolidado das atividades conduzidas pela prestadora para '+esc(cliente.nome)+' em '+esc(mesTxt.toLowerCase())+'.</p>';
+  frentes.forEach((f,i)=>{
+    h += '<h3 class="sub">'+esc(f.nome)+(i===0 && frentes.length>1 ? ' | maior dedicação do mês' : '')+'</h3>';
+    if((f.entregas||[]).length) h += '<ul class="ent">'+f.entregas.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>';
+  });
+  const nums = (rel.numeros||[]).filter(n=>n.valor && n.rotulo);
+  if(nums.length) h += '<h3 class="sub">Entregas em números</h3>'+tabelaKpi(nums.map((n,i)=>[i%2===0?'c3':'c2', n.valor, n.rotulo]));
+  h += '</div>';
+
+  h += '<div class="quebra folha">'+cab;
+  if(rel.leitura) h += '<h2 class="sec">Leitura estratégica do mês</h2><p>'+esc(rel.leitura)+'</p>';
+  if(rel.direcionamento) h += '<div class="caixa"><div class="tt">Direcionamento para '+esc(proximo)+'</div>'+esc(rel.direcionamento)+'</div>';
+  h += '<h3 class="sub">Composição das horas</h3><table class="dados"><thead><tr><th>Frente</th><th>Horas</th><th>Participação</th></tr></thead><tbody>'+frentes.map(f=>'<tr><td>'+esc(f.nome)+'</td><td>'+fmtHorasBPO(f.minutos)+'</td><td>'+f.pct+'%</td></tr>').join('')+'</tbody></table>';
+  h += '<h3 class="sub">Fechamento do período</h3><table class="info"><tr><td class="k" style="width:60%;">HORAS REGISTRADAS NO PERÍODO</td><td class="v">'+fmtHorasBPO(rel.totalMin)+'</td></tr><tr><td class="k" style="width:60%;">DIAS COM ENTREGA</td><td class="v">'+rel.dias+'</td></tr></table>';
+  h += '<div class="assin-rel"><b>Caroline Peixoto</b><div>Prestadora de serviços | Desenvolvimento Humano e Organizacional</div></div></div>';
+
+  return abrirDocumentoParaPDF('Relatório Mensal de Atividades - '+cliente.nome+' - '+mesTxt, h, CSS_REL_BPO, 'Caroline Peixoto DHO • Cliente: '+cliente.nome);
+}
+
+/* ---- Portal do cliente: relatórios publicados ---- */
+function viewPortalRelatorios(){
+  const cliente = db.clientes[0];
+  const lista = (db.relatoriosBPO||[]).filter(r=>r.clienteId===cliente.id).slice().sort((a,b)=>b.mesRef.localeCompare(a.mesRef));
+  if(lista.length===0) return '<div class="card empty-state"><h3>Nenhum relatório disponível ainda</h3><p class="hint">Os relatórios mensais de atividades aparecem aqui assim que forem publicados.</p></div>';
+  const linhas = lista.map(r=>'<tr><td><strong>'+nomeMes(r.mesRef)+'</strong></td><td>'+fmtHorasBPO(r.totalMin)+'</td><td>'+r.dias+'</td><td>'+r.atividades+'</td><td><span class="btn btn-ghost btn-sm" data-action="portal-pdf-relatorio" data-id="'+r.id+'">📄 Ver / salvar PDF</span></td></tr>').join('');
+  return '<div class="card table-wrap"><table><thead><tr><th>Mês</th><th>Horas</th><th>Dias com entrega</th><th>Atividades</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div>';
 }
 
 function modalCartaProposta(candidato){
@@ -7900,6 +8290,8 @@ async function carregarDadosPortal(){
     cargos: resp.cargos || [],
     candidatos: resp.candidatos || [],
     mensalidadesBPO: resp.mensalidadesBPO || [],
+    relatoriosBPO: resp.relatoriosBPO || [],
+    visitasBPO: [],
     agenda: [], diagnosticosCultura: [], denuncias: [], pesquisasClima: [],
     pesquisasRapidas: [], respostasPesquisaRapida: [], avaliacoesDesempenho: [],
     mensalidadesCanalDenuncia: [], mensalidadesPesquisaClima: [], servicosAvulsos: [],
@@ -7932,6 +8324,7 @@ function renderPortalShell(){
           <span class="btn ${state.portalTab==='treinamentos'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="treinamentos">Treinamentos</span>
           <span class="btn ${state.portalTab==='materiais'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="materiais">Materiais e documentos</span>
           <span class="btn ${state.portalTab==='indicadores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="indicadores">Indicadores</span>
+          ${((db.relatoriosBPO||[]).length>0 || db.clientes[0].tipoServico==='bpo') ? '<span class="btn '+(state.portalTab==='relatorios'?'btn-primary':'btn-secondary')+' btn-sm" data-action="portal-tab" data-tab="relatorios">Relatórios de atividades</span>' : ''}
         </div>
         <div id="portal-view"></div>
       </div>
@@ -7952,6 +8345,7 @@ function renderPortalView(){
   else if(state.portalTab==='funcoes') view.innerHTML = viewPortalFuncoes();
   else if(state.portalTab==='treinamentos') view.innerHTML = viewPortalTreinamentos();
   else if(state.portalTab==='materiais') view.innerHTML = viewPortalMateriais();
+  else if(state.portalTab==='relatorios') view.innerHTML = viewPortalRelatorios();
   else if(state.portalTab==='avaliacoes') view.innerHTML = viewPortalAvaliacoes();
   else if(state.portalTab==='ninebox') view.innerHTML = viewPortalNineBox();
   else {
@@ -8352,6 +8746,7 @@ function onPortalClick(e){
   const id = el.dataset.id;
   if(action === 'portal-sair'){ window.location.reload(); return; }
   if(action === 'portal-tab'){ state.portalTab = el.dataset.tab; renderPortalView(); return; }
+  if(action === 'portal-pdf-relatorio'){ const r = (db.relatoriosBPO||[]).find(x=>x.id===id); if(r) gerarPdfRelatorioBPO(r, db.clientes[0]); return; }
   if(action === 'portal-novo-colaborador'){ modalPortalColaborador(null); return; }
   if(action === 'portal-editar-colaborador'){ closeModal(); modalPortalColaborador(db.colaboradores.find(c=>c.id===id)); return; }
   if(action === 'portal-abrir-prontuario'){ abrirProntuarioPortal(id); return; }
@@ -11023,6 +11418,30 @@ function onGlobalClick(e){
   }
 
   if(action === 'nova-vaga'){ modalVaga(null, el.dataset.clienteId); return; }
+  if(action === 'nova-visita-bpo'){ modalVisitaBPO(null); return; }
+  if(action === 'editar-visita-bpo'){ const v = db.visitasBPO.find(x=>x.id===id); if(v) modalVisitaBPO(v); return; }
+  if(action === 'excluir-visita-bpo'){
+    if(confirm('Excluir esta visita e todas as atividades dela? Esta ação não pode ser desfeita.')){ db.visitasBPO = db.visitasBPO.filter(x=>x.id!==id); closeModal(); saveDB(); renderView(); }
+    return;
+  }
+  if(action === 'remover-linha-vb'){
+    if(document.querySelectorAll('[data-vb-linha]').length>1) el.closest('[data-vb-linha]').remove(); else showToast('Mantenha pelo menos uma atividade.', true);
+    return;
+  }
+  if(action === 'relatorio-do-mes-bpo'){
+    garantirVisitasBPO();
+    const ex = db.relatoriosBPO.find(r=>r.clienteId===state.vbClienteId && r.mesRef===state.vbMes);
+    if(ex){ modalRelatorioBPO(ex); return; }
+    const novo = criarRelatorioBPO(state.vbClienteId, state.vbMes);
+    if(novo.frentes.length===0){ showToast('Registre as visitas deste mês antes de gerar o relatório.', true); return; }
+    modalRelatorioBPO(novo); return;
+  }
+  if(action === 'abrir-relatorio-bpo'){ const r = db.relatoriosBPO.find(x=>x.id===id); if(r) modalRelatorioBPO(r); return; }
+  if(action === 'pdf-relatorio-bpo'){ const r = db.relatoriosBPO.find(x=>x.id===id); if(r) gerarPdfRelatorioBPO(r, getCliente(r.clienteId)); return; }
+  if(action === 'excluir-relatorio-bpo'){
+    if(confirm('Excluir este relatório? As visitas continuam registradas e você pode gerar o relatório de novo.')){ db.relatoriosBPO = db.relatoriosBPO.filter(x=>x.id!==id); closeModal(); saveDB(); renderView(); }
+    return;
+  }
   if(action === 'gerar-proposta-comercial'){ modalPropostaComercial(id); return; }
   if(action === 'link-portal-vagas'){ modalLinkPortalVagas(); return; }
   if(action === 'copiar-link-portal-vagas'){
@@ -11520,6 +11939,8 @@ function onGlobalChange(e){
   if(t.dataset.role === 'colab-status'){ state.colabStatus = t.value; renderView(); return; }
   if(t.dataset.role === 'mens-cliente'){ state.mensClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'mens-mes'){ state.mensMes = t.value; renderView(); return; }
+  if(t.dataset.role === 'vb-cliente'){ state.vbClienteId = t.value; renderView(); return; }
+  if(t.dataset.role === 'vb-mes'){ state.vbMes = t.value; renderView(); return; }
   if(t.dataset.role === 'mens-status'){ state.mensStatus = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-cliente'){ state.servClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'serv-tipo'){ state.servTipo = t.value; renderView(); return; }
