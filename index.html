@@ -4160,6 +4160,104 @@ function viewCulturaStandalone(){
   `;
 }
 
+/* ============================= CONFIDENCIALIDADE DA PESQUISA DE CLIMA ============================= */
+const MIN_RESPONDENTES_CLIMA = 3;
+function rotuloAreaClima(a){ return (a||'').trim() || 'Área não informada'; }
+
+// Decide quais áreas podem aparecer.
+// 1) Área com menos de 3 respostas é omitida.
+// 2) Se o total das áreas omitidas ficar abaixo de 3, a menor área visível também é ocultada: sem isso, o resultado
+//    da área omitida poderia ser descoberto subtraindo as áreas visíveis do resultado geral.
+function areasClimaProtegidas(clienteId){
+  const cliente = getCliente(clienteId);
+  const pc = (cliente && cliente.pesquisaClima) || {areas:[]};
+  const respostas = db.pesquisasClima.filter(p=>p.clienteId===clienteId);
+  const nomes = (pc.areas||[]).slice();
+  respostas.forEach(r=>{ const a = r.area||''; if(!nomes.includes(a)) nomes.push(a); });
+  const itens = nomes.map(nome=>{
+    const n = respostas.filter(r=>(r.area||'')===nome).length;
+    return {nome, rotulo:rotuloAreaClima(nome), n, estado: n===0 ? 'vazia' : (n<MIN_RESPONDENTES_CLIMA ? 'minimo' : 'ok')};
+  });
+  const omitidos = itens.filter(a=>a.estado==='minimo').reduce((s,a)=>s+a.n,0);
+  if(omitidos>0 && omitidos<MIN_RESPONDENTES_CLIMA){
+    const visiveis = itens.filter(a=>a.estado==='ok').sort((a,b)=>a.n-b.n);
+    if(visiveis.length) visiveis[0].estado = 'complementar';
+  }
+  return {itens, total:respostas.length};
+}
+
+function resultadoClimaProtegido(clienteId, areaFiltro){
+  const total = db.pesquisasClima.filter(p=>p.clienteId===clienteId).length;
+  if(!areaFiltro && total>0 && total<MIN_RESPONDENTES_CLIMA) return {oculto:true, motivo:'geral', resultado:null};
+  if(areaFiltro){
+    const a = areasClimaProtegidas(clienteId).itens.find(x=>x.nome===areaFiltro);
+    if(a && (a.estado==='minimo' || a.estado==='complementar')) return {oculto:true, motivo:a.estado, resultado:null};
+  }
+  return {oculto:false, motivo:'', resultado:calcularResultadoPesquisaClima(clienteId, areaFiltro)};
+}
+
+function avisoClimaOculto(prot){
+  const textos = {
+    geral: ['Resultado reservado para proteger o anonimato', 'A pesquisa ainda tem menos de '+MIN_RESPONDENTES_CLIMA+' respostas. Os resultados aparecem assim que houver pelo menos '+MIN_RESPONDENTES_CLIMA+' respondentes.'],
+    minimo: ['Resultado omitido para proteger o anonimato', 'Esta área teve menos de '+MIN_RESPONDENTES_CLIMA+' respostas. Para que ninguém seja identificado, o resultado só aparece a partir de '+MIN_RESPONDENTES_CLIMA+' respondentes por área.'],
+    complementar: ['Resultado omitido por segurança', 'Outra área foi omitida por ter poucas respostas. Mostrar esta também permitiria descobrir o resultado da área omitida por subtração do total, por isso ela fica oculta.']
+  };
+  const t = textos[prot.motivo] || textos.minimo;
+  return '<div class="card empty-state"><h3>'+t[0]+'</h3><p>'+t[1]+'</p></div>';
+}
+
+function corFavorabilidadeClima(v){ return v>=75 ? '#DDEFE1' : (v>=60 ? '#FBF1D6' : '#F6DAD6'); }
+const CORES_CLIMA_AREAS = ['#8C6A4B','#B2573D','#C9A24E','#5F8D6B','#6B7FA3','#A66DA0','#4F9A9A','#9A6B4F'];
+
+function viewClimaComparativoAreas(cliente){
+  const pc = cliente.pesquisaClima || {};
+  if(!(pc.areas||[]).length) return '';
+  const prot = areasClimaProtegidas(cliente.id);
+  const geral = calcularResultadoPesquisaClima(cliente.id, '');
+  const nCols = GRUPOS_PESQUISA_CLIMA.length + 4;
+  const celula = v => '<td style="text-align:center;background:'+corFavorabilidadeClima(v)+';">'+v+'%</td>';
+  const linhaDados = (rotulo, r, forte) => '<tr'+(forte?' style="font-weight:600;"':'')+'><td>'+esc(rotulo)+'</td><td style="text-align:center;">'+r.totalRespostas+'</td>'+celula(r.satisfacaoGeral)+'<td style="text-align:center;">'+r.eNPS.score+'</td>'+GRUPOS_PESQUISA_CLIMA.map(g=>celula(r.porGrupo[g.chave].favoravel)).join('')+'</tr>';
+  const linhaAviso = (rotulo, texto) => '<tr><td>'+esc(rotulo)+'</td><td colspan="'+(nCols-1)+'" class="hint" style="font-style:italic;">'+texto+'</td></tr>';
+  const atencao = [];
+  const linhas = prot.itens.map(a=>{
+    if(a.estado==='vazia') return linhaAviso(a.rotulo, 'Sem respostas ainda');
+    if(a.estado==='minimo') return linhaAviso(a.rotulo, 'Omitida para proteger o anonimato (menos de '+MIN_RESPONDENTES_CLIMA+' respostas)');
+    if(a.estado==='complementar') return linhaAviso(a.rotulo, 'Omitida por segurança: mostrar esta área permitiria descobrir, por subtração do total, o resultado da área omitida');
+    const r = calcularResultadoPesquisaClima(cliente.id, a.nome);
+    const pior = GRUPOS_PESQUISA_CLIMA.map(g=>({nome:g.nome, v:r.porGrupo[g.chave].favoravel})).sort((x,y)=>x.v-y.v)[0];
+    atencao.push('<li><strong>'+esc(a.rotulo)+':</strong> o ponto mais frágil é <em>'+esc(pior.nome)+'</em> ('+pior.v+'% de favorabilidade).</li>');
+    return linhaDados(a.rotulo, r, false);
+  }).join('');
+  const temVisivel = prot.itens.some(a=>a.estado==='ok');
+  return `
+    <div class="card" style="margin-bottom:22px;">
+      <h3 style="font-size:15px;margin-bottom:6px;">Comparativo por área</h3>
+      <p class="hint" style="margin-bottom:10px;">Confidencial: uma área só aparece quando tem ${MIN_RESPONDENTES_CLIMA} ou mais respostas. Cores: verde a partir de 75% · amarelo de 60% a 74% · vermelho abaixo de 60% de favorabilidade.</p>
+      <div class="table-wrap"><table style="font-size:13px;">
+        <thead><tr><th>Área</th><th style="text-align:center;">Respostas</th><th style="text-align:center;">Satisfação geral</th><th style="text-align:center;">eNPS</th>${GRUPOS_PESQUISA_CLIMA.map(g=>'<th style="text-align:center;">'+esc(g.nome)+'</th>').join('')}</tr></thead>
+        <tbody>${linhas}${linhaDados('Geral (todas as áreas)', geral, true)}</tbody>
+      </table></div>
+      ${atencao.length ? '<ul class="hint" style="margin:12px 0 0 18px;">'+atencao.join('')+'</ul>' : ''}
+    </div>
+    ${temVisivel ? '<div class="card chart-card" style="margin-bottom:22px;"><h3>Favorabilidade por bloco, por área</h3><div class="chart-wrap" style="height:340px;"><canvas id="chart-clima-areas"></canvas></div></div>' : ''}`;
+}
+
+function desenharChartClimaAreas(cliente){
+  destruirChartClima('chart-clima-areas');
+  const ctx = document.getElementById('chart-clima-areas');
+  if(!ctx || !window.Chart) return;
+  const visiveis = areasClimaProtegidas(cliente.id).itens.filter(a=>a.estado==='ok');
+  const geral = calcularResultadoPesquisaClima(cliente.id, '');
+  const serie = r => GRUPOS_PESQUISA_CLIMA.map(g=>r.porGrupo[g.chave].favoravel);
+  const datasets = [{label:'Geral', data:serie(geral), backgroundColor:CORES_CLIMA_AREAS[0]}].concat(
+    visiveis.map((a,i)=>({label:a.rotulo, data:serie(calcularResultadoPesquisaClima(cliente.id, a.nome)), backgroundColor:CORES_CLIMA_AREAS[(i+1)%CORES_CLIMA_AREAS.length]})));
+  chartsClima['chart-clima-areas'] = new Chart(ctx, {
+    type:'bar',
+    data:{labels:GRUPOS_PESQUISA_CLIMA.map(g=>g.nome), datasets},
+    options:{responsive:true, maintainAspectRatio:false, scales:{y:{min:0, max:100, ticks:{callback:v=>v+'%'}}}, plugins:{legend:{display:true, position:'bottom'}, datalabels:{display:false}}}
+  });
+}
+
 function viewPesquisaClimaAdmin(){
   const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.climaClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+(cl.pesquisaClima&&cl.pesquisaClima.ativo?' ✓':'')+'</option>').join('');
   const cliente = state.climaClienteId ? getCliente(state.climaClienteId) : null;
@@ -4173,7 +4271,8 @@ function viewPesquisaClimaAdmin(){
   }
 
   const pc = cliente.pesquisaClima || {ativo:false, dataInicio:'', dataFim:'', areas:[]};
-  const resultado = calcularResultadoPesquisaClima(cliente.id, state.climaAreaFiltro);
+  const protegido = resultadoClimaProtegido(cliente.id, state.climaAreaFiltro);
+  const resultado = protegido.resultado || {totalRespostas:0};
   const hoje = todayISO();
   const prazoStatus = !pc.dataInicio && !pc.dataFim ? 'sem prazo definido' : (pc.dataFim && hoje>pc.dataFim ? 'encerrada em '+formatDate(pc.dataFim) : (pc.dataInicio && hoje<pc.dataInicio ? 'abre em '+formatDate(pc.dataInicio) : 'aberta'+(pc.dataFim?' até '+formatDate(pc.dataFim):'')));
 
@@ -4200,7 +4299,7 @@ function viewPesquisaClimaAdmin(){
       </select>
     </div>
 
-    ${resultado.totalRespostas===0 ? '<div class="card empty-state"><h3>Nenhuma resposta ainda</h3><p>Envie o link para os colaboradores desta empresa responderem.</p></div>' : `
+    ${protegido.oculto ? avisoClimaOculto(protegido) : resultado.totalRespostas===0 ? '<div class="card empty-state"><h3>Nenhuma resposta ainda</h3><p>Envie o link para os colaboradores desta empresa responderem.</p></div>' : `
     <div class="topbar no-print" style="margin-bottom:10px;">
       <div></div>
       <span class="btn btn-secondary btn-sm" data-action="imprimir-relatorio">🖨️ Imprimir / Exportar relatório</span>
@@ -4210,6 +4309,8 @@ function viewPesquisaClimaAdmin(){
       <div class="kpi"><div class="label">Respostas recebidas</div><div class="value">${resultado.totalRespostas}</div></div>
       <div class="kpi ${resultado.eNPS.score>=50?'c-green':(resultado.eNPS.score>=0?'c-amber':'c-red')}"><div class="label">eNPS (indicariam a empresa)</div><div class="value" style="font-size:28px;">${resultado.eNPS.score}</div><div class="sub">${resultado.eNPS.promotores} promotor(es) · ${resultado.eNPS.neutros} neutro(s) · ${resultado.eNPS.detratores} detrator(es)</div></div>
     </div>
+
+    ${state.climaAreaFiltro ? '' : viewClimaComparativoAreas(cliente)}
 
     <div class="charts-row">
       <div class="card chart-card"><h3>Favorabilidade por bloco</h3><div class="chart-wrap"><canvas id="chart-clima-blocos"></canvas></div></div>
@@ -4228,8 +4329,10 @@ function drawClimaCharts(){
   if(!window.Chart || !state.climaClienteId) return;
   const cliente = getCliente(state.climaClienteId);
   if(!cliente || !cliente.pesquisaClima || !cliente.pesquisaClima.ativo) return;
-  const resultado = calcularResultadoPesquisaClima(cliente.id, state.climaAreaFiltro);
-  if(resultado.totalRespostas===0) return;
+  const protegido = resultadoClimaProtegido(cliente.id, state.climaAreaFiltro);
+  if(protegido.oculto || !protegido.resultado || protegido.resultado.totalRespostas===0) return;
+  const resultado = protegido.resultado;
+  if(!state.climaAreaFiltro) desenharChartClimaAreas(cliente);
 
   const ctxBlocos = document.getElementById('chart-clima-blocos');
   destruirChartClima('chart-clima-blocos');
@@ -8060,7 +8163,7 @@ async function renderPesquisaClima(clienteId){
       </div>
       <div style="padding:32px;">
         <h1 style="font-size:22px;margin-bottom:6px;">Pesquisa de Clima Organizacional</h1>
-        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 20px 0;">${esc(info.nome)} — Esta pesquisa é <strong>totalmente anônima</strong>. Suas respostas não identificam você de forma alguma. Avalie de <strong>1 (discordo totalmente)</strong> a <strong>5 (concordo totalmente)</strong> cada afirmação. Leva cerca de 8 minutos.</p>
+        <p style="color:var(--ink-soft);font-size:14px;margin:0 0 20px 0;">${esc(info.nome)} — Esta pesquisa é <strong>totalmente anônima</strong>. Suas respostas não identificam você de forma alguma, e o resultado de cada área só é apresentado quando pelo menos 3 pessoas dela responderam. Avalie de <strong>1 (discordo totalmente)</strong> a <strong>5 (concordo totalmente)</strong> cada afirmação. Leva cerca de 8 minutos.</p>
 
         <form id="form-clima">
           ${info.areas && info.areas.length ? `<div class="field full"><label>Sua área/setor *</label><select required name="area"><option value="">Selecione…</option>${info.areas.map(a=>'<option>'+esc(a)+'</option>').join('')}</select></div>` : ''}
@@ -9931,7 +10034,7 @@ function modalConfigPesquisaClima(cliente){
         <div class="field full">
           <label>Áreas/setores (um por linha, opcional)</label>
           <textarea name="areas" placeholder="Administrativo&#10;Comercial&#10;Operações">${esc((pc.areas||[]).join('\n'))}</textarea>
-          <div class="hint">Se preencher, a pesquisa pede pra pessoa escolher a área dela — assim dá pra ver o resultado por setor, além do geral. Deixe em branco se não quiser esse filtro.</div>
+          <div class="hint">Se preencher, a pesquisa pede pra pessoa escolher a área dela — assim dá pra ver o resultado por setor, além do geral. Por confidencialidade, o resultado de uma área só aparece com 3 ou mais respostas; evite criar áreas muito pequenas. Deixe em branco se não quiser esse filtro.</div>
         </div>
         <div class="field"><label>Valor da mensalidade (R$)</label><input type="number" step="0.01" min="0" name="valorMensalidade" value="${esc(pc.valorMensalidade)}" placeholder="Ex.: 400.00"></div>
       </div>
