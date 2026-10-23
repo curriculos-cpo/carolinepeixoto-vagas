@@ -5731,7 +5731,7 @@ function montarTextoCartaProposta(candidato, cargo, cliente, dadosProposta){
 /* ============================= DOCUMENTOS EM PDF (impressão da página) ============================= */
 const CSS_DOC_PDF = `
 @page { size: A4; margin: 0; }
-*{ box-sizing:border-box; }
+*{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 body{ font-family: Georgia, 'Noto Serif', 'Times New Roman', serif; color:#3B2924; font-size:12.5pt; line-height:1.55; margin:0; }
 .cab{ display:flex; justify-content:space-between; align-items:center; gap:24px; padding-bottom:14px; border-bottom:2px solid #C66B4E; margin-bottom:26px; }
 .cab img{ max-height:72px; max-width:240px; object-fit:contain; }
@@ -9080,9 +9080,10 @@ function limparHtmlParecer(html){
 }
 
 const CSS_PARECER_PDF = `
-.cab{ margin-bottom:22px; }
-h1.tit-parecer{ margin:4px 0 4px; }
-.sub-parecer{ color:#7a625a; margin:0 0 20px; text-align:left; }
+.faixa-logo{ text-align:center; background:#E8D4C4; padding:18px; border-radius:8px; margin-bottom:28px; }
+.faixa-logo img{ max-width:220px; height:auto; }
+h1.tit-parecer{ margin:4px 0 4px; text-align:center; }
+.sub-parecer{ color:#7a625a; margin:0 0 24px; text-align:center; }
 .meta-parecer p{ margin:0 0 4px; text-align:left; }
 .meta-parecer{ margin-bottom:22px; }
 .corpo-parecer p{ white-space:pre-line; }
@@ -9104,7 +9105,7 @@ function gerarPdfParecerCandidato(candidato){
     : String(candidato.parecerIA.texto||'').split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean).map(p=>'<p>'+esc(p)+'</p>').join('');
   const subtitulo = [vaga && vaga.titulo, cliente && cliente.nome].filter(Boolean).join(' — ');
   const corpo =
-    cabecalhoLogosPDF(cliente) +
+    '<div class="faixa-logo"><img src="data:image/png;base64,'+LOGO_COLORIDO_B64+'" alt="Caroline Peixoto DHO"></div>' +
     '<h1 class="tit-parecer">Parecer de Candidato</h1>' +
     (subtitulo ? '<p class="sub-parecer">'+esc(subtitulo)+'</p>' : '') +
     '<div class="meta-parecer"><p><strong>Data:</strong> '+formatDate(candidato.parecerIA.data)+'</p><p><strong>Candidato(a):</strong> '+esc(candidato.nome)+'</p></div>' +
