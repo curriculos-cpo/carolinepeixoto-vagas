@@ -9049,6 +9049,71 @@ function viewPropostaComercial(){
   `;
 }
 
+/* ============================= PARECER DO CANDIDATO EM PDF ============================= */
+// O texto do parecer é editável na tela (negrito, fonte, alinhamento…). Para o PDF, mantemos essa formatação,
+// mas só deixamos passar etiquetas e estilos simples — o resto é descartado.
+function limparHtmlParecer(html){
+  const doc = new DOMParser().parseFromString('<body>'+String(html||'')+'</body>', 'text/html');
+  const permitidas = new Set(['P','DIV','BR','B','STRONG','I','EM','U','SPAN','FONT','BLOCKQUOTE','UL','OL','LI']);
+  const removerInteiro = new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','LINK','META','TEMPLATE']);
+  const estilosOk = ['text-align','margin-left','padding-left','text-indent','font-family','font-size','font-weight','font-style','text-decoration'];
+  const limpar = no => {
+    Array.from(no.childNodes).forEach(f=>{
+      if(f.nodeType===3) return;
+      if(f.nodeType!==1){ f.remove(); return; }
+      if(removerInteiro.has(f.tagName)){ f.remove(); return; }
+      if(!permitidas.has(f.tagName)){ limpar(f); while(f.firstChild) f.parentNode.insertBefore(f.firstChild, f); f.remove(); return; }
+      Array.from(f.attributes).forEach(at=>{
+        const nome = at.name.toLowerCase();
+        if(nome==='style'){
+          const ok = at.value.split(';').map(s=>s.trim()).filter(s=>{ const k = s.split(':')[0].trim().toLowerCase(); return estilosOk.includes(k) && !/url\(|expression|javascript|@import/i.test(s); }).join(';');
+          if(ok) f.setAttribute('style', ok); else f.removeAttribute('style');
+        } else if(f.tagName==='FONT' && nome==='face' && /^[\w\s,'"\-]+$/.test(at.value)){ /* mantém */ }
+        else if(f.tagName==='FONT' && nome==='size' && /^[1-7]$/.test(at.value)){ /* mantém */ }
+        else f.removeAttribute(at.name);
+      });
+      limpar(f);
+    });
+  };
+  limpar(doc.body);
+  return doc.body.innerHTML;
+}
+
+const CSS_PARECER_PDF = `
+.cab{ margin-bottom:22px; }
+h1.tit-parecer{ margin:4px 0 4px; }
+.sub-parecer{ color:#7a625a; margin:0 0 20px; text-align:left; }
+.meta-parecer p{ margin:0 0 4px; text-align:left; }
+.meta-parecer{ margin-bottom:22px; }
+.corpo-parecer p{ white-space:pre-line; }
+.corpo-parecer{ margin-bottom:8px; }
+.atenciosamente{ margin:30px 0 0; text-align:left; }
+.assin-par{ margin-top:46px; text-align:center; page-break-inside:avoid; }
+.assin-par .linha{ width:280px; border-top:1px solid #3B2924; margin:0 auto 6px; }
+.assin-par p{ margin:0; text-align:center; }
+.assin-par .cargo{ font-size:10pt; color:#7a625a; }
+`;
+
+function gerarPdfParecerCandidato(candidato){
+  if(!candidato || !candidato.parecerIA) return false;
+  const cliente = getCliente(candidato.clienteId);
+  const vaga = getCargo(candidato.cargoId);
+  const editor = document.getElementById('texto-parecer-editavel');
+  const corpoTexto = (editor && state.parecerCandidatoId===candidato.id)
+    ? limparHtmlParecer(editor.innerHTML)
+    : String(candidato.parecerIA.texto||'').split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean).map(p=>'<p>'+esc(p)+'</p>').join('');
+  const subtitulo = [vaga && vaga.titulo, cliente && cliente.nome].filter(Boolean).join(' — ');
+  const corpo =
+    cabecalhoLogosPDF(cliente) +
+    '<h1 class="tit-parecer">Parecer de Candidato</h1>' +
+    (subtitulo ? '<p class="sub-parecer">'+esc(subtitulo)+'</p>' : '') +
+    '<div class="meta-parecer"><p><strong>Data:</strong> '+formatDate(candidato.parecerIA.data)+'</p><p><strong>Candidato(a):</strong> '+esc(candidato.nome)+'</p></div>' +
+    '<div class="corpo-parecer">'+corpoTexto+'</div>' +
+    '<p class="atenciosamente">Atenciosamente,</p>' +
+    '<div class="assin-par"><div class="linha"></div><p><strong>Caroline Peixoto</strong></p><p class="cargo">Desenvolvimento Humano e Organizacional</p></div>';
+  return abrirDocumentoParaPDF('Parecer - '+candidato.nome, corpo, CSS_PARECER_PDF);
+}
+
 function viewParecerCandidato(){
   const candidatoId = state.parecerCandidatoId;
   const candidato = db.candidatos.find(c=>c.id===candidatoId);
@@ -9066,7 +9131,7 @@ function viewParecerCandidato(){
       <div><h1>Parecer do candidato</h1><p>${esc(candidato.nome)}</p></div>
       <div style="display:flex;gap:8px;">
         <span class="btn btn-secondary btn-sm" data-action="gerar-parecer-candidato" data-id="${candidato.id}">🔄 Gerar novamente</span>
-        <span class="btn btn-secondary btn-sm" data-action="imprimir-relatorio">🖨️ Imprimir / Exportar PDF</span>
+        <span class="btn btn-primary btn-sm" data-action="pdf-parecer-candidato" data-id="${candidato.id}">📄 Gerar PDF</span>
       </div>
     </div>
 
@@ -11578,6 +11643,7 @@ function onGlobalClick(e){
   if(action === 'agendar-entrevista'){ modalAgendarEntrevista(db.candidatos.find(c=>c.id===id)); return; }
   if(action === 'transferir-candidato'){ const candTransf = db.candidatos.find(c=>c.id===id); if(candTransf) modalTransferirCandidato(candTransf); return; }
   if(action === 'ver-shortlist'){ modalShortlist(el.dataset.cargoId); return; }
+  if(action === 'pdf-parecer-candidato'){ const c = db.candidatos.find(x=>x.id===id); if(c) gerarPdfParecerCandidato(c); return; }
   if(action === 'ver-parecer-candidato'){
     state.parecerCandidatoId = id;
     if(document.getElementById('modal-slot').innerHTML) closeModal();
