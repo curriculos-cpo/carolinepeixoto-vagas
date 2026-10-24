@@ -78,6 +78,14 @@
   .org-node:hover{border-color:var(--accent);}
   .org-node-titulo{font-weight:600;font-size:13px;}
   .org-node-sub{font-size:11.5px;color:var(--ink-soft);margin-top:2px;max-width:180px;}
+  .org-node[draggable="true"]{cursor:grab;}
+  .org-node-area{font-size:10px;color:#A5533D;text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+  .org-aviso{font-size:10.5px;color:#b3261e;margin-top:3px;}
+  .org-arrastando{opacity:.4;}
+  .org-drop-filho{outline:2px dashed #A5533D;outline-offset:2px;background:#F7F1EA;}
+  .org-drop-antes{box-shadow:-7px 0 0 0 #A5533D;}
+  .org-drop-depois{box-shadow:7px 0 0 0 #A5533D;}
+  #org-area.org-drop-topo{outline:2px dashed #A5533D;outline-offset:-4px;}
   .nav-section-label:first-child{padding-top:4px;}
   .nav-item:hover{background:var(--spine-soft);color:var(--spine-text);}
   .nav-item.active{background:var(--spine-soft);color:var(--spine-text);border-left:3px solid var(--accent);font-weight:700;}
@@ -565,7 +573,8 @@ const GRUPOS_NAV = [
     {href:'#vagas', label:'Portal de Vagas (público)', externo:true}
   ]},
   { id:'cargos', label:'Engenharia de Cargos', icone:'📐', itens:[
-    {tab:'colaboradores', colabAba:'funcoes', label:'Cadastro de Função'}
+    {tab:'colaboradores', colabAba:'funcoes', label:'Cadastro de Função'},
+    {tab:'colaboradores', colabAba:'organograma', label:'Organograma'}
   ]},
   { id:'gestaoColab', label:'Gestão de Colaboradores', icone:'👥', itens:[
     {tab:'colaboradores', colabAba:'colaboradores', label:'Colaboradores'},
@@ -3580,6 +3589,7 @@ function viewColaboradores(){
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
       <span class="btn ${state.colabAba==='colaboradores'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="colaboradores">Colaboradores cadastrados</span>
       <span class="btn ${state.colabAba==='funcoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="funcoes">Funções e cargos</span>
+      <span class="btn ${state.colabAba==='organograma'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="organograma">Organograma</span>
       <span class="btn ${state.colabAba==='absenteismo'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="absenteismo">Absenteísmo</span>
       <span class="btn ${state.colabAba==='treinamentos'?'btn-primary':'btn-secondary'} btn-sm" data-action="colab-aba" data-aba="treinamentos">Treinamentos</span>
     </div>
@@ -3609,7 +3619,7 @@ function viewColaboradores(){
     </div>
     ${funcoes.length===0 ? '<div class="card empty-state"><h3>Nenhuma função cadastrada</h3><p>Clique em "+ Nova função" para começar.</p></div>' : `
     <div class="card table-wrap"><table><thead><tr><th>Título do cargo</th><th>Subordinado a</th><th>Área</th><th>Ocupação</th><th>Descritivo</th><th></th></tr></thead><tbody>${linhasFuncoes}</tbody></table></div>`}
-    ` : state.colabAba==='absenteismo' ? viewAbsenteismo(cl) : viewTreinamentos(cl)}
+    ` : state.colabAba==='organograma' ? viewOrganogramaEditavel(cl, false) : state.colabAba==='absenteismo' ? viewAbsenteismo(cl) : viewTreinamentos(cl)}
   `;
 }
 
@@ -3741,6 +3751,307 @@ function modalTreinamento(treinamento, clienteId){
     else { db.treinamentos.push(Object.assign({id:uid('trein')}, dados)); }
     closeModal(); saveDB(); renderView();
   });
+}
+
+/* ============================= ORGANOGRAMA EDITÁVEL ============================= */
+// Cada caixa é uma função (cargo) do cadastro de "Funções e cargos": mudar quem reporta a quem aqui muda o campo
+// "Subordinado ao cargo" de lá, e o inverso. A ordem entre irmãos fica no campo ordemOrg.
+var ORG_CTX = {portal:false, clienteId:''};
+var ORG_ZOOM = 1;
+var ORG_ARRASTO = '';
+
+function ordenarPorOrg(a, b){
+  const oa = (a.ordemOrg===undefined || a.ordemOrg===null || a.ordemOrg==='') ? 1e9 : Number(a.ordemOrg);
+  const ob = (b.ordemOrg===undefined || b.ordemOrg===null || b.ordemOrg==='') ? 1e9 : Number(b.ordemOrg);
+  return (oa-ob) || String(a.nome||'').localeCompare(String(b.nome||''));
+}
+function normNomeOrg(s){ return String(s||'').trim().toLowerCase(); }
+
+function construirOrganogramaEditavel(clienteId){
+  const funcoes = funcoesDoCliente(clienteId).slice().sort(ordenarPorOrg);
+  const porNome = {};
+  funcoes.forEach(f=>{ const k = normNomeOrg(f.nome); if(!porNome[k]) porNome[k] = f; });
+  const nos = {};
+  funcoes.forEach(f=>{ nos[f.id] = {funcao:f, filhos:[], colaboradores:colaboradoresAtivosNaFuncao(f.id), orfao:false}; });
+  const pai = {};
+  funcoes.forEach(f=>{
+    const nomeSup = normNomeOrg(f.subordinadoA);
+    if(!nomeSup) return;
+    const sup = porNome[nomeSup];
+    if(sup && sup.id!==f.id) pai[f.id] = sup.id; else nos[f.id].orfao = true;
+  });
+  // se dois cargos apontarem um para o outro, solta um deles para ninguém sumir da tela
+  funcoes.forEach(f=>{ const visto = new Set(); let x = f.id; while(pai[x]){ if(visto.has(x)){ delete pai[x]; break; } visto.add(x); x = pai[x]; } });
+  funcoes.forEach(f=>{ if(pai[f.id]) nos[pai[f.id]].filhos.push(nos[f.id]); });
+  const raizes = funcoes.filter(f=>!pai[f.id]).map(f=>nos[f.id]);
+  return {raizes, nos, pai};
+}
+// o cargo "noId" está abaixo de "ancId" (direta ou indiretamente)?
+function orgEhDescendente(pai, ancId, noId){ let x = noId; let n = 0; while(x && n++<500){ if(x===ancId) return true; x = pai[x]; } return false; }
+
+function renderNoOrgEditavel(no, editavel){
+  const nomes = no.colaboradores.map(c=>c.nome);
+  const sub = nomes.length===0 ? '<span class="vaga-aberta" style="color:#b3261e;">vaga em aberto</span>'
+    : (nomes.length===1 ? esc(nomes[0]) : nomes.length+' pessoas: '+esc(nomes.join(', ')));
+  const aviso = (editavel && no.orfao) ? '<div class="org-aviso" title="O cargo informado em &quot;Subordinado a&quot; não existe. Arraste a caixa para o lugar certo.">⚠ superior não encontrado</div>' : '';
+  const attrs = editavel ? ' draggable="true" data-org-id="'+no.funcao.id+'" data-action="org-editar" data-id="'+no.funcao.id+'"' : '';
+  const filhos = no.filhos.length ? '<ul>'+no.filhos.map(f=>renderNoOrgEditavel(f, editavel)).join('')+'</ul>' : '';
+  return '<li><div class="org-node"'+attrs+'><div class="org-node-titulo">'+esc(no.funcao.nome)+'</div>'
+    +(no.funcao.area ? '<div class="org-node-area">'+esc(no.funcao.area)+'</div>' : '')
+    +'<div class="org-node-sub">'+sub+'</div>'+aviso+'</div>'+filhos+'</li>';
+}
+
+function viewOrganogramaEditavel(cliente, portal){
+  ORG_CTX = {portal:!!portal, clienteId:cliente.id};
+  const {raizes} = construirOrganogramaEditavel(cliente.id);
+  const barra = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <button class="btn btn-primary btn-sm" data-action="org-novo">+ Novo cargo</button>
+      <span class="btn btn-secondary btn-sm" data-action="org-zoom" data-dz="-0.1" title="Diminuir">−</span>
+      <span class="btn btn-secondary btn-sm" data-action="org-zoom" data-dz="0.1" title="Aumentar">+</span>
+      <span class="btn btn-ghost btn-sm" data-action="org-zoom" data-dz="reset">Tamanho normal</span>
+      <span class="btn btn-secondary btn-sm" data-action="org-pdf">📄 Gerar PDF</span>
+    </div>
+    <p class="hint" style="margin-bottom:12px;">Clique numa caixa para editar. <strong>Arraste</strong> uma caixa e solte: no <strong>meio</strong> de outra, ela passa a se reportar a esta; na <strong>borda esquerda ou direita</strong>, fica ao lado; no <strong>fundo da área</strong>, vai para o topo. As mudanças atualizam também "Funções e cargos". No celular, toque na caixa e use "Subordinado a".</p>`;
+  if(raizes.length===0){
+    return barra+'<div class="card empty-state"><h3>Nenhum cargo cadastrado</h3><p>Clique em "+ Novo cargo" para começar o organograma.</p></div>';
+  }
+  return barra+`<div class="card" id="org-area" data-portal="${portal?1:0}" style="overflow:auto;padding:28px 20px;min-height:260px;">
+      <div id="org-tree-wrap" style="zoom:${ORG_ZOOM};"><ul class="org-tree">${raizes.map(n=>renderNoOrgEditavel(n, true)).join('')}</ul></div>
+    </div>`;
+}
+function viewPortalOrganograma(){ return viewOrganogramaEditavel(db.clientes[0], true); }
+
+/* ---- gravação (painel e portal) ---- */
+async function orgSalvarPatches(patches){
+  if(!patches.length) return true;
+  patches.forEach(p=>{ const f = db.funcoes.find(x=>x.id===p.id); if(!f) return; ['nome','subordinadoA','area','quantidadeAutorizada','ordemOrg'].forEach(k=>{ if(p[k]!==undefined) f[k] = p[k]; }); });
+  if(!ORG_CTX.portal){ saveDB(); renderView(); return true; }
+  try{
+    await chamarAppsScriptPost('portalSalvarHierarquia', {clienteId:ORG_CTX.clienteId, itens:patches});
+    renderPortalView(); return true;
+  }catch(err){
+    showToast((err && err.message) || 'Não foi possível salvar agora.', true);
+    try{ await carregarDadosPortal(); }catch(_){}
+    renderPortalView(); return false;
+  }
+}
+
+function orgMover(idMov, idAlvo, zona){
+  const {raizes, nos, pai} = construirOrganogramaEditavel(ORG_CTX.clienteId);
+  if(!nos[idMov]) return;
+  let novoPaiId = null;
+  if(zona!=='topo'){
+    if(!nos[idAlvo] || idAlvo===idMov) return;
+    if(orgEhDescendente(pai, idMov, idAlvo)){ showToast('Não dá para colocar um cargo abaixo de um subordinado dele.', true); return; }
+    novoPaiId = zona==='filho' ? idAlvo : (pai[idAlvo] || null);
+  }
+  const lista = (novoPaiId ? nos[novoPaiId].filhos : raizes).map(n=>n.funcao.id).filter(i=>i!==idMov);
+  let pos = lista.length;
+  if(zona==='antes') pos = lista.indexOf(idAlvo); else if(zona==='depois') pos = lista.indexOf(idAlvo)+1;
+  if(pos<0) pos = lista.length;
+  lista.splice(pos, 0, idMov);
+  const nomePai = novoPaiId ? nos[novoPaiId].funcao.nome : '';
+  const patches = [];
+  lista.forEach((fid, i)=>{
+    const f = nos[fid].funcao; const p = {id:fid};
+    if(f.ordemOrg!==i) p.ordemOrg = i;
+    if(fid===idMov && String(f.subordinadoA||'').trim()!==nomePai) p.subordinadoA = nomePai;
+    if(Object.keys(p).length>1) patches.push(p);
+  });
+  orgSalvarPatches(patches);
+}
+
+/* ---- arrastar e soltar ---- */
+function orgZona(e, alvo){ const r = alvo.getBoundingClientRect(); const x = r.width ? (e.clientX - r.left)/r.width : 0.5; return x<0.25 ? 'antes' : (x>0.75 ? 'depois' : 'filho'); }
+function orgLimparDrop(){ document.querySelectorAll('.org-drop-filho,.org-drop-antes,.org-drop-depois,.org-drop-topo').forEach(n=>n.classList.remove('org-drop-filho','org-drop-antes','org-drop-depois','org-drop-topo')); }
+(function registrarArrastoOrganograma(){
+  document.addEventListener('dragstart', e=>{
+    const n = e.target.closest && e.target.closest('.org-node[draggable="true"]'); if(!n) return;
+    ORG_ARRASTO = n.dataset.orgId;
+    try{ e.dataTransfer.setData('text/plain', ORG_ARRASTO); e.dataTransfer.effectAllowed = 'move'; }catch(_){}
+    n.classList.add('org-arrastando');
+  });
+  document.addEventListener('dragend', ()=>{ ORG_ARRASTO = ''; orgLimparDrop(); document.querySelectorAll('.org-arrastando').forEach(x=>x.classList.remove('org-arrastando')); });
+  document.addEventListener('dragover', e=>{
+    if(!ORG_ARRASTO) return;
+    const area = e.target.closest && e.target.closest('#org-area'); if(!area) return;
+    e.preventDefault(); orgLimparDrop();
+    const alvo = e.target.closest('.org-node');
+    if(alvo){ if(alvo.dataset.orgId!==ORG_ARRASTO) alvo.classList.add('org-drop-'+orgZona(e, alvo)); }
+    else area.classList.add('org-drop-topo');
+  });
+  document.addEventListener('drop', e=>{
+    if(!ORG_ARRASTO) return;
+    const area = e.target.closest && e.target.closest('#org-area'); if(!area) return;
+    e.preventDefault();
+    const alvo = e.target.closest('.org-node'); const id = ORG_ARRASTO;
+    const zona = alvo ? orgZona(e, alvo) : 'topo';
+    orgLimparDrop(); ORG_ARRASTO = '';
+    if(alvo && alvo.dataset.orgId===id) return;
+    orgMover(id, alvo ? alvo.dataset.orgId : '', zona);
+  });
+})();
+
+/* ---- janelas de edição ---- */
+function opcoesSuperiorOrg(clienteId, excluirId, pai, selecionadoNome){
+  const sel = normNomeOrg(selecionadoNome);
+  const lista = funcoesDoCliente(clienteId).filter(x=>x.id!==excluirId && !(excluirId && orgEhDescendente(pai, excluirId, x.id))).sort((a,b)=>String(a.nome).localeCompare(String(b.nome)));
+  let html = '<option value="">— Topo (não se reporta a ninguém) —</option>';
+  html += lista.map(x=>'<option value="'+esc(x.nome)+'" '+(normNomeOrg(x.nome)===sel?'selected':'')+'>'+esc(x.nome)+'</option>').join('');
+  if(sel && !lista.some(x=>normNomeOrg(x.nome)===sel)) html += '<option value="'+esc(selecionadoNome)+'" selected>'+esc(selecionadoNome)+' (cargo não encontrado)</option>';
+  return html;
+}
+
+function modalNoOrganograma(funcaoId){
+  const f = db.funcoes.find(x=>x.id===funcaoId); if(!f) return;
+  const {pai} = construirOrganogramaEditavel(f.clienteId);
+  const pessoas = colaboradoresAtivosNaFuncao(f.id).map(c=>c.nome);
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Editar cargo</h2>
+    <form id="form-no-org">
+      <div class="form-grid">
+        <div class="field full"><label>Título do cargo *</label><input name="nome" required value="${esc(f.nome)}"></div>
+        <div class="field full"><label>Subordinado a</label><select name="superior">${opcoesSuperiorOrg(f.clienteId, f.id, pai, f.subordinadoA)}</select></div>
+        <div class="field"><label>Área / unidade</label><input name="area" value="${esc(f.area||'')}"></div>
+        <div class="field"><label>Quantidade autorizada</label><input name="qtd" type="number" min="0" value="${esc(f.quantidadeAutorizada||'')}"></div>
+      </div>
+      <p class="hint" style="margin-top:8px;">Quem ocupa este cargo: ${pessoas.length ? esc(pessoas.join(', ')) : '<em>vaga em aberto</em>'}. Para trocar pessoas, use "Colaboradores".</p>
+      <div class="modal-footer">
+        <span style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span class="btn btn-secondary btn-sm" data-action="org-novo-sub" data-id="${f.id}">+ Adicionar subordinado</span>
+          ${ORG_CTX.portal ? '' : '<span class="btn btn-danger btn-sm" data-action="org-excluir" data-id="'+f.id+'">Excluir cargo</span>'}
+        </span>
+        <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Salvar</button></div>
+      </div>
+    </form>`);
+  document.getElementById('form-no-org').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const nome = String(fd.get('nome')||'').trim();
+    if(!nome) return;
+    if(funcoesDoCliente(f.clienteId).some(x=>x.id!==f.id && normNomeOrg(x.nome)===normNomeOrg(nome))){ showToast('Já existe um cargo com esse nome nesta empresa.', true); return; }
+    const antigo = normNomeOrg(f.nome);
+    const patches = [{id:f.id, nome, subordinadoA:String(fd.get('superior')||'').trim(), area:String(fd.get('area')||'').trim(), quantidadeAutorizada:String(fd.get('qtd')||'')}];
+    if(antigo!==normNomeOrg(nome)) funcoesDoCliente(f.clienteId).filter(x=>x.id!==f.id && normNomeOrg(x.subordinadoA)===antigo).forEach(x=>patches.push({id:x.id, subordinadoA:nome}));
+    closeModal(); await orgSalvarPatches(patches);
+  });
+}
+
+function modalNovoNoOrganograma(paiId){
+  const clienteId = ORG_CTX.clienteId;
+  const paiFunc = paiId ? db.funcoes.find(x=>x.id===paiId) : null;
+  const {pai} = construirOrganogramaEditavel(clienteId);
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Novo cargo</h2>
+    <form id="form-novo-no-org">
+      <div class="form-grid">
+        <div class="field full"><label>Título do cargo *</label><input name="nome" required placeholder="Ex.: Gerente de Salão"></div>
+        <div class="field full"><label>Subordinado a</label><select name="superior">${opcoesSuperiorOrg(clienteId, '', pai, paiFunc ? paiFunc.nome : '')}</select></div>
+        <div class="field"><label>Área / unidade</label><input name="area"></div>
+        <div class="field"><label>Quantidade autorizada</label><input name="qtd" type="number" min="0"></div>
+      </div>
+      <div id="erro-novo-no-org" class="hint" style="display:none;color:#B3261E;margin-top:8px;"></div>
+      <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Criar cargo</button></div></div>
+    </form>`);
+  document.getElementById('form-novo-no-org').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const nome = String(fd.get('nome')||'').trim(); if(!nome) return;
+    if(funcoesDoCliente(clienteId).some(x=>normNomeOrg(x.nome)===normNomeOrg(nome))){ showToast('Já existe um cargo com esse nome nesta empresa.', true); return; }
+    const superior = String(fd.get('superior')||'').trim();
+    const irmaos = funcoesDoCliente(clienteId).filter(x=>normNomeOrg(x.subordinadoA)===normNomeOrg(superior)).length;
+    const dados = {clienteId, nome, subordinadoA:superior, area:String(fd.get('area')||'').trim(), quantidadeAutorizada:String(fd.get('qtd')||''), ordemOrg:irmaos};
+    if(!ORG_CTX.portal){ db.funcoes.push(Object.assign({id:uid('func')}, dados)); closeModal(); saveDB(); renderView(); return; }
+    const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Salvando…';
+    try{ await chamarAppsScriptPost('portalSalvarFuncao', {clienteId, funcao:dados}); await carregarDadosPortal(); closeModal(); renderPortalView(); showToast('Cargo criado.'); }
+    catch(err){ const el = document.getElementById('erro-novo-no-org'); el.textContent = (err && err.message) || 'Não foi possível salvar agora.'; el.style.display = 'block'; btn.disabled = false; btn.textContent = 'Criar cargo'; }
+  });
+}
+
+function excluirNoOrganograma(id){
+  if(ORG_CTX.portal) return;
+  const f = db.funcoes.find(x=>x.id===id); if(!f) return;
+  if(!confirm('Excluir o cargo "'+f.nome+'"? Quem se reportava a ele passa a se reportar ao superior dele. O descritivo de cargo vinculado também será removido e colaboradores com esse cargo ficarão sem função definida.')) return;
+  const antigo = normNomeOrg(f.nome);
+  db.funcoes.forEach(x=>{ if(x.clienteId===f.clienteId && x.id!==f.id && normNomeOrg(x.subordinadoA)===antigo) x.subordinadoA = f.subordinadoA || ''; });
+  db.descritivosCargo = db.descritivosCargo.filter(d=>d.funcaoId!==id);
+  db.colaboradores.forEach(c=>{ if(c.funcaoId===id) c.funcaoId = ''; });
+  db.funcoes = db.funcoes.filter(x=>x.id!==id);
+  closeModal(); saveDB(); renderView();
+}
+
+/* ---- PDF ---- */
+const CSS_ORG_PDF = `
+@page { size: A4 landscape; margin: 0; }
+td.conteudo{ padding:0 14mm !important; }
+.tit-org{ font-size:20pt; letter-spacing:.04em; text-transform:uppercase; color:#A5533D; margin:4px 0 2px; }
+.sub-org{ color:#7a625a; margin:0 0 14px; text-align:left; }
+.cab{ margin-bottom:12px; }
+.org-pdf{ text-align:center; }
+.org-pdf ul{ background:none; border-left:0; padding:0; }
+.org-tree, .org-tree ul{ list-style:none; margin:0; padding:0; text-align:center; }
+.org-tree{ display:flex; justify-content:center; }
+.org-tree ul{ padding-top:22px; position:relative; display:flex; justify-content:center; }
+.org-tree li{ display:inline-flex; flex-direction:column; align-items:center; list-style:none; position:relative; padding:22px 8px 0 8px; margin:0; }
+.org-tree li::before, .org-tree li::after{ content:''; position:absolute; top:0; right:50%; border-top:1.5px solid #C9A98F; width:50%; height:22px; }
+.org-tree li::after{ right:auto; left:50%; border-left:1.5px solid #C9A98F; }
+.org-tree li:only-child{ padding-top:0; }
+.org-tree li:only-child::before, .org-tree li:only-child::after{ display:none; }
+.org-tree li:first-child::before, .org-tree li:last-child::after{ border:0 none; }
+.org-tree li:last-child::before{ border-right:1.5px solid #C9A98F; border-radius:0 4px 0 0; }
+.org-tree li:first-child::after{ border-radius:4px 0 0 0; }
+.org-tree ul::before{ content:''; position:absolute; top:0; left:50%; border-left:1.5px solid #C9A98F; width:0; height:22px; }
+.org-tree > li{ padding-top:0; }
+.org-tree > li::before, .org-tree > li::after{ display:none; }
+.org-node{ display:inline-block; border:1px solid #C66B4E; border-radius:6px; padding:7px 12px; background:#F7F1EA; min-width:120px; }
+.org-node-titulo{ font-weight:bold; font-size:10.5pt; color:#3B2924; }
+.org-node-area{ font-size:7.5pt; color:#A5533D; text-transform:uppercase; letter-spacing:.04em; margin-top:1px; }
+.org-node-sub{ font-size:8.5pt; color:#7a625a; margin-top:2px; max-width:170px; }
+.org-tree > li > .org-node{ background:#A5533D; border-color:#A5533D; }
+.org-tree > li > .org-node .org-node-titulo{ color:#fff; }
+.org-tree > li > .org-node .org-node-sub, .org-tree > li > .org-node .org-node-area{ color:#F7F1EA; }
+.org-tree > li > .org-node .vaga-aberta{ color:#FFE3DC !important; }
+`;
+
+function gerarPdfOrganograma(){
+  const cliente = getCliente(ORG_CTX.clienteId); if(!cliente) return;
+  const {raizes} = construirOrganogramaEditavel(cliente.id);
+  if(!raizes.length){ showToast('Cadastre cargos antes de gerar o organograma.', true); return; }
+  // mede a árvore em tamanho normal para caber numa folha A4 deitada
+  let larg = 0, alt = 0;
+  const wrap = document.getElementById('org-tree-wrap');
+  if(wrap){
+    const zAnt = wrap.style.zoom; wrap.style.zoom = 1;
+    let minL = 1e9, maxR = 0, minT = 1e9, maxB = 0;
+    wrap.querySelectorAll('.org-node').forEach(n=>{ const r = n.getBoundingClientRect(); minL = Math.min(minL, r.left); maxR = Math.max(maxR, r.right); minT = Math.min(minT, r.top); maxB = Math.max(maxB, r.bottom); });
+    wrap.style.zoom = zAnt;
+    if(maxR>minL){ larg = maxR-minL+40; alt = maxB-minT+20; }
+  }
+  const escala = larg ? Math.max(0.35, Math.min(1, 960/larg, (alt ? 470/alt : 1))) : 1;
+  const corpo = cabecalhoLogosPDF(cliente)
+    + '<h1 class="tit-org">Organograma</h1>'
+    + '<p class="sub-org">'+esc(cliente.nome)+' · '+formatDate(todayISO())+'</p>'
+    + '<div class="org-pdf" style="zoom:'+escala.toFixed(2)+';"><ul class="org-tree">'+raizes.map(n=>renderNoOrgEditavel(n, false)).join('')+'</ul></div>';
+  abrirDocumentoParaPDF('Organograma - '+cliente.nome, corpo, CSS_ORG_PDF);
+}
+
+function tratarAcaoOrganograma(action, el){
+  switch(action){
+    case 'org-editar': modalNoOrganograma(el.dataset.id); return true;
+    case 'org-novo': modalNovoNoOrganograma(''); return true;
+    case 'org-novo-sub': modalNovoNoOrganograma(el.dataset.id); return true;
+    case 'org-excluir': excluirNoOrganograma(el.dataset.id); return true;
+    case 'org-pdf': gerarPdfOrganograma(); return true;
+    case 'org-zoom': {
+      const dz = el.dataset.dz;
+      ORG_ZOOM = dz==='reset' ? 1 : Math.max(0.4, Math.min(1.6, Math.round((ORG_ZOOM+parseFloat(dz))*10)/10));
+      const w = document.getElementById('org-tree-wrap'); if(w) w.style.zoom = ORG_ZOOM;
+      return true;
+    }
+  }
+  return false;
 }
 
 function construirHierarquiaFuncoes(clienteId){
@@ -8424,6 +8735,7 @@ function renderPortalShell(){
           <span class="btn ${state.portalTab==='avaliacoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="avaliacoes">Avaliação de Desempenho</span>
           <span class="btn ${state.portalTab==='ninebox'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="ninebox">9Box</span>
           <span class="btn ${state.portalTab==='funcoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="funcoes">Funções e cargos</span>
+          <span class="btn ${state.portalTab==='organograma'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="organograma">Organograma</span>
           <span class="btn ${state.portalTab==='treinamentos'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="treinamentos">Treinamentos</span>
           <span class="btn ${state.portalTab==='materiais'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="materiais">Materiais e documentos</span>
           <span class="btn ${state.portalTab==='indicadores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="indicadores">Indicadores</span>
@@ -8446,6 +8758,7 @@ function renderPortalView(){
   if(state.portalTab==='visaoGeral') view.innerHTML = viewPortalVisaoGeral();
   else if(state.portalTab==='colaboradores') view.innerHTML = viewPortalColaboradores();
   else if(state.portalTab==='funcoes') view.innerHTML = viewPortalFuncoes();
+  else if(state.portalTab==='organograma') view.innerHTML = viewPortalOrganograma();
   else if(state.portalTab==='treinamentos') view.innerHTML = viewPortalTreinamentos();
   else if(state.portalTab==='materiais') view.innerHTML = viewPortalMateriais();
   else if(state.portalTab==='relatorios') view.innerHTML = viewPortalRelatorios();
@@ -8848,6 +9161,7 @@ function onPortalClick(e){
   const action = el.dataset.action;
   const id = el.dataset.id;
   if(action === 'portal-sair'){ window.location.reload(); return; }
+  if(tratarAcaoOrganograma(action, el)) return;
   if(action === 'portal-tab'){ state.portalTab = el.dataset.tab; renderPortalView(); return; }
   if(action === 'portal-pdf-relatorio'){ const r = (db.relatoriosBPO||[]).find(x=>x.id===id); if(r) gerarPdfRelatorioBPO(r, db.clientes[0]); return; }
   if(action === 'portal-novo-colaborador'){ modalPortalColaborador(null); return; }
@@ -11587,6 +11901,7 @@ function onGlobalClick(e){
   }
 
   if(action === 'nova-vaga'){ modalVaga(null, el.dataset.clienteId); return; }
+  if(tratarAcaoOrganograma(action, el)) return;
   if(action === 'nova-visita-bpo'){ modalVisitaBPO(null); return; }
   if(action === 'editar-visita-bpo'){ const v = db.visitasBPO.find(x=>x.id===id); if(v) modalVisitaBPO(v); return; }
   if(action === 'excluir-visita-bpo'){
