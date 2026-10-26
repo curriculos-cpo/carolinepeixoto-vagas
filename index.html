@@ -2203,11 +2203,12 @@ function modalPdi(colaboradorId, pdiId, inicial){
       <p class="hint" id="erro-pdi" style="color:var(--red);display:none;margin-top:8px;"></p>
       <div class="modal-footer">
         <span>${existente ? '<span class="btn btn-danger btn-sm" data-action="excluir-pdi" data-id="'+c.id+'" data-pdi-id="'+existente.id+'">Excluir PDI</span>' : ''}</span>
-        <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Salvar PDI</button></div>
+        <div class="right"><span class="btn btn-secondary" id="btn-pdf-pdi">📄 Gerar PDF</span><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Salvar PDI</button></div>
       </div>
     </form>
   `);
   const form = document.getElementById('form-pdi');
+  document.getElementById('btn-pdf-pdi').addEventListener('click', ()=>{ const dados = lerPdiDoForm(c, existente); if(!dados.acoes.length){ showToast('Inclua pelo menos uma ação para gerar o PDF.', true); return; } gerarPdfPdi(c, dados); });
   document.getElementById('btn-add-acao-pdi').addEventListener('click', ()=>{ document.getElementById('lista-acoes-pdi').insertAdjacentHTML('beforeend', linhaAcaoPdi()); });
   const btnIA = document.getElementById('btn-sugerir-pdi');
   btnIA.addEventListener('click', async ()=>{
@@ -2293,6 +2294,7 @@ function viewPdiLista(){
       <td>${gaps ? gaps+' gap(s)' : '—'}</td><td>${situacao}</td>
       <td class="no-print" style="white-space:nowrap;">
         ${p ? '<span class="btn btn-secondary btn-sm" data-action="abrir-pdi" data-id="'+c.id+'">Abrir PDI</span>' : '<span class="btn btn-secondary btn-sm" data-action="novo-pdi" data-id="'+c.id+'">+ Novo PDI</span>'}
+        ${p ? '<span class="btn btn-ghost btn-sm" data-action="pdf-pdi" data-id="'+c.id+'" data-pdi-id="'+p.id+'">📄 PDF</span>' : ''}
       </td></tr>`;
   }).join('');
   return `
@@ -2486,7 +2488,7 @@ function viewRegistros(){
       <td><span class="badge badge-${corBadgeRegistro(r.tipo)}">${esc(r.tipo)}</span></td>
       <td title="${esc(desc)}">${esc(desc.length>160 ? desc.slice(0,160)+'…' : desc)}</td>
       <td>${esc(r.registradoPor||'—')}</td>
-      <td class="no-print"><span class="btn btn-ghost btn-sm" data-action="abrir-prontuario" data-id="${c.id}">📋 Prontuário</span></td>
+      <td class="no-print" style="white-space:nowrap;"><span class="btn btn-ghost btn-sm" data-action="abrir-prontuario" data-id="${c.id}">📋 Prontuário</span> <span class="btn btn-ghost btn-sm" data-action="pdf-registro" data-id="${c.id}" data-reg-id="${r.id}">📄 PDF</span></td>
     </tr>`;
   }).join('');
   return `
@@ -3564,6 +3566,7 @@ function viewColaboradores(){
       <td class="no-print" style="white-space:nowrap;">
         <span class="btn btn-ghost btn-sm" data-action="editar-funcao" data-id="${f.id}">Editar</span>
         <span class="btn btn-ghost btn-sm" data-action="descritivo-cargo" data-id="${f.id}">📄 Descritivo do cargo</span>
+        ${temDescritivo ? '<span class="btn btn-ghost btn-sm" data-action="pdf-descritivo-cargo" data-id="'+f.id+'">PDF</span>' : ''}
         <span class="btn btn-ghost btn-sm" data-action="excluir-funcao" data-id="${f.id}">Excluir</span>
       </td>
     </tr>`;
@@ -6070,11 +6073,11 @@ function cabecalhoLogosPDF(cliente, comPara){
 }
 
 // Abre o documento numa janela limpa e chama a impressão — no diálogo, o destino "Salvar como PDF" gera o arquivo.
-function abrirDocumentoParaPDF(titulo, corpoHtml, cssExtra, rodape){
+function abrirDocumentoParaPDF(titulo, corpoHtml, cssExtra, rodape, cabecalhoRepetido){
   const w = window.open('', '_blank');
   if(!w){ showToast('O navegador bloqueou a janela do PDF. Libere pop-ups para este site e tente de novo.', true); return false; }
   w.document.open();
-  w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+esc(titulo)+'</title><style>'+CSS_DOC_PDF+(cssExtra||'')+'</style></head><body><table class="pag"><thead><tr><td><div class="esp-topo"></div></td></tr></thead><tfoot><tr><td><div class="esp-base">'+(rodape?esc(rodape):'')+'</div></td></tr></tfoot><tbody><tr><td class="conteudo">'+corpoHtml+'</td></tr></tbody></table></body></html>');
+  w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+esc(titulo)+'</title><style>'+CSS_DOC_PDF+(cssExtra||'')+'</style></head><body><table class="pag"><thead><tr><td><div class="esp-topo"></div>'+(cabecalhoRepetido||'')+'</td></tr></thead><tfoot><tr><td><div class="esp-base">'+(rodape?esc(rodape):'')+'</div></td></tr></tfoot><tbody><tr><td class="conteudo">'+corpoHtml+'</td></tr></tbody></table></body></html>');
   w.document.close();
   const prontas = Array.from(w.document.images).map(img => img.complete ? Promise.resolve() : new Promise(r=>{ img.onload=r; img.onerror=r; }));
   Promise.race([Promise.all(prontas), new Promise(r=>setTimeout(r,5000))]).then(()=>{ w.focus(); w.print(); });
@@ -7191,7 +7194,7 @@ function abrirProntuario(colaboradorId){
         html += avaliacoes.map(a=>{
           const notas = CRITERIOS_EXPERIENCIA.map(crit=> esc(crit.nome)+': <strong>'+esc((a.criterios[crit.chave]||'—').replace(/^./,ch=>ch.toUpperCase()))+'</strong>').join(' · ');
           const etapaLabel = a.periodo==='etapa1' ? '1ª etapa' : '2ª etapa';
-          return '<div class="card" style="padding:10px 14px;margin-bottom:8px;"><strong>Avaliação — '+etapaLabel+'</strong> <span class="hint">'+formatDate(a.dataAvaliacao)+(a.avaliador?' · '+esc(a.avaliador):'')+'</span><p class="hint" style="margin:6px 0 0 0;">'+notas+'</p></div>';
+          return '<div class="card" style="padding:10px 14px;margin-bottom:8px;"><strong>Avaliação — '+etapaLabel+'</strong> <span class="hint">'+formatDate(a.dataAvaliacao)+(a.avaliador?' · '+esc(a.avaliador):'')+'</span> <span class="btn btn-ghost btn-sm no-print" data-action="pdf-avaliacao-experiencia" data-id="'+c.id+'" data-av-id="'+a.id+'">📄 PDF</span><p class="hint" style="margin:6px 0 0 0;">'+notas+'</p></div>';
         }).join('');
       }
       return html;
@@ -7244,7 +7247,7 @@ function abrirProntuario(colaboradorId){
       <div class="card" style="padding:10px 14px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;gap:10px;">
           <strong>${esc(r.tipo)}</strong>
-          <span class="hint" style="white-space:nowrap;">${formatDate(r.data)}</span>
+          <span class="hint" style="white-space:nowrap;">${formatDate(r.data)} <span class="btn btn-ghost btn-sm no-print" data-action="pdf-registro" data-id="${c.id}" data-reg-id="${r.id}">📄 PDF</span></span>
         </div>
         <p style="margin:6px 0 0 0;font-size:13.5px;white-space:pre-line;">${esc(r.descricao)}</p>
         ${r.registradoPor?'<p class="hint" style="margin:6px 0 0 0;">Registrado por: '+esc(r.registradoPor)+'</p>':''}
@@ -7489,7 +7492,7 @@ function modalVerAvaliacaoDesempenho(colaboradorId, avaliacaoId){
 
     <div class="modal-footer">
       <span></span>
-      <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div>
+      <div class="right"><span class="btn btn-secondary" data-action="pdf-avaliacao-desempenho" data-id="${c.id}" data-av-id="${avaliacao.id}">📄 Gerar PDF</span><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div>
     </div>
   `);
 }
@@ -8061,6 +8064,192 @@ function habilidadesJaUsadas(campo){
   return Array.from(nomes).sort((a,b)=>a.localeCompare(b));
 }
 
+/* ============================= DESCRITIVO DE CARGO EM PDF ============================= */
+const CSS_DESC_PDF = `
+.tit-desc{ margin:2px 0 2px; font-size:19pt; }
+.sub-desc{ color:#7a625a; margin:0 0 14px; text-align:left; }
+table.ident{ width:100%; border-collapse:collapse; margin-bottom:6px; }
+table.ident td{ border:1px solid #E8D4C4; padding:6px 9px; font-size:10.5pt; vertical-align:top; }
+table.ident td.k{ background:#F7F1EA; color:#A5533D; font-weight:bold; width:32%; font-size:8.5pt; text-transform:uppercase; letter-spacing:.03em; }
+h2.sec-desc{ font-size:11.5pt; color:#A5533D; border-bottom:1px solid #E8D4C4; padding-bottom:3px; margin:18px 0 8px; text-transform:uppercase; letter-spacing:.04em; page-break-after:avoid; }
+.txt-desc{ margin:0 0 8px; text-align:justify; white-space:pre-line; }
+.vazio-desc{ color:#8a746b; font-style:italic; margin:0 0 8px; text-align:left; }
+ul.ativ{ list-style:disc; background:none; border:0; padding:0 0 0 20px; margin:0 0 8px; }
+ul.ativ li{ margin:3px 0; }
+table.hab{ width:100%; border-collapse:collapse; margin-bottom:8px; }
+table.hab th{ background:#A5533D; color:#fff; text-align:left; padding:6px 9px; font-size:9pt; }
+table.hab td{ border:1px solid #E8D4C4; padding:6px 9px; font-size:10.5pt; }
+table.hab tr:nth-child(even) td{ background:#FBF8F4; }
+table.hab td.nv{ width:30%; white-space:nowrap; }
+table.hab tr{ page-break-inside:avoid; }
+.assin-desc{ margin-top:34px; page-break-inside:avoid; }
+.bloco-aprov{ page-break-inside:avoid; }
+.assin-desc .linha{ width:320px; border-top:1px solid #3B2924; }
+.assin-desc p{ margin:4px 0 0; text-align:left; }
+`;
+const NIVEIS_HABILIDADE_PDF = {'1':'Obrigatório', '2':'Desejável', '3':'Desenvolvimento'};
+
+function coletarDescritivoDoForm(form, base){
+  const f = new FormData(form);
+  const ler = id => Array.from(document.querySelectorAll('#'+id+' [data-linha-habilidade]'))
+    .map(l=>({nome:l.querySelector('.input-hab-nome').value.trim(), nivel:l.querySelector('.input-hab-nivel').value})).filter(h=>h.nome);
+  return Object.assign({}, base, {
+    sumario: String(f.get('sumario')||'').trim(), atividadesPrincipais: String(f.get('atividadesPrincipais')||'').trim(),
+    grauInstrucao: f.get('grauInstrucao'), formacaoRequerida: String(f.get('formacaoRequerida')||'').trim(),
+    experienciaComFormacao: String(f.get('experienciaComFormacao')||'').trim(), experienciaSemFormacao: String(f.get('experienciaSemFormacao')||'').trim(),
+    habilidadesComportamentais: ler('lista-hab-comportamentais'), habilidadesTecnicas: ler('lista-hab-tecnicas'),
+    observacao: String(f.get('observacao')||'').trim(), aprovadoPor: String(f.get('aprovadoPor')||'').trim(), dataAprovacao: f.get('dataAprovacao') || ''
+  });
+}
+
+function gerarPdfDescritivoCargo(funcao, d){
+  if(!funcao || !d) return false;
+  const cliente = getCliente(funcao.clienteId);
+  const secao = (titulo, conteudo) => '<h2 class="sec-desc">'+titulo+'</h2>'+conteudo;
+  const texto = t => t ? '<p class="txt-desc">'+esc(t)+'</p>' : '<p class="vazio-desc">Não informado.</p>';
+  const atividades = String(d.atividadesPrincipais||'').split('\n').map(x=>x.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim()).filter(Boolean);
+  const tabelaHab = lista => (lista||[]).length
+    ? '<table class="hab"><thead><tr><th>Habilidade</th><th>Nível</th></tr></thead><tbody>'+lista.map(h=>'<tr><td>'+esc(h.nome)+'</td><td class="nv">'+esc(h.nivel+' · '+(NIVEIS_HABILIDADE_PDF[h.nivel]||''))+'</td></tr>').join('')+'</tbody></table>'
+    : '<p class="vazio-desc">Não informado.</p>';
+  const linhaIdent = (k, v) => '<tr><td class="k">'+k+'</td><td>'+(v ? esc(v) : '—')+'</td></tr>';
+
+  const corpo =
+    '<h1 class="tit-desc">Descrição e Perfil do Cargo</h1>' +
+    '<p class="sub-desc">'+esc(cliente ? cliente.nome : '')+' — Versão '+esc(d.versao||'00')+' · '+formatDate(d.data)+'</p>' +
+    secao('1. Identificação', '<table class="ident">'+linhaIdent('Título do cargo', funcao.nome)+linhaIdent('Subordinado ao cargo', funcao.subordinadoA)+linhaIdent('Unidade / Gerência / Área', funcao.area)+'</table>') +
+    secao('2. Sumário do cargo', texto(d.sumario)) +
+    secao('3. Atividades principais', atividades.length ? '<ul class="ativ">'+atividades.map(a=>'<li>'+esc(a)+'</li>').join('')+'</ul>' : '<p class="vazio-desc">Não informado.</p>') +
+    secao('4.1 Escolaridade e experiência', '<table class="ident">'+linhaIdent('Grau de instrução (completo)', d.grauInstrucao)+linhaIdent('Formação requerida', d.formacaoRequerida)+linhaIdent('Experiência mínima — com formação requerida', d.experienciaComFormacao)+linhaIdent('Experiência mínima — sem formação requerida', d.experienciaSemFormacao)+'</table>') +
+    secao('4.2 Habilidades comportamentais', tabelaHab(d.habilidadesComportamentais)) +
+    secao('4.3 Habilidades técnicas', tabelaHab(d.habilidadesTecnicas)) +
+    (d.observacao ? secao('5. Observação', texto(d.observacao)) : '') +
+    '<div class="bloco-aprov">'+secao('6. Aprovação', '<table class="ident">'+linhaIdent('Superior imediato', d.aprovadoPor)+linhaIdent('Data', d.dataAprovacao ? formatDate(d.dataAprovacao) : '')+'</table>'+
+      '<div class="assin-desc"><div class="linha"></div><p>'+(d.aprovadoPor ? esc(d.aprovadoPor)+' — ' : '')+'Superior imediato</p></div>')+'</div>';
+  return abrirDocumentoParaPDF('Descritivo de Cargo - '+funcao.nome+(cliente ? ' - '+cliente.nome : ''), corpo, CSS_DESC_PDF, '', cabecalhoLogosPDF(cliente));
+}
+
+/* ============================= PDFs: PDI, AVALIAÇÕES E FEEDBACKS/REGISTROS ============================= */
+// Todos usam o mesmo cabeçalho: a sua logo à esquerda e a do cliente à direita, repetido em cada página.
+const CSS_RH_PDF = CSS_DESC_PDF + `
+table.dados{ width:100%; border-collapse:collapse; margin-bottom:8px; font-size:10pt; }
+table.dados th{ background:#A5533D; color:#fff; text-align:left; padding:6px 8px; font-size:8.5pt; }
+table.dados td{ border:1px solid #E8D4C4; padding:6px 8px; vertical-align:top; }
+table.dados tr{ page-break-inside:avoid; }
+table.dados .c{ text-align:center; }
+table.dados tr.gap td{ background:#F8E1DC; }
+table.dados tr.ok td{ background:#EAF4EA; }
+.marca{ color:#A5533D; font-weight:bold; font-size:12pt; }
+.mini{ font-size:8.5pt; color:#7a625a; }
+.bloco-texto{ border:1px solid #E8D4C4; background:#FBF8F4; padding:8px 12px; margin:0 0 10px; page-break-inside:avoid; }
+.bloco-texto h4{ margin:0 0 4px; font-size:8.5pt; color:#A5533D; text-transform:uppercase; letter-spacing:.04em; }
+.bloco-texto p{ margin:0; white-space:pre-line; text-align:left; }
+.barra{ background:#E8D4C4; height:9px; border-radius:5px; margin:2px 0 8px; }
+.barra i{ display:block; height:9px; border-radius:5px; background:#A5533D; }
+.legenda{ font-size:9pt; color:#7a625a; margin:2px 0 10px; text-align:left; }
+table.assin2{ width:100%; border-collapse:collapse; margin-top:40px; page-break-inside:avoid; }
+table.assin2 td{ width:50%; padding:0 18px; text-align:center; vertical-align:bottom; }
+table.assin2 .linha{ border-top:1px solid #3B2924; margin-bottom:5px; }
+table.assin2 p{ margin:0; text-align:center; font-size:10pt; }
+ul.lista-simples{ list-style:disc; background:none; border:0; padding:0 0 0 20px; margin:0 0 8px; }
+`;
+function numPT(n){ return (n===null || n===undefined || isNaN(n)) ? '—' : String(n).replace('.', ','); }
+function linhaIdentPDF(k, v){ return '<tr><td class="k">'+k+'</td><td>'+(v ? esc(v) : '—')+'</td></tr>'; }
+function secaoPDF(titulo, html){ return '<h2 class="sec-desc">'+esc(titulo)+'</h2>'+html; }
+function tituloDocPDF(titulo, subtitulo){ return '<h1 class="tit-desc">'+esc(titulo)+'</h1>'+(subtitulo ? '<p class="sub-desc">'+esc(subtitulo)+'</p>' : ''); }
+function blocoTextoPDF(titulo, texto){ return texto ? '<div class="bloco-texto"><h4>'+esc(titulo)+'</h4><p>'+esc(texto)+'</p></div>' : ''; }
+function assinaturasPDF(rotulos){ return '<table class="assin2"><tr>'+rotulos.map(r=>'<td><div class="linha"></div><p>'+esc(r)+'</p></td>').join('')+'</tr></table>'; }
+function identColaboradorPDF(c, extras){
+  const fn = getFuncao(c.funcaoId);
+  const linhas = [['Colaborador(a)', c.nome], ['Cargo', fn && fn.nome], ['Área / unidade', fn && fn.area], ['Data de admissão', c.dataAdmissao ? formatDate(c.dataAdmissao) : '']].concat(extras||[]);
+  return '<table class="ident">'+linhas.map(l=>linhaIdentPDF(l[0], l[1])).join('')+'</table>';
+}
+function abrirPdfRH(titulo, c, corpo){
+  const cliente = getCliente(c.clienteId);
+  return abrirDocumentoParaPDF(titulo+' - '+c.nome, corpo, CSS_RH_PDF, '', cabecalhoLogosPDF(cliente));
+}
+
+/* ---- PDI ---- */
+function lerPdiDoForm(c, existente){
+  const form = document.getElementById('form-pdi'); const f = new FormData(form);
+  const acoes = [];
+  document.querySelectorAll('[data-linha-pdi]').forEach(l=>{
+    const competencia = l.querySelector('.pdi-comp').value.trim(), acao = l.querySelector('.pdi-acao').value.trim();
+    if(!competencia && !acao) return;
+    acoes.push({competencia, acao, tipo:l.querySelector('.pdi-tipo').value, prazo:l.querySelector('.pdi-prazo').value, responsavel:l.querySelector('.pdi-resp').value.trim(), status:l.querySelector('.pdi-status').value, gap:(l.dataset.gap!==undefined && l.dataset.gap!=='') ? Number(l.dataset.gap) : null});
+  });
+  return {periodo:String(f.get('periodo')||'').trim(), objetivo:String(f.get('objetivo')||'').trim(), status:existente ? existente.status : 'ativo', criadoEm:existente ? existente.criadoEm : todayISO(), acoes, acompanhamentos:(existente && existente.acompanhamentos) || []};
+}
+
+function gerarPdfPdi(c, p){
+  const cliente = getCliente(c.clienteId); const pr = progressoPdi(p);
+  const linhas = p.acoes.map((a,i)=>'<tr><td class="c">'+(i+1)+'</td><td>'+esc(a.competencia||'—')+((a.gap!==null && a.gap!==undefined) ? '<div class="mini">gap '+numPT(a.gap)+'</div>' : '')+'</td><td>'+esc(a.acao||'')+'</td><td>'+esc(a.tipo||'—')+'</td><td>'+esc(a.responsavel||'—')+'</td><td class="c">'+(a.prazo ? formatDate(a.prazo) : '—')+'</td><td>'+esc(STATUS_ACAO_PDI[a.status]||a.status||'')+'</td></tr>').join('');
+  const acomp = (p.acompanhamentos||[]).slice().sort((a,b)=>String(a.data).localeCompare(String(b.data)));
+  const corpo = tituloDocPDF('Plano de Desenvolvimento Individual (PDI)', cliente ? cliente.nome : '')
+    + secaoPDF('1. Identificação', identColaboradorPDF(c, [['Período do plano', p.periodo], ['Situação', p.status==='concluido' ? 'Concluído' : 'Em andamento'], ['Plano criado em', p.criadoEm ? formatDate(p.criadoEm) : '']]))
+    + secaoPDF('2. Objetivo geral', p.objetivo ? '<p class="txt-desc">'+esc(p.objetivo)+'</p>' : '<p class="vazio-desc">Não informado.</p>')
+    + secaoPDF('3. Ações de desenvolvimento', '<p class="legenda">'+pr.concluidas+' de '+pr.total+' ação(ões) concluída(s) — '+pr.pct+'%</p><div class="barra"><i style="width:'+pr.pct+'%;"></i></div>'
+        + (p.acoes.length ? '<table class="dados"><thead><tr><th class="c">#</th><th>Competência</th><th>Ação</th><th>Tipo</th><th>Responsável</th><th class="c">Prazo</th><th>Situação</th></tr></thead><tbody>'+linhas+'</tbody></table>' : '<p class="vazio-desc">Nenhuma ação cadastrada.</p>'))
+    + (acomp.length ? secaoPDF('4. Acompanhamento', '<table class="dados"><thead><tr><th class="c" style="width:16%;">Data</th><th>Registro</th></tr></thead><tbody>'+acomp.map(x=>'<tr><td class="c">'+formatDate(x.data)+'</td><td style="white-space:pre-line;">'+esc(x.texto)+'</td></tr>').join('')+'</tbody></table>') : '')
+    + assinaturasPDF(['Colaborador(a)', 'Gestor(a) / RH']);
+  return abrirPdfRH('PDI', c, corpo);
+}
+
+/* ---- Avaliação de desempenho ---- */
+// Em "opcoes.comentarios", os comentários dos avaliadores saem sem o nome de quem escreveu.
+function gerarPdfAvaliacaoDesempenho(c, av, opcoes){
+  opcoes = opcoes || {};
+  const cliente = getCliente(c.clienteId);
+  const r = calcularResultadoAvaliacaoDesempenho(av);
+  const papeis = Object.keys(PAPEIS_AVALIADOR).filter(p=>av.avaliadores.some(a=>a.papel===p));
+  let corpo = tituloDocPDF('Avaliação de Desempenho', cliente ? cliente.nome : '')
+    + secaoPDF('1. Identificação', identColaboradorPDF(c, [['Período de referência', av.periodoReferencia], ['Avaliadores que responderam', r.respondidos+' de '+r.total]]));
+  if(r.respondidos===0){
+    corpo += '<p class="vazio-desc">Esta avaliação ainda não recebeu respostas.</p>';
+  } else {
+    const linhas = r.competencias.map(x=>{
+      const classe = (x.gap!==null && x.gap<0) ? 'gap' : ((x.gap!==null && x.gap>0) ? 'ok' : '');
+      const gapTxt = x.gap===null ? '—' : (x.gap<0 ? '▼ '+numPT(x.gap) : (x.gap>0 ? '▲ +'+numPT(x.gap) : '0'));
+      return '<tr class="'+classe+'"><td>'+esc(x.nome)+(x.categoria ? '<div class="mini">'+esc(x.categoria)+'</div>' : '')+'</td><td class="c">'+x.notaEsperada+'</td>'+papeis.map(p=>'<td class="c">'+numPT(x.medias[p])+'</td>').join('')+'<td class="c"><strong>'+numPT(x.mediaGeral)+'</strong></td><td class="c">'+gapTxt+'</td></tr>';
+    }).join('');
+    corpo += secaoPDF('2. Resultado por competência', '<table class="dados"><thead><tr><th>Competência</th><th class="c">Esperado</th>'+papeis.map(p=>'<th class="c">'+esc(PAPEIS_AVALIADOR[p].label)+'</th>').join('')+'<th class="c">Média geral</th><th class="c">Gap</th></tr></thead><tbody>'+linhas+'</tbody></table>'
+      + '<p class="legenda">Notas de 1 a 5. "Esperado" é a nota de referência do descritivo do cargo; Gap = média geral − esperado (▼ abaixo do esperado, ▲ acima).</p>');
+    const abaixo = r.competencias.filter(x=>x.gap!==null && x.gap<0).sort((a,b)=>a.gap-b.gap);
+    const acima = r.competencias.filter(x=>x.gap!==null && x.gap>0).sort((a,b)=>b.gap-a.gap);
+    corpo += secaoPDF('3. Leitura do resultado',
+      (abaixo.length ? '<p class="txt-desc"><strong>Pontos de atenção:</strong></p><ul class="lista-simples">'+abaixo.map(x=>'<li>'+esc(x.nome)+' (média '+numPT(x.mediaGeral)+' para '+x.notaEsperada+' esperado)</li>').join('')+'</ul>' : '<p class="txt-desc">Nenhuma competência ficou abaixo do esperado.</p>')
+      + (acima.length ? '<p class="txt-desc"><strong>Pontos fortes:</strong></p><ul class="lista-simples">'+acima.slice(0,5).map(x=>'<li>'+esc(x.nome)+' (média '+numPT(x.mediaGeral)+' para '+x.notaEsperada+' esperado)</li>').join('')+'</ul>' : ''));
+    if(opcoes.comentarios){
+      const coment = av.avaliadores.filter(a=>a.respondida && a.comentarioGeral);
+      if(coment.length) corpo += secaoPDF('4. Comentários dos avaliadores', coment.map(a=>blocoTextoPDF((PAPEIS_AVALIADOR[a.papel]||{}).label||'Avaliador', a.comentarioGeral)).join('')+'<p class="legenda">Os comentários são apresentados sem identificar quem os escreveu.</p>');
+    }
+  }
+  corpo += assinaturasPDF(['Colaborador(a) — ciente da devolutiva', 'Gestor(a) / RH']);
+  return abrirPdfRH('Avaliação de Desempenho', c, corpo);
+}
+
+/* ---- Avaliação de experiência ---- */
+function gerarPdfAvaliacaoExperiencia(c, a){
+  const cliente = getCliente(c.clienteId);
+  const marcar = (chave, nivel) => (a.criterios && a.criterios[chave]===nivel.toLowerCase()) ? '<span class="marca">●</span>' : '';
+  const linhas = CRITERIOS_EXPERIENCIA.map(cr=>'<tr><td><strong>'+esc(cr.nome)+'</strong><div class="mini">'+esc(cr.desc)+'</div></td>'+NIVEIS_AVALIACAO_EXPERIENCIA.map(n=>'<td class="c">'+marcar(cr.chave, n)+'</td>').join('')+'</tr>').join('');
+  const corpo = tituloDocPDF('Avaliação de Experiência', cliente ? cliente.nome : '')
+    + secaoPDF('1. Identificação', identColaboradorPDF(c, [['Etapa avaliada', a.periodo==='etapa1' ? '1ª etapa' : '2ª etapa'], ['Data da avaliação', a.dataAvaliacao ? formatDate(a.dataAvaliacao) : ''], ['Avaliador(a)', a.avaliador]]))
+    + secaoPDF('2. Critérios', '<table class="dados"><thead><tr><th>Critério</th>'+NIVEIS_AVALIACAO_EXPERIENCIA.map(n=>'<th class="c">'+n+'</th>').join('')+'</tr></thead><tbody>'+linhas+'</tbody></table>')
+    + secaoPDF('3. Comentários', (blocoTextoPDF('Pontos fortes', a.pontosFortes)+blocoTextoPDF('Áreas de melhoria', a.areasMelhoria)+blocoTextoPDF('Recomendações', a.recomendacoes)+blocoTextoPDF('Considerações do colaborador', a.consideracoesColaborador)) || '<p class="vazio-desc">Sem comentários registrados.</p>')
+    + assinaturasPDF(['Avaliador(a)', 'Colaborador(a) — ciente']);
+  return abrirPdfRH('Avaliação de Experiência', c, corpo);
+}
+
+/* ---- Feedbacks e registros (1:1, advertências etc.) ---- */
+function gerarPdfRegistro(c, r){
+  const cliente = getCliente(c.clienteId);
+  const corpo = tituloDocPDF('Registro — '+r.tipo, cliente ? cliente.nome : '')
+    + secaoPDF('1. Identificação', identColaboradorPDF(c, [['Tipo de registro', r.tipo], ['Data', r.data ? formatDate(r.data) : ''], ['Registrado por', r.registradoPor]]))
+    + secaoPDF('2. Descrição', r.descricao ? '<p class="txt-desc">'+esc(r.descricao)+'</p>' : '<p class="vazio-desc">Sem descrição.</p>')
+    + assinaturasPDF(['Responsável pelo registro', 'Colaborador(a) — ciente']);
+  return abrirPdfRH('Registro - '+r.tipo, c, corpo);
+}
+
 function modalDescritivoCargo(funcao){
   const existente = db.descritivosCargo.find(d=>d.funcaoId===funcao.id);
   const d = existente || {
@@ -8127,6 +8316,7 @@ function modalDescritivoCargo(funcao){
       <div class="modal-footer">
         <span></span>
         <div class="right">
+          <span class="btn btn-secondary" id="btn-pdf-descritivo">📄 Gerar PDF</span>
           <span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span>
           <button type="submit" class="btn btn-primary">Salvar descritivo</button>
         </div>
@@ -8135,6 +8325,7 @@ function modalDescritivoCargo(funcao){
   `);
 
   const form = document.getElementById('form-descritivo');
+  document.getElementById('btn-pdf-descritivo').addEventListener('click', ()=>{ gerarPdfDescritivoCargo(funcao, coletarDescritivoDoForm(form, d)); });
   document.getElementById('btn-add-hab-comp').addEventListener('click', ()=>{
     document.getElementById('lista-hab-comportamentais').insertAdjacentHTML('beforeend', linhaHabilidade(null, 'sugestoes-hab-comp'));
   });
@@ -8825,7 +9016,7 @@ function modalPortalResultadoAvaliacao(colaboradorId, avaliacaoId){
         <td>${comp.gap!==null ? (comp.gap<0?'🔴 ':(comp.gap>0?'🟢 +':'')) + comp.gap : '—'}</td>
       </tr>`).join('')}
     </tbody></table></div>
-    <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div></div>
+    <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="portal-pdf-avaliacao" data-id="${c.id}" data-av-id="${avaliacao.id}">📄 Gerar PDF</span><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div></div>
   `);
 }
 
@@ -9161,7 +9352,10 @@ function onPortalClick(e){
   const action = el.dataset.action;
   const id = el.dataset.id;
   if(action === 'portal-sair'){ window.location.reload(); return; }
+  if(action === 'portal-pdf-registro'){ const c = getColaborador(el.dataset.id); const r = c && (c.registros||[]).find(x=>x.id===el.dataset.regId); if(r) gerarPdfRegistro(c, r); return; }
+  if(action === 'portal-pdf-avaliacao'){ const c = getColaborador(el.dataset.id); const av = c && (c.avaliacoesDesempenho||[]).find(x=>x.id===el.dataset.avId); if(av) gerarPdfAvaliacaoDesempenho(c, av, {comentarios:false}); return; }
   if(tratarAcaoOrganograma(action, el)) return;
+  if(action === 'portal-pdf-descritivo'){ const fn = db.funcoes.find(x=>x.id===el.dataset.id); const ds = db.descritivosCargo.find(x=>x.funcaoId===el.dataset.id); if(fn && ds) gerarPdfDescritivoCargo(fn, ds); return; }
   if(action === 'portal-tab'){ state.portalTab = el.dataset.tab; renderPortalView(); return; }
   if(action === 'portal-pdf-relatorio'){ const r = (db.relatoriosBPO||[]).find(x=>x.id===id); if(r) gerarPdfRelatorioBPO(r, db.clientes[0]); return; }
   if(action === 'portal-novo-colaborador'){ modalPortalColaborador(null); return; }
@@ -9702,7 +9896,7 @@ function abrirProntuarioPortal(colaboradorId){
       <div class="card" style="padding:10px 14px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;gap:10px;">
           <strong>${esc(r.tipo)}</strong>
-          <span class="hint" style="white-space:nowrap;">${formatDate(r.data)}</span>
+          <span class="hint" style="white-space:nowrap;">${formatDate(r.data)} <span class="btn btn-ghost btn-sm no-print" data-action="portal-pdf-registro" data-id="${c.id}" data-reg-id="${r.id}">📄 PDF</span></span>
         </div>
         <p style="margin:6px 0 0 0;font-size:13.5px;white-space:pre-line;">${esc(r.descricao)}</p>
         ${r.registradoPor?'<p class="hint" style="margin:6px 0 0 0;">Registrado por: '+esc(r.registradoPor)+'</p>':''}
@@ -9779,7 +9973,7 @@ function viewPortalFuncoes(){
       <td>${esc(f.subordinadoA||'—')}</td>
       <td>${esc(f.area||'—')}</td>
       <td>${ocupacaoTexto}</td>
-      <td><span class="btn btn-ghost btn-sm" data-action="portal-editar-funcao" data-id="${f.id}">Editar</span></td>
+      <td style="white-space:nowrap;"><span class="btn btn-ghost btn-sm" data-action="portal-editar-funcao" data-id="${f.id}">Editar</span>${db.descritivosCargo.some(d=>d.funcaoId===f.id) ? ' <span class="btn btn-ghost btn-sm" data-action="portal-pdf-descritivo" data-id="'+f.id+'">📄 Descritivo (PDF)</span>' : ''}</td>
     </tr>`;
   }).join('');
   return `
@@ -11783,6 +11977,7 @@ function onGlobalClick(e){
     }
     return;
   }
+  if(action === 'pdf-descritivo-cargo'){ const fn = getFuncao(id); const ds = db.descritivosCargo.find(x=>x.funcaoId===id); if(fn && ds) gerarPdfDescritivoCargo(fn, ds); return; }
   if(action === 'descritivo-cargo'){ modalDescritivoCargo(getFuncao(id)); return; }
   if(action === 'nova-mensalidade'){ modalMensalidade(null); return; }
   if(action === 'editar-mensalidade'){ modalMensalidade(db.mensalidadesBPO.find(m=>m.id===id)); return; }
@@ -11901,6 +12096,18 @@ function onGlobalClick(e){
   }
 
   if(action === 'nova-vaga'){ modalVaga(null, el.dataset.clienteId); return; }
+  if(action === 'pdf-registro'){ const c = getColaborador(id); const r = c && (c.registros||[]).find(x=>x.id===el.dataset.regId); if(r) gerarPdfRegistro(c, r); return; }
+  if(action === 'pdf-avaliacao-experiencia'){ const c = getColaborador(id); const a = c && (c.avaliacoesExperiencia||[]).find(x=>x.id===el.dataset.avId); if(a) gerarPdfAvaliacaoExperiencia(c, a); return; }
+  if(action === 'pdf-avaliacao-desempenho'){
+    const c = getColaborador(id); const av = c && (c.avaliacoesDesempenho||[]).find(x=>x.id===el.dataset.avId);
+    if(av){
+      const temComentarios = av.avaliadores.some(a=>a.respondida && a.comentarioGeral);
+      const comentarios = temComentarios && confirm('Incluir no PDF os comentários dos avaliadores?\n\nEles saem sem o nome de quem escreveu.\n\nOK = incluir  ·  Cancelar = gerar sem os comentários');
+      gerarPdfAvaliacaoDesempenho(c, av, {comentarios});
+    }
+    return;
+  }
+  if(action === 'pdf-pdi'){ const c = getColaborador(id); const p = c && (c.pdis||[]).find(x=>x.id===el.dataset.pdiId); if(p) gerarPdfPdi(c, p); return; }
   if(tratarAcaoOrganograma(action, el)) return;
   if(action === 'nova-visita-bpo'){ modalVisitaBPO(null); return; }
   if(action === 'editar-visita-bpo'){ const v = db.visitasBPO.find(x=>x.id===id); if(v) modalVisitaBPO(v); return; }
