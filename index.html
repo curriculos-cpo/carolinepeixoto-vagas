@@ -1139,6 +1139,7 @@ function garantirConfiguracoes(){
   if(!Array.isArray(db.mensalidadesBPO)) db.mensalidadesBPO = [];
   if(!Array.isArray(db.visitasBPO)) db.visitasBPO = [];
   if(!Array.isArray(db.relatoriosBPO)) db.relatoriosBPO = [];
+  if(!Array.isArray(db.acoesClima)) db.acoesClima = [];
   if(!Array.isArray(db.servicosAvulsos)) db.servicosAvulsos = [];
   if(!Array.isArray(db.absenteismo)) db.absenteismo = [];
   if(!Array.isArray(db.treinamentos)) db.treinamentos = [];
@@ -2610,6 +2611,7 @@ function viewAvaliacaoDesempenhoLista(){
       </table></div>`}
       <p class="hint" style="margin-top:10px;">Clique no nome para ver o histórico completo de avaliações da pessoa.</p>
     </div>
+    ${state.adClienteId ? viewPlanoAcaoDesempenho(getCliente(state.adClienteId)) : '<p class="hint" style="margin-top:14px;">Escolha uma empresa no filtro para ver o plano de ação da equipe.</p>'}
   `;
 }
 
@@ -4482,10 +4484,10 @@ function rotuloAreaClima(a){ return (a||'').trim() || 'Área não informada'; }
 // 1) Área com menos de 3 respostas é omitida.
 // 2) Se o total das áreas omitidas ficar abaixo de 3, a menor área visível também é ocultada: sem isso, o resultado
 //    da área omitida poderia ser descoberto subtraindo as áreas visíveis do resultado geral.
-function areasClimaProtegidas(clienteId){
+function areasClimaProtegidas(clienteId, ciclo){
   const cliente = getCliente(clienteId);
   const pc = (cliente && cliente.pesquisaClima) || {areas:[]};
-  const respostas = db.pesquisasClima.filter(p=>p.clienteId===clienteId);
+  const respostas = respostasClima(clienteId, ciclo);
   const nomes = (pc.areas||[]).slice();
   respostas.forEach(r=>{ const a = r.area||''; if(!nomes.includes(a)) nomes.push(a); });
   const itens = nomes.map(nome=>{
@@ -4500,14 +4502,14 @@ function areasClimaProtegidas(clienteId){
   return {itens, total:respostas.length};
 }
 
-function resultadoClimaProtegido(clienteId, areaFiltro){
-  const total = db.pesquisasClima.filter(p=>p.clienteId===clienteId).length;
+function resultadoClimaProtegido(clienteId, areaFiltro, ciclo){
+  const total = respostasClima(clienteId, ciclo).length;
   if(!areaFiltro && total>0 && total<MIN_RESPONDENTES_CLIMA) return {oculto:true, motivo:'geral', resultado:null};
   if(areaFiltro){
-    const a = areasClimaProtegidas(clienteId).itens.find(x=>x.nome===areaFiltro);
+    const a = areasClimaProtegidas(clienteId, ciclo).itens.find(x=>x.nome===areaFiltro);
     if(a && (a.estado==='minimo' || a.estado==='complementar')) return {oculto:true, motivo:a.estado, resultado:null};
   }
-  return {oculto:false, motivo:'', resultado:calcularResultadoPesquisaClima(clienteId, areaFiltro)};
+  return {oculto:false, motivo:'', resultado:calcularResultadoPesquisaClima(clienteId, areaFiltro, ciclo)};
 }
 
 function avisoClimaOculto(prot){
@@ -4572,6 +4574,338 @@ function desenharChartClimaAreas(cliente){
   });
 }
 
+/* ============================= PLANO DE AÇÃO (CLIMA E DESEMPENHO) E COMPARAÇÃO ENTRE PESQUISAS ============================= */
+const STATUS_ACAO_CLIMA = {nao_iniciada:'Não iniciada', em_andamento:'Em andamento', concluida:'Concluída'};
+const COR_STATUS_ACAO_CLIMA = {nao_iniciada:'gray', em_andamento:'amber', concluida:'green'};
+const FAVORABILIDADE_CRITICA_CLIMA = 60;
+const MIN_PESSOAS_DESEMPENHO = 3;
+const FONTES_PLANO = {
+  clima: {nome:'Pesquisa de clima', pdf:'Plano de Ação — Pesquisa de Clima', ia:'sugerirPlanoAcaoClimaIA'},
+  desempenho: {nome:'Avaliação de desempenho', pdf:'Plano de Ação — Avaliação de Desempenho', ia:'sugerirPlanoAcaoDesempenhoIA'}
+};
+
+function garantirAcoesClima(){ if(!Array.isArray(db.acoesClima)) db.acoesClima = []; }
+function somarDiasISO(iso, n){ const d = new Date(iso+'T12:00:00'); d.setDate(d.getDate()+Number(n||0)); return d.toISOString().slice(0,10); }
+function arred1(n){ return Math.round(n*10)/10; }
+
+/* ---- Ciclos (cada vez que a pesquisa é aplicada de novo, as respostas ficam separadas) ---- */
+function cicloDaResposta(r){ return r.ciclo || 'Pesquisa inicial'; }
+function ciclosClima(clienteId){
+  const primeira = {};
+  db.pesquisasClima.filter(p=>p.clienteId===clienteId).forEach(p=>{ const c = cicloDaResposta(p); const d = p.data||''; if(primeira[c]===undefined || d<primeira[c]) primeira[c] = d; });
+  const lista = Object.keys(primeira).sort((a,b)=>String(primeira[a]).localeCompare(String(primeira[b])));
+  const cl = getCliente(clienteId); const atual = cl && cl.pesquisaClima && cl.pesquisaClima.cicloAtual;
+  if(atual && !lista.includes(atual)) lista.push(atual);
+  return lista;
+}
+function cicloSelecionadoClima(clienteId){ const l = ciclosClima(clienteId); return (state.climaCiclo && l.includes(state.climaCiclo)) ? state.climaCiclo : (l[l.length-1] || ''); }
+function respostasClima(clienteId, ciclo){ const c = ciclo===undefined ? cicloSelecionadoClima(clienteId) : ciclo; return db.pesquisasClima.filter(p=>p.clienteId===clienteId && (!c || cicloDaResposta(p)===c)); }
+
+function iniciarNovaPesquisaClima(clienteId){
+  const cl = getCliente(clienteId); if(!cl) return;
+  const n = ciclosClima(clienteId).length + 1;
+  const nome = prompt('Nome da nova pesquisa (ex.: "Pesquisa '+n+' — '+formatMesRef(mesAtualRef())+'"):\n\nAs respostas atuais ficam guardadas na pesquisa anterior, e os resultados da nova começam do zero. Depois você poderá comparar as duas.', 'Pesquisa '+n+' — '+formatMesRef(mesAtualRef()));
+  if(!nome || !nome.trim()) return;
+  const rotulo = nome.trim();
+  if(ciclosClima(clienteId).includes(rotulo)){ showToast('Já existe uma pesquisa com esse nome.', true); return; }
+  cl.pesquisaClima = Object.assign({ativo:false, dataInicio:'', dataFim:'', areas:[]}, cl.pesquisaClima, {cicloAtual:rotulo});
+  state.climaCiclo = rotulo; state.climaAreaFiltro = '';
+  saveDB(); renderView(); showToast('Nova pesquisa iniciada: as próximas respostas entram nela.');
+}
+
+function variacaoClima(d, sufixo){
+  if(d===0) return '<span class="hint">sem variação</span>';
+  return '<span style="color:'+(d>0?'#2E7D32':'#B3261E')+';font-weight:600;white-space:nowrap;">'+(d>0?'▲ +':'▼ ')+numPT(Math.abs(d))+(sufixo||'')+'</span>';
+}
+// Compara a pesquisa selecionada com a anterior. Só compara o que aparece nas duas (3+ respostas); áreas seguem a mesma regra de confidencialidade.
+function viewComparativoCiclosClima(cliente){
+  const ciclos = ciclosClima(cliente.id); const atual = cicloSelecionadoClima(cliente.id); const i = ciclos.indexOf(atual);
+  if(i<=0) return '';
+  const anterior = ciclos[i-1];
+  const pa = resultadoClimaProtegido(cliente.id, '', anterior), pb = resultadoClimaProtegido(cliente.id, '', atual);
+  const cab = '<h3 style="font-size:15px;margin-bottom:6px;">Comparativo com a pesquisa anterior</h3><p class="hint" style="margin-bottom:10px;">'+esc(anterior)+' → <strong>'+esc(atual)+'</strong></p>';
+  if(pa.oculto || pb.oculto || !pa.resultado || !pb.resultado || !pa.resultado.totalRespostas || !pb.resultado.totalRespostas){
+    return '<div class="card" style="margin-bottom:22px;">'+cab+'<p class="hint">O comparativo aparece quando as duas pesquisas têm pelo menos '+MIN_RESPONDENTES_CLIMA+' respostas.</p></div>';
+  }
+  const ra = pa.resultado, rb = pb.resultado;
+  const linha = (rotulo, a, b, suf) => '<tr><td>'+esc(rotulo)+'</td><td style="text-align:center;">'+numPT(a)+(suf||'')+'</td><td style="text-align:center;">'+numPT(b)+(suf||'')+'</td><td style="text-align:center;">'+variacaoClima(arred1(b-a), suf==='%'?' pp':'')+'</td></tr>';
+  const linhas = linha('Satisfação geral', ra.satisfacaoGeral, rb.satisfacaoGeral, '%') + linha('eNPS', ra.eNPS.score, rb.eNPS.score, '')
+    + GRUPOS_PESQUISA_CLIMA.map(g=>linha(g.nome, ra.porGrupo[g.chave].favoravel, rb.porGrupo[g.chave].favoravel, '%')).join('');
+  const perguntas = [];
+  GRUPOS_PESQUISA_CLIMA.forEach(g=>g.perguntas.forEach(p=>{ if(p.tipo==='nps') return; const a = ra.porPergunta[p.chave], b = rb.porPergunta[p.chave]; if(a.respostas>0 && b.respostas>0) perguntas.push({texto:p.texto, a:a.favoravel, b:b.favoravel, d:arred1(b.favoravel-a.favoravel)}); }));
+  const melhoraram = perguntas.filter(x=>x.d>0).sort((x,y)=>y.d-x.d).slice(0,3), pioraram = perguntas.filter(x=>x.d<0).sort((x,y)=>x.d-y.d).slice(0,3);
+  const lista = arr => arr.length ? '<ul class="hint" style="margin:4px 0 0 18px;">'+arr.map(x=>'<li>'+esc(x.texto)+' <strong>('+numPT(x.a)+'% → '+numPT(x.b)+'%)</strong></li>').join('')+'</ul>' : '<p class="hint" style="margin:4px 0 0;">Nenhuma.</p>';
+  const aa = areasClimaProtegidas(cliente.id, anterior).itens, ab = areasClimaProtegidas(cliente.id, atual).itens;
+  const areas = ab.filter(x=>x.estado==='ok' && aa.some(y=>y.nome===x.nome && y.estado==='ok'));
+  const linhasAreas = areas.map(x=>{ const A = calcularResultadoPesquisaClima(cliente.id, x.nome, anterior).satisfacaoGeral, B = calcularResultadoPesquisaClima(cliente.id, x.nome, atual).satisfacaoGeral; return linha(x.rotulo, A, B, '%'); }).join('');
+  return '<div class="card" style="margin-bottom:22px;">'+cab
+    +'<div class="table-wrap"><table style="font-size:13px;"><thead><tr><th>Indicador</th><th style="text-align:center;">Antes</th><th style="text-align:center;">Agora</th><th style="text-align:center;">Variação</th></tr></thead><tbody>'+linhas+'</tbody></table></div>'
+    +(areas.length ? '<h4 style="font-size:13px;margin:14px 0 6px;">Satisfação geral por área</h4><div class="table-wrap"><table style="font-size:13px;"><thead><tr><th>Área</th><th style="text-align:center;">Antes</th><th style="text-align:center;">Agora</th><th style="text-align:center;">Variação</th></tr></thead><tbody>'+linhasAreas+'</tbody></table></div><p class="hint" style="margin-top:6px;">Só aparecem áreas com '+MIN_RESPONDENTES_CLIMA+' ou mais respostas nas duas pesquisas.</p>' : '')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px;"><div><strong style="color:#2E7D32;">Mais melhoraram</strong>'+lista(melhoraram)+'</div><div><strong style="color:#B3261E;">Mais pioraram</strong>'+lista(pioraram)+'</div></div>'
+    +'</div>';
+}
+
+/* ---- Pontos críticos ---- */
+// Perguntas com menos de 60% de respostas favoráveis (4 ou 5), no geral e em cada área que pode aparecer (3+ respostas).
+function pontosCriticosClima(clienteId, ciclo){
+  const prot = areasClimaProtegidas(clienteId, ciclo);
+  if(prot.total < MIN_RESPONDENTES_CLIMA) return [];
+  const escopos = [{nome:'', rotulo:'Geral (todas as áreas)', n:prot.total}].concat(prot.itens.filter(a=>a.estado==='ok').map(a=>({nome:a.nome, rotulo:a.rotulo, n:a.n})));
+  const perguntas = [];
+  GRUPOS_PESQUISA_CLIMA.forEach(g=>g.perguntas.forEach(p=>{ if(p.tipo!=='nps') perguntas.push({chave:p.chave, texto:p.texto, bloco:g.nome}); }));
+  return escopos.map(e=>{
+    const r = calcularResultadoPesquisaClima(clienteId, e.nome, ciclo);
+    const criticas = perguntas.map(p=>({texto:p.texto, bloco:p.bloco, favoravel:r.porPergunta[p.chave].favoravel, respostas:r.porPergunta[p.chave].respostas}))
+      .filter(x=>x.respostas>0 && x.favoravel<FAVORABILIDADE_CRITICA_CLIMA).sort((a,b)=>a.favoravel-b.favoravel).slice(0,5)
+      .map(x=>Object.assign(x, {detalhe:numPT(x.favoravel)+'% favorável'}));
+    return {nome:e.nome, rotulo:e.rotulo, n:e.n, satisfacao:r.satisfacaoGeral, eNPS:r.eNPS.score, blocos:GRUPOS_PESQUISA_CLIMA.map(g=>({nome:g.nome, favoravel:r.porGrupo[g.chave].favoravel})), criticas};
+  }).filter(e=>e.criticas.length>0);
+}
+
+// Competências em que vários colaboradores ficaram abaixo do esperado (última avaliação de cada pessoa).
+// Só aparece com 3+ pessoas avaliadas, para que o resultado da equipe não exponha ninguém.
+function pontosCriticosDesempenho(clienteId){
+  const porComp = {}; let pessoas = 0;
+  db.colaboradores.filter(c=>c.clienteId===clienteId && statusColaborador(c)!=='desligado').forEach(c=>{
+    const avs = (c.avaliacoesDesempenho||[]).filter(a=>(a.avaliadores||[]).some(x=>x.respondida));
+    const av = avs[avs.length-1]; if(!av) return;
+    const r = calcularResultadoAvaliacaoDesempenho(av); if(!r.respondidos) return;
+    pessoas++;
+    r.competencias.forEach(x=>{
+      if(x.mediaGeral===null || x.gap===null) return;
+      const o = porComp[x.nome] || (porComp[x.nome] = {nome:x.nome, categoria:x.categoria||'', n:0, abaixo:0, somaGap:0, somaMedia:0, somaEsp:0});
+      o.n++; if(x.gap<0) o.abaixo++; o.somaGap += x.gap; o.somaMedia += x.mediaGeral; o.somaEsp += x.notaEsperada;
+    });
+  });
+  if(pessoas < MIN_PESSOAS_DESEMPENHO) return [];
+  const lista = Object.values(porComp).filter(o=>o.n>=MIN_PESSOAS_DESEMPENHO)
+    .map(o=>({nome:o.nome, categoria:o.categoria, pessoas:o.n, abaixo:o.abaixo, gapMedio:arred1(o.somaGap/o.n), mediaGeral:arred1(o.somaMedia/o.n), esperado:arred1(o.somaEsp/o.n)}))
+    .filter(o=>o.gapMedio<0 && o.abaixo/o.pessoas>=0.4).sort((a,b)=>a.gapMedio-b.gapMedio).slice(0,5);
+  if(!lista.length) return [];
+  return [{nome:'', rotulo:'Equipe avaliada', n:pessoas, criticas:lista.map(o=>({texto:o.nome, bloco:o.categoria, detalhe:o.abaixo+' de '+o.pessoas+' pessoas abaixo do esperado · gap médio '+numPT(o.gapMedio), dados:o}))}];
+}
+function pontosCriticosPlano(clienteId, fonte){ return fonte==='desempenho' ? pontosCriticosDesempenho(clienteId) : pontosCriticosClima(clienteId); }
+function acoesPlano(clienteId, fonte){ garantirAcoesClima(); return db.acoesClima.filter(a=>a.clienteId===clienteId && (a.fonte||'clima')===fonte); }
+
+/* ---- Plano de ação (painel) ---- */
+function viewPlanoAcao(cliente, fonte){
+  const hoje = todayISO(); const info = FONTES_PLANO[fonte];
+  const acoes = acoesPlano(cliente.id, fonte).sort((a,b)=>((a.status==='concluida')-(b.status==='concluida')) || String(a.prazo||'9999').localeCompare(String(b.prazo||'9999')));
+  const atrasadas = acoes.filter(a=>a.status!=='concluida' && a.prazo && a.prazo<hoje).length;
+  const concluidas = acoes.filter(a=>a.status==='concluida').length;
+  const naoPublicadas = acoes.filter(a=>!a.publicado).length;
+  const criticos = pontosCriticosPlano(cliente.id, fonte);
+  const attrs = ' data-cliente="'+cliente.id+'" data-fonte="'+fonte+'"';
+  const linhas = acoes.map(a=>{
+    const atrasada = a.status!=='concluida' && a.prazo && a.prazo<hoje;
+    return '<tr><td style="min-width:150px;"><span class="badge badge-gray">'+esc(a.area ? a.area : (fonte==='clima' ? 'Geral' : 'Equipe'))+'</span>'+(a.ponto ? '<div class="hint" style="margin-top:4px;">'+esc(a.ponto)+'</div>' : '')+'</td>'
+      +'<td>'+esc(a.acao)+(a.indicador ? '<div class="hint" style="margin-top:4px;">Como medir: '+esc(a.indicador)+'</div>' : '')+(a.observacao ? '<div class="hint" style="margin-top:4px;">📝 '+esc(a.observacao)+'</div>' : '')+'</td>'
+      +'<td>'+esc(a.responsavel||'—')+'</td>'
+      +'<td style="white-space:nowrap;'+(atrasada?'color:#B3261E;font-weight:600;':'')+'">'+(a.prazo ? formatDate(a.prazo) : '—')+(atrasada ? '<div class="hint" style="color:#B3261E;">atrasada</div>' : '')+'</td>'
+      +'<td><span class="badge badge-'+COR_STATUS_ACAO_CLIMA[a.status]+'">'+esc(STATUS_ACAO_CLIMA[a.status]||a.status)+'</span>'+(a.publicado ? '<div class="hint" style="margin-top:4px;">🌐 no portal</div>' : '')+'</td>'
+      +'<td class="no-print"><span class="btn btn-ghost btn-sm" data-action="plano-editar-acao" data-id="'+a.id+'">Editar</span></td></tr>';
+  }).join('');
+  const total = criticos.reduce((s,e)=>s+e.criticas.length,0);
+  const blocosCriticos = criticos.length ? '<details style="margin:0 0 14px;"><summary style="cursor:pointer;font-weight:600;">Pontos críticos identificados ('+total+')'+(fonte==='clima' ? ' — perguntas com menos de '+FAVORABILIDADE_CRITICA_CLIMA+'% de respostas favoráveis' : ' — competências abaixo do esperado em boa parte da equipe')+'</summary>'
+    + criticos.map(e=>'<div style="margin:10px 0 4px;"><strong>'+esc(e.rotulo)+'</strong> <span class="hint">· '+e.n+(fonte==='clima' ? ' respostas' : ' pessoas avaliadas')+'</span></div>'
+      + e.criticas.map(c=>'<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid #F0E6DC;"><span>'+esc(c.texto)+' <span class="hint">('+(c.bloco ? esc(c.bloco)+' · ' : '')+esc(c.detalhe)+')</span></span><span class="btn btn-ghost btn-sm no-print" data-action="plano-nova-acao"'+attrs+' data-area="'+esc(e.nome)+'" data-ponto="'+esc(c.texto)+'">＋ Criar ação</span></div>').join('')).join('')
+    + '</details>'
+    : '<p class="hint" style="margin-bottom:12px;">'+(fonte==='clima'
+        ? (respostasClima(cliente.id).length>0 ? 'Nenhuma pergunta ficou abaixo de '+FAVORABILIDADE_CRITICA_CLIMA+'% de respostas favoráveis, ou ainda há poucas respostas. Você pode criar ações manualmente.' : 'Quando a pesquisa tiver respostas (mínimo de '+MIN_RESPONDENTES_CLIMA+'), os pontos críticos aparecem aqui para virar ações.')
+        : 'Os pontos críticos aparecem quando '+MIN_PESSOAS_DESEMPENHO+' ou mais pessoas da empresa têm avaliação respondida e há competências abaixo do esperado em boa parte delas. Você também pode criar ações manualmente.')+'</p>';
+  return `
+    <div class="card" style="margin-top:22px;" id="plano-acao-${fonte}">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+        <h3 style="font-size:16px;margin:0;">Plano de ação — ${esc(info.nome)}</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" class="no-print">
+          ${criticos.length ? '<span class="btn btn-secondary btn-sm" data-action="plano-ia"'+attrs+'>✨ Sugerir ações com IA</span>' : ''}
+          <span class="btn btn-secondary btn-sm" data-action="plano-nova-acao"${attrs} data-area="" data-ponto="">+ Nova ação</span>
+          ${naoPublicadas ? '<span class="btn btn-secondary btn-sm" data-action="plano-publicar"'+attrs+'>🌐 Publicar no portal</span>' : ''}
+          ${acoes.length ? '<span class="btn btn-secondary btn-sm" data-action="plano-pdf"'+attrs+'>📄 PDF</span>' : ''}
+        </div>
+      </div>
+      <p class="hint" style="margin-bottom:12px;">${acoes.length} ação(ões) · ${concluidas} concluída(s)${atrasadas ? ' · <strong style="color:#B3261E;">'+atrasadas+' atrasada(s)</strong>' : ''}${acoes.length ? ' · '+(acoes.length-naoPublicadas)+' visível(is) no portal do cliente' : ''}</p>
+      ${blocosCriticos}
+      ${acoes.length ? '<div class="table-wrap"><table><thead><tr><th>'+(fonte==='clima'?'Área':'Equipe')+' e ponto crítico</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Situação</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div>' : '<p class="hint">Nenhuma ação no plano ainda.</p>'}
+    </div>`;
+}
+function viewPlanoAcaoClima(cliente){ return viewPlanoAcao(cliente, 'clima'); }
+function viewPlanoAcaoDesempenho(cliente){ return viewPlanoAcao(cliente, 'desempenho'); }
+
+function modalAcaoPlano(id, preset){
+  garantirAcoesClima();
+  const a = id ? db.acoesClima.find(x=>x.id===id) : null;
+  const clienteId = a ? a.clienteId : preset.clienteId; const fonte = a ? (a.fonte||'clima') : preset.fonte;
+  const cliente = getCliente(clienteId);
+  const dados = a || Object.assign({area:'', ponto:'', acao:'', indicador:'', responsavel:'', prazo:'', status:'nao_iniciada', observacao:'', publicado:false}, preset||{});
+  let campoArea;
+  if(fonte==='clima'){
+    const opcoes = ['', ...areasClimaProtegidas(clienteId).itens.filter(x=>x.estado==='ok').map(x=>x.nome)];
+    if(dados.area && !opcoes.includes(dados.area)) opcoes.push(dados.area);
+    campoArea = '<div class="field"><label>Área</label><select name="area">'+opcoes.map(x=>'<option value="'+esc(x)+'" '+(dados.area===x?'selected':'')+'>'+esc(x||'Geral (todas as áreas)')+'</option>').join('')+'</select></div>';
+  } else {
+    campoArea = '<div class="field"><label>Equipe / área (opcional)</label><input name="area" value="'+esc(dados.area)+'"></div>';
+  }
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>${a ? 'Editar ação' : 'Nova ação'}</h2>
+    <p class="hint" style="margin-bottom:10px;">${esc(cliente.nome)} · ${esc(FONTES_PLANO[fonte].nome)}</p>
+    <form id="form-acao-plano">
+      <div class="form-grid">
+        ${campoArea}
+        <div class="field"><label>Situação</label><select name="status">${Object.keys(STATUS_ACAO_CLIMA).map(k=>'<option value="'+k+'" '+(dados.status===k?'selected':'')+'>'+STATUS_ACAO_CLIMA[k]+'</option>').join('')}</select></div>
+        <div class="field full"><label>Ponto crítico que a ação enfrenta</label><textarea name="ponto" rows="2">${esc(dados.ponto)}</textarea></div>
+        <div class="field full"><label>Ação *</label><textarea name="acao" rows="3" required placeholder="O que será feito, de forma concreta">${esc(dados.acao)}</textarea></div>
+        <div class="field full"><label>Como medir se funcionou</label><input name="indicador" value="${esc(dados.indicador)}" placeholder="Ex.: favorabilidade desta pergunta de 55% para 70% na próxima pesquisa"></div>
+        <div class="field"><label>Responsável</label><input name="responsavel" value="${esc(dados.responsavel)}" placeholder="Cargo ou nome"></div>
+        <div class="field"><label>Prazo</label><input type="date" name="prazo" value="${esc(dados.prazo)}"></div>
+        <div class="field full"><label>Acompanhamento / observações</label><textarea name="observacao" rows="2">${esc(dados.observacao)}</textarea></div>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;margin:10px 0;"><input type="checkbox" name="publicado" ${dados.publicado?'checked':''}> Visível no Portal do Cliente (o gestor poderá atualizar a situação)</label>
+      <div class="modal-footer">
+        <span>${a ? '<span class="btn btn-danger btn-sm" data-action="plano-excluir-acao" data-id="'+a.id+'">Excluir ação</span>' : ''}</span>
+        <div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Salvar ação</button></div>
+      </div>
+    </form>`);
+  document.getElementById('form-acao-plano').addEventListener('submit', e=>{
+    e.preventDefault();
+    const f = new FormData(e.target); const acao = String(f.get('acao')||'').trim();
+    if(!acao){ showToast('Descreva a ação.', true); return; }
+    const novo = {area:String(f.get('area')||'').trim(), ponto:String(f.get('ponto')||'').trim(), acao, indicador:String(f.get('indicador')||'').trim(), responsavel:String(f.get('responsavel')||'').trim(), prazo:String(f.get('prazo')||''), status:String(f.get('status')||'nao_iniciada'), observacao:String(f.get('observacao')||'').trim(), publicado:!!f.get('publicado')};
+    if(a){
+      Object.assign(a, novo);
+      a.concluidaEm = novo.status==='concluida' ? (a.concluidaEm || todayISO()) : '';
+    } else {
+      db.acoesClima.push(Object.assign({id:uid('acl'), clienteId, fonte, ciclo:(fonte==='clima' ? cicloSelecionadoClima(clienteId) : formatMesRef(mesAtualRef())), origem:'manual', criadoEm:todayISO(), concluidaEm:novo.status==='concluida' ? todayISO() : ''}, novo));
+    }
+    closeModal(); saveDB(); renderView();
+  });
+}
+
+// Sugestões da IA: a pessoa escolhe e ajusta antes de entrar no plano.
+function modalSugestoesPlano(sugestoes, criticos, clienteId, fonte){
+  const cliente = getCliente(clienteId);
+  const nomePorRotulo = {}; criticos.forEach(c=>{ nomePorRotulo[c.rotulo.toLowerCase()] = c.nome; });
+  const itens = sugestoes.map(s=>({area: fonte==='clima' ? (nomePorRotulo[String(s.escopo||'').toLowerCase()] || '') : '', ponto:s.ponto||'', acao:s.acao||'', responsavel:s.responsavel||'', prazo:somarDiasISO(todayISO(), s.prazoDias||30), indicador:s.indicador||''}));
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>✨ Sugestões da IA</h2>
+    <p class="hint" style="margin-bottom:10px;">Revise, ajuste e marque o que fizer sentido para ${esc(cliente.nome)}. Só o que estiver marcado entra no plano.</p>
+    <form id="form-sugestoes-plano">
+      ${itens.map((it,i)=>`<div data-sug="${i}" style="border:1px solid #E8D4C4;border-radius:10px;padding:12px;margin-bottom:10px;">
+        <label style="display:flex;gap:8px;align-items:flex-start;"><input type="checkbox" class="sug-marcar" checked style="margin-top:4px;"><span><span class="badge badge-gray">${esc(it.area ? it.area : (fonte==='clima' ? 'Geral' : 'Equipe'))}</span> <span class="hint">${esc(it.ponto)}</span></span></label>
+        <div class="field" style="margin-top:8px;"><label>Ação</label><textarea class="sug-acao" rows="3">${esc(it.acao)}</textarea></div>
+        <div class="form-grid"><div class="field"><label>Responsável</label><input class="sug-resp" value="${esc(it.responsavel)}"></div><div class="field"><label>Prazo</label><input type="date" class="sug-prazo" value="${it.prazo}"></div></div>
+        <div class="field"><label>Como medir</label><input class="sug-ind" value="${esc(it.indicador)}"></div>
+      </div>`).join('')}
+      <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Adicionar ao plano</button></div></div>
+    </form>`);
+  document.getElementById('form-sugestoes-plano').addEventListener('submit', e=>{
+    e.preventDefault(); garantirAcoesClima(); let n = 0;
+    e.target.querySelectorAll('[data-sug]').forEach(bloco=>{
+      if(!bloco.querySelector('.sug-marcar').checked) return;
+      const it = itens[Number(bloco.dataset.sug)]; const acao = bloco.querySelector('.sug-acao').value.trim(); if(!acao) return;
+      db.acoesClima.push({id:uid('acl'), clienteId, fonte, ciclo:(fonte==='clima' ? cicloSelecionadoClima(clienteId) : formatMesRef(mesAtualRef())), origem:'ia', criadoEm:todayISO(), concluidaEm:'', area:it.area, ponto:it.ponto, acao, indicador:bloco.querySelector('.sug-ind').value.trim(), responsavel:bloco.querySelector('.sug-resp').value.trim(), prazo:bloco.querySelector('.sug-prazo').value, status:'nao_iniciada', observacao:'', publicado:false});
+      n++;
+    });
+    if(!n){ showToast('Marque pelo menos uma sugestão.', true); return; }
+    closeModal(); saveDB(); renderView(); showToast(n+' ação(ões) adicionada(s) ao plano.');
+  });
+}
+
+function payloadIAPlano(criticos, fonte){
+  if(fonte==='desempenho') return {escopos: criticos.map(c=>({rotulo:c.rotulo, n:c.n, criticas:c.criticas.map(x=>({competencia:x.dados.nome, categoria:x.dados.categoria, pessoas:x.dados.pessoas, abaixo:x.dados.abaixo, gapMedio:x.dados.gapMedio, mediaGeral:x.dados.mediaGeral, esperado:x.dados.esperado}))}))};
+  return {escopos: criticos.map(c=>({rotulo:c.rotulo, n:c.n, satisfacao:c.satisfacao, eNPS:c.eNPS, blocos:c.blocos, criticas:c.criticas.map(x=>({texto:x.texto, bloco:x.bloco, favoravel:x.favoravel}))}))};
+}
+async function sugerirPlanoComIA(btn, clienteId, fonte){
+  const criticos = pontosCriticosPlano(clienteId, fonte).slice(0, 6);
+  if(!criticos.length){ showToast('Não há pontos críticos para a IA analisar.', true); return; }
+  const rotulo = btn.textContent; btn.textContent = '✨ Pensando…'; btn.style.pointerEvents = 'none';
+  try{
+    const r = await chamarAppsScriptPost(FONTES_PLANO[fonte].ia, payloadIAPlano(criticos, fonte), 90000);
+    if(!r.acoes || !r.acoes.length){ showToast('A IA não trouxe sugestões desta vez. Tente de novo.', true); return; }
+    modalSugestoesPlano(r.acoes, criticos, clienteId, fonte);
+  }catch(err){
+    showToast('Não foi possível pedir sugestões agora: '+((err && err.message) || 'erro desconhecido')+' Você pode criar as ações manualmente.', true);
+  }finally{ btn.textContent = rotulo; btn.style.pointerEvents = ''; }
+}
+
+function gerarPdfPlanoAcao(clienteId, fonte){
+  const cliente = getCliente(clienteId); garantirAcoesClima();
+  const acoes = acoesPlano(clienteId, fonte).sort((a,b)=>String(a.area||'').localeCompare(String(b.area||'')) || String(a.prazo||'9999').localeCompare(String(b.prazo||'9999')));
+  if(!acoes.length){ showToast('O plano ainda não tem ações.', true); return; }
+  const hoje = todayISO(); const concl = acoes.filter(a=>a.status==='concluida').length;
+  const linhas = acoes.map(a=>'<tr><td><strong>'+esc(a.area||(fonte==='clima' ? 'Geral' : 'Equipe'))+'</strong>'+(a.ponto ? '<div class="mini">'+esc(a.ponto)+'</div>' : '')+'</td><td>'+esc(a.acao)+(a.indicador ? '<div class="mini">Como medir: '+esc(a.indicador)+'</div>' : '')+(a.observacao ? '<div class="mini">Acompanhamento: '+esc(a.observacao)+'</div>' : '')+'</td><td>'+esc(a.responsavel||'—')+'</td><td class="c">'+(a.prazo ? formatDate(a.prazo) : '—')+'</td><td>'+esc(STATUS_ACAO_CLIMA[a.status]||'')+((a.status!=='concluida' && a.prazo && a.prazo<hoje) ? '<div class="mini" style="color:#B3261E;">atrasada</div>' : '')+'</td></tr>').join('');
+  const corpo = tituloDocPDF(FONTES_PLANO[fonte].pdf, cliente.nome+' · '+formatDate(hoje))
+    + '<p class="legenda">'+acoes.length+' ação(ões) · '+concl+' concluída(s).'+(fonte==='clima' ? ' As áreas só aparecem quando têm '+MIN_RESPONDENTES_CLIMA+' ou mais respostas na pesquisa.' : '')+'</p>'
+    + '<table class="dados"><thead><tr><th style="width:22%;">'+(fonte==='clima'?'Área':'Equipe')+' e ponto crítico</th><th>Ação</th><th style="width:13%;">Responsável</th><th class="c" style="width:9%;">Prazo</th><th style="width:11%;">Situação</th></tr></thead><tbody>'+linhas+'</tbody></table>'
+    + assinaturasPDF(['Responsável pelo plano', 'Direção / Gestão']);
+  return abrirDocumentoParaPDF(FONTES_PLANO[fonte].pdf+' - '+cliente.nome, corpo, CSS_RH_PDF+'\n@page { size: A4 landscape; margin: 0; }\ntd.conteudo, table.pag thead td{ padding-left:14mm !important; padding-right:14mm !important; }', '', cabecalhoLogosPDF(cliente));
+}
+
+/* ---- Portal do cliente: o gestor acompanha e atualiza a situação ---- */
+function viewPortalPlanoAcao(){
+  garantirAcoesClima();
+  const cliente = db.clientes[0]; const hoje = todayISO();
+  const secoes = Object.keys(FONTES_PLANO).map(f=>({f, acoes:acoesPlano(cliente.id, f).sort((a,b)=>((a.status==='concluida')-(b.status==='concluida')) || String(a.prazo||'9999').localeCompare(String(b.prazo||'9999')))})).filter(s=>s.acoes.length);
+  if(!secoes.length) return '<div class="card empty-state"><h3>Nenhum plano de ação disponível ainda</h3><p class="hint">Os planos de ação construídos com a consultoria aparecem aqui, e você pode atualizar a situação de cada ação.</p></div>';
+  return secoes.map(s=>{
+    const concl = s.acoes.filter(a=>a.status==='concluida').length; const atras = s.acoes.filter(a=>a.status!=='concluida' && a.prazo && a.prazo<hoje).length;
+    const pct = Math.round(concl*100/s.acoes.length);
+    const linhas = s.acoes.map(a=>{ const atrasada = a.status!=='concluida' && a.prazo && a.prazo<hoje;
+      return '<tr><td style="min-width:140px;"><span class="badge badge-gray">'+esc(a.area ? a.area : (s.f==='clima' ? 'Geral' : 'Equipe'))+'</span>'+(a.ponto ? '<div class="hint" style="margin-top:4px;">'+esc(a.ponto)+'</div>' : '')+'</td>'
+        +'<td>'+esc(a.acao)+(a.indicador ? '<div class="hint" style="margin-top:4px;">Como medir: '+esc(a.indicador)+'</div>' : '')+(a.observacao ? '<div class="hint" style="margin-top:4px;">📝 '+esc(a.observacao)+'</div>' : '')+'</td>'
+        +'<td>'+esc(a.responsavel||'—')+'</td><td style="white-space:nowrap;'+(atrasada?'color:#B3261E;font-weight:600;':'')+'">'+(a.prazo ? formatDate(a.prazo) : '—')+(atrasada ? '<div class="hint" style="color:#B3261E;">atrasada</div>' : '')+'</td>'
+        +'<td><span class="badge badge-'+COR_STATUS_ACAO_CLIMA[a.status]+'">'+esc(STATUS_ACAO_CLIMA[a.status]||a.status)+'</span></td>'
+        +'<td class="no-print"><span class="btn btn-secondary btn-sm" data-action="portal-atualizar-acao" data-id="'+a.id+'">Atualizar</span></td></tr>'; }).join('');
+    return '<div class="card" style="margin-bottom:22px;"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;"><h3 style="font-size:16px;margin:0;">Plano de ação — '+esc(FONTES_PLANO[s.f].nome)+'</h3><span class="btn btn-secondary btn-sm no-print" data-action="plano-pdf" data-cliente="'+cliente.id+'" data-fonte="'+s.f+'">📄 PDF</span></div>'
+      +'<p class="hint" style="margin:6px 0 4px;">'+concl+' de '+s.acoes.length+' ação(ões) concluída(s) — '+pct+'%'+(atras ? ' · <strong style="color:#B3261E;">'+atras+' atrasada(s)</strong>' : '')+'</p><div style="background:#E8D4C4;height:9px;border-radius:5px;margin-bottom:12px;"><div style="width:'+pct+'%;height:9px;border-radius:5px;background:#A5533D;"></div></div>'
+      +'<div class="table-wrap"><table><thead><tr><th>'+(s.f==='clima'?'Área':'Equipe')+' e ponto crítico</th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Situação</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div></div>';
+  }).join('');
+}
+
+function modalPortalAcaoPlano(id){
+  const a = (db.acoesClima||[]).find(x=>x.id===id); if(!a) return;
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>Atualizar ação</h2>
+    <p style="margin-bottom:12px;">${esc(a.acao)}</p>
+    <form id="form-portal-acao">
+      <div class="form-grid">
+        <div class="field"><label>Situação</label><select name="status">${Object.keys(STATUS_ACAO_CLIMA).map(k=>'<option value="'+k+'" '+(a.status===k?'selected':'')+'>'+STATUS_ACAO_CLIMA[k]+'</option>').join('')}</select></div>
+        <div class="field full"><label>Acompanhamento / observações</label><textarea name="observacao" rows="3" placeholder="O que já foi feito, dificuldades, próximos passos">${esc(a.observacao||'')}</textarea></div>
+      </div>
+      <div id="erro-portal-acao" class="hint" style="display:none;color:#B3261E;margin-top:8px;"></div>
+      <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Cancelar</span><button type="submit" class="btn btn-primary">Salvar</button></div></div>
+    </form>`);
+  document.getElementById('form-portal-acao').addEventListener('submit', async e=>{
+    e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Salvando…';
+    try{
+      await chamarAppsScriptPost('portalAtualizarAcaoPlano', {clienteId:db.clientes[0].id, id, status:String(f.get('status')||''), observacao:String(f.get('observacao')||'').trim()});
+      await carregarDadosPortal(); closeModal(); renderPortalView(); showToast('Ação atualizada.');
+    }catch(err){ const el = document.getElementById('erro-portal-acao'); el.textContent = (err && err.message) || 'Não foi possível salvar agora.'; el.style.display = 'block'; btn.disabled = false; btn.textContent = 'Salvar'; }
+  });
+}
+
+function tratarAcaoPlano(action, el){
+  switch(action){
+    case 'plano-nova-acao': modalAcaoPlano(null, {clienteId:el.dataset.cliente, fonte:el.dataset.fonte, area:el.dataset.area||'', ponto:el.dataset.ponto||''}); return true;
+    case 'plano-editar-acao': modalAcaoPlano(el.dataset.id); return true;
+    case 'plano-excluir-acao':
+      if(confirm('Excluir esta ação do plano?')){ db.acoesClima = db.acoesClima.filter(x=>x.id!==el.dataset.id); closeModal(); saveDB(); renderView(); }
+      return true;
+    case 'plano-ia': sugerirPlanoComIA(el, el.dataset.cliente, el.dataset.fonte); return true;
+    case 'plano-pdf': gerarPdfPlanoAcao(el.dataset.cliente, el.dataset.fonte); return true;
+    case 'plano-publicar': {
+      const lista = acoesPlano(el.dataset.cliente, el.dataset.fonte).filter(a=>!a.publicado);
+      if(lista.length && confirm('Tornar '+lista.length+' ação(ões) visível(is) no Portal do Cliente? O gestor poderá acompanhar e atualizar a situação de cada uma.')){ lista.forEach(a=>{ a.publicado = true; }); saveDB(); renderView(); showToast('Plano publicado no portal.'); }
+      return true;
+    }
+    case 'portal-atualizar-acao': modalPortalAcaoPlano(el.dataset.id); return true;
+  }
+  return false;
+}
+
 function viewPesquisaClimaAdmin(){
   const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.climaClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+(cl.pesquisaClima&&cl.pesquisaClima.ativo?' ✓':'')+'</option>').join('');
   const cliente = state.climaClienteId ? getCliente(state.climaClienteId) : null;
@@ -4597,7 +4931,7 @@ function viewPesquisaClimaAdmin(){
     <div class="card" style="margin-bottom:22px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${pc.ativo?'14px':'0'};">
         <h3 style="font-size:15px;margin:0;">Configuração</h3>
-        <span class="btn btn-secondary btn-sm" data-action="config-pesquisa-clima" data-id="${cliente.id}">⚙️ Configurar</span>
+        <span style="display:flex;gap:8px;flex-wrap:wrap;"><span class="btn btn-ghost btn-sm" data-action="clima-nova-pesquisa" data-id="${cliente.id}">＋ Iniciar nova pesquisa</span><span class="btn btn-secondary btn-sm" data-action="config-pesquisa-clima" data-id="${cliente.id}">⚙️ Configurar</span></span>
       </div>
       ${pc.ativo ? `
       <p class="hint">Pesquisa <strong style="color:var(--green);">ativa</strong> — ${esc(prazoStatus)}. Áreas cadastradas: ${pc.areas&&pc.areas.length?esc(pc.areas.join(', ')):'nenhuma (pesquisa não pedirá área)'}.</p>
@@ -4607,6 +4941,7 @@ function viewPesquisaClimaAdmin(){
 
     ${pc.ativo ? `
     <div class="filters-row">
+      ${ciclosClima(cliente.id).length>1 ? '<select data-role="clima-ciclo">'+ciclosClima(cliente.id).slice().reverse().map(c=>'<option value="'+esc(c)+'" '+(cicloSelecionadoClima(cliente.id)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select>' : ''}
       <select data-role="clima-area-filtro">
         <option value="">Todas as áreas</option>
         ${(pc.areas||[]).map(a=>'<option value="'+esc(a)+'" '+(state.climaAreaFiltro===a?'selected':'')+'>'+esc(a)+'</option>').join('')}
@@ -4625,6 +4960,7 @@ function viewPesquisaClimaAdmin(){
     </div>
 
     ${state.climaAreaFiltro ? '' : viewClimaComparativoAreas(cliente)}
+    ${state.climaAreaFiltro ? '' : viewComparativoCiclosClima(cliente)}
 
     <div class="charts-row">
       <div class="card chart-card"><h3>Favorabilidade por bloco</h3><div class="chart-wrap"><canvas id="chart-clima-blocos"></canvas></div></div>
@@ -4632,6 +4968,8 @@ function viewPesquisaClimaAdmin(){
     </div>
     `}
     ` : ''}
+
+    ${viewPlanoAcaoClima(cliente)}
   `;
 }
 
@@ -5607,8 +5945,8 @@ function calcularResultadoPesquisaDesligamento(clienteId, mesIni, mesFim){
   };
 }
 
-function calcularResultadoPesquisaClima(clienteId, areaFiltro){
-  let respostas = db.pesquisasClima.filter(p=>p.clienteId===clienteId);
+function calcularResultadoPesquisaClima(clienteId, areaFiltro, ciclo){
+  let respostas = respostasClima(clienteId, ciclo);
   if(areaFiltro) respostas = respostas.filter(p=>p.area===areaFiltro);
 
   const porGrupo = {};
@@ -6063,6 +6401,7 @@ table.pag td{ padding:0; vertical-align:top; }
 .esp-topo{ height:16mm; }
 .esp-base{ height:18mm; display:flex; align-items:flex-end; justify-content:center; padding-bottom:7mm; font-size:8.5pt; color:#8a746b; }
 td.conteudo{ padding:0 18mm !important; }
+table.pag thead td, table.pag tfoot td{ padding-left:18mm !important; padding-right:18mm !important; }
 `;
 
 function cabecalhoLogosPDF(cliente, comPara){
@@ -8426,7 +8765,7 @@ async function renderDiagnosticoCultura(clienteId){
                   </div>
                   <div style="display:flex;gap:14px;align-items:center;margin-bottom:10px;">
                     ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;">
-                      <input type="radio" name="dim_${dim.chave}_${tipo}_atual" value="${n}" ${n===3?'checked':''} required>${n}
+                      <input type="radio" name="dim_${dim.chave}_${tipo}_atual" value="${n}" required>${n}
                     </label>`).join('')}
                   </div>
                   <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--ink-soft);margin-bottom:3px;">
@@ -8434,7 +8773,7 @@ async function renderDiagnosticoCultura(clienteId){
                   </div>
                   <div style="display:flex;gap:14px;align-items:center;">
                     ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;">
-                      <input type="radio" name="dim_${dim.chave}_${tipo}_desejado" value="${n}" ${n===3?'checked':''} required>${n}
+                      <input type="radio" name="dim_${dim.chave}_${tipo}_desejado" value="${n}" required>${n}
                     </label>`).join('')}
                   </div>
                 </div>
@@ -8678,7 +9017,7 @@ async function renderPesquisaClima(clienteId){
                   <p style="font-size:13.5px;margin:0 0 6px 0;">${esc(p.texto)}</p>
                   <div style="display:flex;gap:${p.tipo==='nps'?'4px':'14px'};align-items:center;flex-wrap:wrap;">
                     ${(p.tipo==='nps' ? Array.from({length:11},(_,n)=>n) : [1,2,3,4,5]).map(n=>`<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-soft);gap:2px;">
-                      <input type="radio" name="p_${p.chave}" value="${n}" ${p.tipo==='nps' ? '' : (n===3?'checked':'')} required>${n}
+                      <input type="radio" name="p_${p.chave}" value="${n}" required>${n}
                     </label>`).join('')}
                   </div>
                 </div>
@@ -8896,6 +9235,7 @@ async function carregarDadosPortal(){
     candidatos: resp.candidatos || [],
     mensalidadesBPO: resp.mensalidadesBPO || [],
     relatoriosBPO: resp.relatoriosBPO || [],
+    acoesClima: resp.acoesClima || [],
     visitasBPO: [],
     agenda: [], diagnosticosCultura: [], denuncias: [], pesquisasClima: [],
     pesquisasRapidas: [], respostasPesquisaRapida: [], avaliacoesDesempenho: [],
@@ -8927,6 +9267,7 @@ function renderPortalShell(){
           <span class="btn ${state.portalTab==='ninebox'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="ninebox">9Box</span>
           <span class="btn ${state.portalTab==='funcoes'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="funcoes">Funções e cargos</span>
           <span class="btn ${state.portalTab==='organograma'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="organograma">Organograma</span>
+          ${(db.acoesClima||[]).length>0 ? '<span class="btn '+(state.portalTab==='plano'?'btn-primary':'btn-secondary')+' btn-sm" data-action="portal-tab" data-tab="plano">Planos de ação</span>' : ''}
           <span class="btn ${state.portalTab==='treinamentos'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="treinamentos">Treinamentos</span>
           <span class="btn ${state.portalTab==='materiais'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="materiais">Materiais e documentos</span>
           <span class="btn ${state.portalTab==='indicadores'?'btn-primary':'btn-secondary'} btn-sm" data-action="portal-tab" data-tab="indicadores">Indicadores</span>
@@ -8950,6 +9291,7 @@ function renderPortalView(){
   else if(state.portalTab==='colaboradores') view.innerHTML = viewPortalColaboradores();
   else if(state.portalTab==='funcoes') view.innerHTML = viewPortalFuncoes();
   else if(state.portalTab==='organograma') view.innerHTML = viewPortalOrganograma();
+  else if(state.portalTab==='plano') view.innerHTML = viewPortalPlanoAcao();
   else if(state.portalTab==='treinamentos') view.innerHTML = viewPortalTreinamentos();
   else if(state.portalTab==='materiais') view.innerHTML = viewPortalMateriais();
   else if(state.portalTab==='relatorios') view.innerHTML = viewPortalRelatorios();
@@ -9352,6 +9694,7 @@ function onPortalClick(e){
   const action = el.dataset.action;
   const id = el.dataset.id;
   if(action === 'portal-sair'){ window.location.reload(); return; }
+  if(tratarAcaoPlano(action, el)) return;
   if(action === 'portal-pdf-registro'){ const c = getColaborador(el.dataset.id); const r = c && (c.registros||[]).find(x=>x.id===el.dataset.regId); if(r) gerarPdfRegistro(c, r); return; }
   if(action === 'portal-pdf-avaliacao'){ const c = getColaborador(el.dataset.id); const av = c && (c.avaliacoesDesempenho||[]).find(x=>x.id===el.dataset.avId); if(av) gerarPdfAvaliacaoDesempenho(c, av, {comentarios:false}); return; }
   if(tratarAcaoOrganograma(action, el)) return;
@@ -10625,13 +10968,13 @@ function modalConfigPesquisaClima(cliente){
     e.preventDefault();
     const f = new FormData(e.target);
     const areas = f.get('areas').split('\n').map(s=>s.trim()).filter(Boolean);
-    cliente.pesquisaClima = {
+    cliente.pesquisaClima = Object.assign({}, cliente.pesquisaClima, {
       ativo: document.getElementById('chk-clima-ativo').checked,
       dataInicio: f.get('dataInicio') || '',
       dataFim: f.get('dataFim') || '',
       areas: areas,
       valorMensalidade: f.get('valorMensalidade') || ''
-    };
+    });
     closeModal(); saveDB(); renderView();
     showToast('Configuração salva.');
   });
@@ -12096,6 +12439,8 @@ function onGlobalClick(e){
   }
 
   if(action === 'nova-vaga'){ modalVaga(null, el.dataset.clienteId); return; }
+  if(tratarAcaoPlano(action, el)) return;
+  if(action === 'clima-nova-pesquisa'){ iniciarNovaPesquisaClima(id); return; }
   if(action === 'pdf-registro'){ const c = getColaborador(id); const r = c && (c.registros||[]).find(x=>x.id===el.dataset.regId); if(r) gerarPdfRegistro(c, r); return; }
   if(action === 'pdf-avaliacao-experiencia'){ const c = getColaborador(id); const a = c && (c.avaliacoesExperiencia||[]).find(x=>x.id===el.dataset.avId); if(a) gerarPdfAvaliacaoExperiencia(c, a); return; }
   if(action === 'pdf-avaliacao-desempenho'){
@@ -12651,6 +12996,7 @@ function onGlobalChange(e){
   if(t.dataset.role === 'cultura-standalone-cliente'){ state.culturaStandaloneClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'rapida-cliente'){ state.rapidaClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'clima-area-filtro'){ state.climaAreaFiltro = t.value; renderView(); return; }
+  if(t.dataset.role === 'clima-ciclo'){ state.climaCiclo = t.value; state.climaAreaFiltro = ''; renderView(); return; }
   if(t.dataset.role === 'clima-mens-cliente'){ state.climaMensClienteId = t.value; renderView(); return; }
   if(t.dataset.role === 'clima-mens-mes'){ state.climaMensMes = t.value; renderView(); return; }
   if(t.dataset.role === 'clima-mens-status'){ state.climaMensStatus = t.value; renderView(); return; }
