@@ -3398,8 +3398,24 @@ function modalServicoAvulso(servico){
 }
 
 /* ============================= COLABORADORES (BPO) ============================= */
+/* ---- Benefícios: os do cadastro + os "outros" da empresa + os avulsos de cada carta ---- */
+function beneficiosDaEmpresa(cliente){
+  if(!cliente) return [];
+  const padrao = cliente.beneficios ? BENEFICIOS_PADRAO.filter(b=>cliente.beneficios[b.chave] && cliente.beneficios[b.chave].ativo).map(b=>({nome:b.nome, valor:cliente.beneficios[b.chave].valor||''})) : [];
+  const extras = (cliente.beneficiosExtras||[]).filter(b=>b && String(b.nome||'').trim()).map(b=>({nome:String(b.nome).trim(), valor:String(b.valor||'').trim()}));
+  return padrao.concat(extras);
+}
+function linhaBeneficioExtraHtml(b){
+  b = b || {nome:'', valor:''};
+  return '<div data-linha-benef style="display:grid;grid-template-columns:1fr 1.4fr auto;gap:8px;align-items:center;margin-bottom:8px;"><input class="benef-nome" placeholder="Benefício (ex.: Plano odontológico)" value="'+esc(b.nome)+'"><input class="benef-valor" placeholder="Valor ou condição (ex.: R$ 40,00 por mês)" value="'+esc(b.valor)+'"><span class="btn btn-ghost btn-sm" data-action="remover-linha-benef" title="Remover">✕</span></div>';
+}
+function lerBeneficiosDasLinhas(raiz){
+  if(!raiz) return [];
+  return Array.from(raiz.querySelectorAll('[data-linha-benef]')).map(l=>({nome:l.querySelector('.benef-nome').value.trim(), valor:l.querySelector('.benef-valor').value.trim()})).filter(b=>b.nome);
+}
+
 function viewResumoBeneficios(cliente){
-  const ativos = BENEFICIOS_PADRAO.filter(b=> cliente.beneficios && cliente.beneficios[b.chave] && cliente.beneficios[b.chave].ativo);
+  const ativos = beneficiosDaEmpresa(cliente);
   if(ativos.length===0){
     return '<div class="card" style="margin-bottom:22px;"><h3 style="font-size:15px;margin-bottom:6px;">Benefícios oferecidos</h3><p class="hint">Nenhum benefício cadastrado para este cliente ainda. Edite o cliente em "Clientes e vagas" para adicionar.</p></div>';
   }
@@ -3407,7 +3423,7 @@ function viewResumoBeneficios(cliente){
     <div class="card" style="margin-bottom:22px;">
       <h3 style="font-size:15px;margin-bottom:10px;">Benefícios oferecidos</h3>
       <div class="form-grid cols-3">
-        ${ativos.map(b=>`<div class="field"><label>${esc(b.nome)}</label><div>${esc(cliente.beneficios[b.chave].valor||'—')}</div></div>`).join('')}
+        ${ativos.map(b=>`<div class="field"><label>${esc(b.nome)}</label><div>${esc(b.valor||'—')}</div></div>`).join('')}
       </div>
       <p class="hint" style="margin-top:8px;">Para alterar, edite o cliente em "Clientes e vagas".</p>
     </div>`;
@@ -6366,11 +6382,11 @@ function montarTextoCartaProposta(candidato, cargo, cliente, dadosProposta){
   texto += 'É com grande satisfação que estamos formalizando a proposta de trabalho na ' + (cliente?cliente.nome:'nossa empresa') + ', em ' + (dadosProposta.cidade || 'Feira de Santana/BA') + ', para o cargo de ' + (cargo?cargo.titulo:'—') + (valorNum ? ' com salário base mensal de R$ ' + valorFormatado + ' (' + extensoReais(valorNum) + ')' : '') + '.\n\n';
   texto += 'As condições abaixo listadas são parte integrante da proposta:\n\n';
 
-  const beneficiosAtivos = cliente && cliente.beneficios ? BENEFICIOS_PADRAO.filter(b=>cliente.beneficios[b.chave] && cliente.beneficios[b.chave].ativo) : [];
-  beneficiosAtivos.forEach(b=>{
-    texto += '- ' + b.nome.toUpperCase() + ': ' + (cliente.beneficios[b.chave].valor || '(condição a combinar)') + '\n';
+  const beneficiosCarta = beneficiosDaEmpresa(cliente).concat((dadosProposta.beneficiosAdicionais||[]).filter(b=>b && String(b.nome||'').trim()).map(b=>({nome:String(b.nome).trim(), valor:String(b.valor||'').trim()})));
+  beneficiosCarta.forEach(b=>{
+    texto += '- ' + b.nome.toUpperCase() + ': ' + (b.valor || '(condição a combinar)') + '\n';
   });
-  if(beneficiosAtivos.length) texto += '\n';
+  if(beneficiosCarta.length) texto += '\n';
 
   if(dadosProposta.observacoes) texto += dadosProposta.observacoes + '\n\n';
 
@@ -6838,14 +6854,19 @@ function modalCartaProposta(candidato){
       <div class="field full"><label>Observações adicionais (opcional)</label><textarea id="cp-observacoes" placeholder="Qualquer condição especial da proposta..."></textarea></div>
     </div>
 
-    ${cliente && cliente.beneficios ? (()=>{
-      const ativos = BENEFICIOS_PADRAO.filter(b=>cliente.beneficios[b.chave] && cliente.beneficios[b.chave].ativo);
-      if(!ativos.length) return '<p class="hint">Este cliente não tem benefícios cadastrados. Cadastre em "Clientes e vagas" se quiser que apareçam aqui.</p>';
-      return `<div class="section-title">Benefícios que serão incluídos</div>
+    ${(()=>{
+      const lista = beneficiosDaEmpresa(cliente);
+      const tabela = lista.length
+        ? `<div class="section-title">Benefícios do cadastro da empresa</div>
       <div class="table-wrap"><table><thead><tr><th>Benefício</th><th>Detalhe</th></tr></thead><tbody>
-        ${ativos.map(b=>'<tr><td>'+esc(b.nome)+'</td><td>'+esc(cliente.beneficios[b.chave].valor||'—')+'</td></tr>').join('')}
-      </tbody></table></div>`;
-    })() : ''}
+        ${lista.map(b=>'<tr><td>'+esc(b.nome)+'</td><td>'+esc(b.valor||'—')+'</td></tr>').join('')}
+      </tbody></table></div>`
+        : '<p class="hint">Este cliente não tem benefícios cadastrados. Cadastre em "Clientes e vagas" se quiser que apareçam aqui.</p>';
+      return tabela + `<div class="section-title">Outros benefícios só desta carta</div>
+      <p class="hint" style="margin:-4px 0 8px;">Para um benefício que não está no cadastro da empresa. Vale só para esta carta. Depois de preencher, clique em "Gerar / atualizar texto".</p>
+      <div id="cp-benef-extras"></div>
+      <span class="btn btn-secondary btn-sm" id="btn-add-benef-cp">+ Adicionar benefício</span>`;
+    })()}
 
     <div class="section-title">Texto da proposta</div>
     <textarea id="cp-texto" style="min-height:320px;font-family:monospace;font-size:12.5px;width:100%;"></textarea>
@@ -6866,10 +6887,12 @@ function modalCartaProposta(candidato){
       cidade: document.getElementById('cp-cidade').value.trim(),
       dataAdmissao: document.getElementById('cp-data-admissao').value,
       salario: document.getElementById('cp-salario').value,
-      observacoes: document.getElementById('cp-observacoes').value.trim()
+      observacoes: document.getElementById('cp-observacoes').value.trim(),
+      beneficiosAdicionais: lerBeneficiosDasLinhas(document.getElementById('cp-benef-extras'))
     };
     document.getElementById('cp-texto').value = montarTextoCartaProposta(candidato, cargo, cliente, dadosProposta);
   }
+  document.getElementById('btn-add-benef-cp').addEventListener('click', ()=>{ document.getElementById('cp-benef-extras').insertAdjacentHTML('beforeend', linhaBeneficioExtraHtml()); });
   gerarTexto();
   document.getElementById('btn-gerar-cp').addEventListener('click', gerarTexto);
 
@@ -10501,6 +10524,10 @@ function modalCliente(cliente){
           <input data-beneficio-valor="${b.chave}" value="${esc(cfg.valor)}" placeholder="${b.placeholder}">
         </div>`;
       }).join('')}
+      <div class="section-title">Outros benefícios da empresa</div>
+      <p class="hint" style="margin-top:-4px;margin-bottom:10px;">Benefícios que não estão na lista acima. Ficam salvos no cadastro e aparecem em todas as cartas propostas desta empresa.</p>
+      <div id="benef-extras-cliente">${(cliente.beneficiosExtras||[]).map(b=>linhaBeneficioExtraHtml(b)).join('')}</div>
+      <span class="btn btn-secondary btn-sm" id="btn-add-benef-cliente" style="margin-bottom:6px;">+ Adicionar outro benefício</span>
 
       <div class="section-title">Logo do cliente</div>
       <p class="hint" style="margin-bottom:10px;">Aparece na página pública de divulgação das vagas deste cliente, ao lado da nossa marca.</p>
@@ -10526,6 +10553,7 @@ function modalCliente(cliente){
     if(img){ img.src = cliente.logoUrlPublica; document.getElementById('logo-preview-area').style.display='block'; }
   }
 
+  document.getElementById('btn-add-benef-cliente').addEventListener('click', ()=>{ document.getElementById('benef-extras-cliente').insertAdjacentHTML('beforeend', linhaBeneficioExtraHtml()); });
   document.querySelectorAll('.chk-beneficio').forEach(chk=>{
     chk.addEventListener('change', e=>{
       const wrap = document.querySelector('[data-beneficio-valor-wrap="'+e.target.dataset.beneficio+'"]');
@@ -10558,7 +10586,7 @@ function modalCliente(cliente){
       beneficios[b.chave] = { ativo: !!(chk&&chk.checked), valor: valorInput?valorInput.value.trim():'' };
     });
     const produtosContratados = Array.from(document.querySelectorAll('.chk-produto-contratado:checked')).map(chk=>chk.value);
-    const dados = {nome:f.get('nome').trim(), nomeContato:f.get('nomeContato').trim(), telefoneContato:f.get('telefoneContato').trim(), emailContato:f.get('emailContato').trim(), observacoes:f.get('observacoes').trim(), tipoServico:f.get('tipoServico')||'rs', valorMensalidadeBPO:f.get('valorMensalidadeBPO')||'', dataDescontinuacaoBPO:f.get('dataDescontinuacaoBPO')||'', produtosContratados: produtosContratados, beneficios: beneficios, temLogo: cliente.temLogo||false, logoNome: cliente.logoNome||'', logoUrlPublica: cliente.logoUrlPublica||''};
+    const dados = {nome:f.get('nome').trim(), nomeContato:f.get('nomeContato').trim(), telefoneContato:f.get('telefoneContato').trim(), emailContato:f.get('emailContato').trim(), observacoes:f.get('observacoes').trim(), tipoServico:f.get('tipoServico')||'rs', valorMensalidadeBPO:f.get('valorMensalidadeBPO')||'', dataDescontinuacaoBPO:f.get('dataDescontinuacaoBPO')||'', produtosContratados: produtosContratados, beneficios: beneficios, beneficiosExtras: lerBeneficiosDasLinhas(document.getElementById('benef-extras-cliente')), temLogo: cliente.temLogo||false, logoNome: cliente.logoNome||'', logoUrlPublica: cliente.logoUrlPublica||''};
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = 'Salvando…'; }
@@ -12439,6 +12467,7 @@ function onGlobalClick(e){
   }
 
   if(action === 'nova-vaga'){ modalVaga(null, el.dataset.clienteId); return; }
+  if(action === 'remover-linha-benef'){ const l = el.closest('[data-linha-benef]'); if(l) l.remove(); return; }
   if(tratarAcaoPlano(action, el)) return;
   if(action === 'clima-nova-pesquisa'){ iniciarNovaPesquisaClima(id); return; }
   if(action === 'pdf-registro'){ const c = getColaborador(id); const r = c && (c.registros||[]).find(x=>x.id===el.dataset.regId); if(r) gerarPdfRegistro(c, r); return; }
