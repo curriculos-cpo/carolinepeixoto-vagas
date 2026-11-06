@@ -4922,6 +4922,143 @@ function tratarAcaoPlano(action, el){
   return false;
 }
 
+/* ============================= RELATÓRIO DA PESQUISA DE CLIMA EM PDF ============================= */
+const CSS_CLIMA_PDF = `
+table.kpi2{ width:100%; border-collapse:separate; border-spacing:3px 0; margin:6px 0 14px; table-layout:fixed; }
+table.kpi2 td.n{ color:#fff; font-size:19pt; padding:10px 10px 8px; line-height:1.1; }
+table.kpi2 td.n small{ display:block; font-size:8pt; font-weight:normal; opacity:.92; margin-top:2px; }
+table.kpi2 td.l{ background:#F2E4E1; font-size:8.5pt; padding:7px 10px; text-transform:uppercase; color:#5a3a32; }
+.k1{ background:#9F4052; } .k2{ background:#7A3B2B; } .k3{ background:#B5593C; } .k4{ background:#A8905F; }
+table.dados td.sv{ background:#DDEFE1; text-align:center; } table.dados td.sa{ background:#FBF1D6; text-align:center; } table.dados td.sr{ background:#F6DAD6; text-align:center; }
+table.dados td.sn{ text-align:center; }
+.bar{ background:#EFE3D8; height:8px; border-radius:4px; min-width:80px; } .bar i{ display:block; height:8px; border-radius:4px; background:#5F8D6B; }
+.bar i.a{ background:#C9A24E; } .bar i.r{ background:#B3261E; }
+table.enps{ width:100%; border-collapse:collapse; height:14px; margin:6px 0 4px; } table.enps td{ height:14px; padding:0; border:0; }
+.sub-bloco{ font-size:10.5pt; color:#7A3B2B; margin:12px 0 4px; font-weight:bold; page-break-after:avoid; }
+table.cols2{ width:100%; border-collapse:separate; border-spacing:10px 0; margin:0 -10px; } table.cols2 td{ width:50%; vertical-align:top; padding:0; }
+.met{ font-size:9pt; color:#7a625a; text-align:left; margin:0 0 4px; }
+.aviso-omit{ font-style:italic; color:#7a625a; }
+`;
+function classeFavClima(v){ return v>=75 ? 'v' : (v>=60 ? 'a' : 'r'); }
+function celulaFavClima(v, suf){ return '<td class="s'+classeFavClima(v)+'">'+numPT(v)+(suf===undefined ? '%' : suf)+'</td>'; }
+function barraFavClima(v){ return '<div class="bar"><i class="'+(classeFavClima(v)==='v' ? '' : classeFavClima(v))+'" style="width:'+Math.max(2, Math.min(100, v))+'%;"></i></div>'; }
+function zonaENPSClima(s){ return s>=75 ? 'Excelente' : (s>=50 ? 'Muito bom' : (s>=0 ? 'Bom, com espaço para evoluir' : 'Crítico')); }
+
+function gerarPdfRelatorioClima(clienteId, areaFiltro){
+  const cliente = getCliente(clienteId); if(!cliente) return false;
+  garantirAcoesClima();
+  areaFiltro = areaFiltro || '';
+  const ciclo = cicloSelecionadoClima(clienteId);
+  const prot = resultadoClimaProtegido(clienteId, areaFiltro, ciclo);
+  if(prot.oculto || !prot.resultado || !prot.resultado.totalRespostas){
+    showToast('Ainda não há resultado liberado para o relatório: é preciso ter pelo menos '+MIN_RESPONDENTES_CLIMA+' respostas'+(areaFiltro ? ' nesta área' : '')+'.', true); return false;
+  }
+  const r = prot.resultado;
+  const respostas = respostasClima(clienteId, ciclo).filter(x=>!areaFiltro || x.area===areaFiltro);
+  const datas = respostas.map(x=>x.data).filter(Boolean).sort();
+  const periodo = datas.length ? formatDate(datas[0])+(datas[datas.length-1]!==datas[0] ? ' a '+formatDate(datas[datas.length-1]) : '') : '';
+  const colabs = db.colaboradores.filter(c=>c.clienteId===clienteId && statusColaborador(c)!=='desligado').length;
+  const participacao = (!areaFiltro && colabs>0 && r.totalRespostas<=colabs) ? r.totalRespostas+' de '+colabs+' colaboradores cadastrados ('+Math.round(r.totalRespostas*100/colabs)+'%)' : '';
+
+  const perguntas = [];
+  GRUPOS_PESQUISA_CLIMA.forEach(g=>g.perguntas.forEach(p=>{ if(p.tipo!=='nps' && r.porPergunta[p.chave] && r.porPergunta[p.chave].respostas>0) perguntas.push({texto:p.texto, bloco:g.nome, media:r.porPergunta[p.chave].media, fav:r.porPergunta[p.chave].favoravel}); }));
+  const fortes = perguntas.slice().sort((a,b)=>b.fav-a.fav).slice(0,5);
+  const atencao = perguntas.filter(x=>x.fav<FAVORABILIDADE_CRITICA_CLIMA).sort((a,b)=>a.fav-b.fav);
+  const lista = arr => '<ul class="lista-simples">'+arr.map(x=>'<li>'+esc(x.texto)+' <strong>('+numPT(x.fav)+'%)</strong> <span class="mini">'+esc(x.bloco)+'</span></li>').join('')+'</ul>';
+
+  let n = 0; const sec = t => esc((++n)+'. '+t);
+  let corpo = tituloDocPDF('Relatório da Pesquisa de Clima Organizacional', cliente.nome+' · '+ciclo+(areaFiltro ? ' · Área: '+areaFiltro : ''));
+
+  // Identificação
+  corpo += '<h2 class="sec-desc">'+sec('Identificação')+'</h2><table class="ident">'
+    + linhaIdentPDF('Empresa', cliente.nome) + linhaIdentPDF('Pesquisa', ciclo) + (areaFiltro ? linhaIdentPDF('Área analisada', areaFiltro) : '')
+    + linhaIdentPDF('Período das respostas', periodo) + linhaIdentPDF('Respondentes', String(r.totalRespostas)) + (participacao ? linhaIdentPDF('Participação', participacao) : '')
+    + linhaIdentPDF('Emitido em', formatDate(todayISO())) + '</table>'
+    + '<p class="met">Pesquisa anônima. Por confidencialidade, os resultados de uma área só são apresentados quando ela tem '+MIN_RESPONDENTES_CLIMA+' ou mais respondentes.</p>';
+
+  // Indicadores gerais
+  const E = r.eNPS;
+  const kpi = [['k1', numPT(r.satisfacaoGeral)+'%', '', 'Satisfação geral'], ['k2', numPT(E.score), '<small>'+esc(zonaENPSClima(E.score))+'</small>', 'eNPS'], ['k3', String(r.totalRespostas), '', 'Respondentes'], ['k4', String(atencao.length), '<small>de '+perguntas.length+' perguntas</small>', 'Abaixo de '+FAVORABILIDADE_CRITICA_CLIMA+'% favorável']];
+  corpo += '<h2 class="sec-desc">'+sec('Indicadores gerais')+'</h2><table class="kpi2"><tr>'+kpi.map(k=>'<td class="n '+k[0]+'">'+k[1]+k[2]+'</td>').join('')+'</tr><tr>'+kpi.map(k=>'<td class="l">'+esc(k[3])+'</td>').join('')+'</tr></table>';
+  if(E.total>0){
+    const pr = x=>Math.round(x*1000/E.total)/10;
+    corpo += '<p class="met"><strong>eNPS</strong> — "De 0 a 10, o quanto você indicaria esta empresa como um bom lugar para trabalhar?" ('+E.total+' resposta(s)).</p>'
+      + '<table class="enps"><tr><td style="width:'+pr(E.detratores)+'%;background:#B3261E;"></td><td style="width:'+pr(E.neutros)+'%;background:#C9A24E;"></td><td style="width:'+pr(E.promotores)+'%;background:#5F8D6B;"></td></tr></table>'
+      + '<p class="met">Detratores (0 a 6): <strong>'+E.detratores+'</strong> ('+numPT(pr(E.detratores))+'%) · Neutros (7 e 8): <strong>'+E.neutros+'</strong> ('+numPT(pr(E.neutros))+'%) · Promotores (9 e 10): <strong>'+E.promotores+'</strong> ('+numPT(pr(E.promotores))+'%)</p>';
+  }
+
+  // Blocos
+  corpo += '<h2 class="sec-desc">'+sec('Resultado por bloco')+'</h2><table class="dados"><thead><tr><th>Bloco</th><th class="c" style="width:14%;">Média (1 a 5)</th><th class="c" style="width:14%;">Índice do bloco</th><th style="width:26%;">Visão geral</th></tr></thead><tbody>'
+    + GRUPOS_PESQUISA_CLIMA.map(g=>{ const x = r.porGrupo[g.chave]; return '<tr><td>'+esc(g.nome)+'</td><td class="sn">'+numPT(x.media)+'</td>'+celulaFavClima(x.favoravel)+'<td>'+barraFavClima(x.favoravel)+'</td></tr>'; }).join('')
+    + '</tbody></table><p class="legenda">Índice do bloco = média das respostas ÷ 5. Cores: verde a partir de 75% · amarelo de 60% a 74% · vermelho abaixo de 60%.</p>';
+
+  // Perguntas
+  corpo += '<h2 class="sec-desc">'+sec('Resultado por pergunta')+'</h2>';
+  GRUPOS_PESQUISA_CLIMA.forEach(g=>{
+    const itens = g.perguntas.filter(p=>p.tipo!=='nps' && r.porPergunta[p.chave] && r.porPergunta[p.chave].respostas>0);
+    if(!itens.length) return;
+    corpo += '<div class="sub-bloco">'+esc(g.nome)+'</div><table class="dados"><thead><tr><th>Pergunta</th><th class="c" style="width:11%;">Média</th><th class="c" style="width:15%;">% favorável</th><th style="width:20%;"></th></tr></thead><tbody>'
+      + itens.map(p=>{ const x = r.porPergunta[p.chave]; return '<tr><td>'+esc(p.texto)+'</td><td class="sn">'+numPT(x.media)+'</td>'+celulaFavClima(x.favoravel)+'<td>'+barraFavClima(x.favoravel)+'</td></tr>'; }).join('')
+      + '</tbody></table>';
+  });
+  corpo += '<p class="legenda">% favorável = percentual de respostas 4 ou 5 (concordo / concordo totalmente).</p>';
+
+  // Pontos fortes e de atenção
+  corpo += '<h2 class="sec-desc">'+sec('Pontos fortes e pontos de atenção')+'</h2><table class="cols2"><tr><td><div class="sub-bloco" style="color:#2E7D32;margin-top:0;">Pontos fortes</div>'+lista(fortes)+'</td><td><div class="sub-bloco" style="color:#B3261E;margin-top:0;">Pontos de atenção</div>'
+    + (atencao.length ? lista(atencao.slice(0,5)) + (atencao.length>5 ? '<p class="mini">e mais '+(atencao.length-5)+' pergunta(s) abaixo de '+FAVORABILIDADE_CRITICA_CLIMA+'%.</p>' : '') : '<p class="txt-desc">Nenhuma pergunta ficou abaixo de '+FAVORABILIDADE_CRITICA_CLIMA+'% de respostas favoráveis.</p>')
+    + '</td></tr></table>';
+
+  // Comparativo por área
+  const pcfg = cliente.pesquisaClima || {};
+  if(!areaFiltro && (pcfg.areas||[]).length){
+    const prA = areasClimaProtegidas(clienteId, ciclo);
+    const linhaArea = (rotulo, x, forte) => '<tr'+(forte ? ' style="font-weight:bold;"' : '')+'><td>'+esc(rotulo)+'</td><td class="sn">'+x.totalRespostas+'</td>'+celulaFavClima(x.satisfacaoGeral)+'<td class="sn">'+numPT(x.eNPS.score)+'</td>'+GRUPOS_PESQUISA_CLIMA.map(g=>celulaFavClima(x.porGrupo[g.chave].favoravel)).join('')+'</tr>';
+    const cols = GRUPOS_PESQUISA_CLIMA.length+4;
+    const linhasA = prA.itens.map(a=>{
+      if(a.estado==='vazia') return '<tr><td>'+esc(a.rotulo)+'</td><td colspan="'+(cols-1)+'" class="aviso-omit">Sem respostas</td></tr>';
+      if(a.estado==='minimo') return '<tr><td>'+esc(a.rotulo)+'</td><td colspan="'+(cols-1)+'" class="aviso-omit">Omitida para proteger o anonimato (menos de '+MIN_RESPONDENTES_CLIMA+' respostas)</td></tr>';
+      if(a.estado==='complementar') return '<tr><td>'+esc(a.rotulo)+'</td><td colspan="'+(cols-1)+'" class="aviso-omit">Omitida por segurança, para que o resultado da área omitida não possa ser deduzido por subtração</td></tr>';
+      return linhaArea(a.rotulo, calcularResultadoPesquisaClima(clienteId, a.nome, ciclo), false);
+    }).join('');
+    corpo += '<h2 class="sec-desc">'+sec('Comparativo por área')+'</h2><table class="dados" style="font-size:9pt;"><thead><tr><th>Área</th><th class="c">Resp.</th><th class="c">Satisfação</th><th class="c">eNPS</th>'+GRUPOS_PESQUISA_CLIMA.map(g=>'<th class="c">'+esc(g.nome)+'</th>').join('')+'</tr></thead><tbody>'+linhasA+linhaArea('Geral (todas as áreas)', calcularResultadoPesquisaClima(clienteId, '', ciclo), true)+'</tbody></table>'
+      + '<p class="legenda">Cores: verde a partir de 75% · amarelo de 60% a 74% · vermelho abaixo de 60%. Colunas dos blocos mostram o índice do bloco.</p>';
+  }
+
+  // Comparativo com a pesquisa anterior
+  const ciclos = ciclosClima(clienteId); const pos = ciclos.indexOf(ciclo);
+  if(!areaFiltro && pos>0){
+    const anterior = ciclos[pos-1]; const pa = resultadoClimaProtegido(clienteId, '', anterior);
+    if(!pa.oculto && pa.resultado && pa.resultado.totalRespostas){
+      const ra = pa.resultado;
+      const linha = (rot, a, b, suf) => '<tr><td>'+esc(rot)+'</td><td class="sn">'+numPT(a)+(suf||'')+'</td><td class="sn">'+numPT(b)+(suf||'')+'</td><td class="sn">'+variacaoClima(arred1(b-a), suf==='%' ? ' pp' : '')+'</td></tr>';
+      const mudancas = [];
+      GRUPOS_PESQUISA_CLIMA.forEach(g=>g.perguntas.forEach(p=>{ if(p.tipo==='nps') return; const a = ra.porPergunta[p.chave], b = r.porPergunta[p.chave]; if(a.respostas>0 && b.respostas>0) mudancas.push({texto:p.texto, a:a.favoravel, b:b.favoravel, d:arred1(b.favoravel-a.favoravel)}); }));
+      const mel = mudancas.filter(x=>x.d>0).sort((x,y)=>y.d-x.d).slice(0,3), pio = mudancas.filter(x=>x.d<0).sort((x,y)=>x.d-y.d).slice(0,3);
+      const ul = arr => arr.length ? '<ul class="lista-simples">'+arr.map(x=>'<li>'+esc(x.texto)+' <strong>('+numPT(x.a)+'% → '+numPT(x.b)+'%)</strong></li>').join('')+'</ul>' : '<p class="txt-desc">Nenhuma.</p>';
+      corpo += '<h2 class="sec-desc">'+sec('Comparativo com a pesquisa anterior')+'</h2><p class="met">'+esc(anterior)+' → <strong>'+esc(ciclo)+'</strong></p>'
+        + '<table class="dados"><thead><tr><th>Indicador</th><th class="c">Antes</th><th class="c">Agora</th><th class="c">Variação</th></tr></thead><tbody>'
+        + linha('Satisfação geral', ra.satisfacaoGeral, r.satisfacaoGeral, '%') + linha('eNPS', ra.eNPS.score, E.score, '')
+        + GRUPOS_PESQUISA_CLIMA.map(g=>linha(g.nome, ra.porGrupo[g.chave].favoravel, r.porGrupo[g.chave].favoravel, '%')).join('')
+        + '</tbody></table><table class="cols2"><tr><td><div class="sub-bloco" style="color:#2E7D32;margin-top:4px;">Mais melhoraram</div>'+ul(mel)+'</td><td><div class="sub-bloco" style="color:#B3261E;margin-top:4px;">Mais pioraram</div>'+ul(pio)+'</td></tr></table>';
+    }
+  }
+
+  // Plano de ação
+  const acoes = acoesPlano(clienteId, 'clima').filter(a=>(!a.ciclo || a.ciclo===ciclo) && (!areaFiltro || !a.area || a.area===areaFiltro)).sort((a,b)=>String(a.prazo||'9999').localeCompare(String(b.prazo||'9999')));
+  if(acoes.length){
+    const hoje = todayISO();
+    corpo += '<h2 class="sec-desc">'+sec('Plano de ação')+'</h2><table class="dados"><thead><tr><th style="width:16%;">Área</th><th>Ação</th><th style="width:15%;">Responsável</th><th class="c" style="width:11%;">Prazo</th><th style="width:13%;">Situação</th></tr></thead><tbody>'
+      + acoes.map(a=>'<tr><td>'+esc(a.area||'Geral')+'</td><td>'+esc(a.acao)+(a.indicador ? '<div class="mini">Como medir: '+esc(a.indicador)+'</div>' : '')+'</td><td>'+esc(a.responsavel||'—')+'</td><td class="sn">'+(a.prazo ? formatDate(a.prazo) : '—')+'</td><td>'+esc(STATUS_ACAO_CLIMA[a.status]||'')+((a.status!=='concluida' && a.prazo && a.prazo<hoje) ? '<div class="mini" style="color:#B3261E;">atrasada</div>' : '')+'</td></tr>').join('')
+      + '</tbody></table>';
+  }
+
+  // Nota metodológica e assinatura
+  corpo += '<h2 class="sec-desc">'+sec('Nota metodológica')+'</h2><p class="met">As afirmações foram respondidas em escala de 1 (discordo totalmente) a 5 (concordo totalmente). A satisfação geral é a média de todas as respostas em relação ao máximo da escala (média ÷ 5). O eNPS é o percentual de promotores (notas 9 e 10) menos o de detratores (notas 0 a 6): resultados acima de 0 indicam mais promotores que detratores; acima de 50, muito bom; acima de 75, excelente. A pesquisa é anônima e nenhuma resposta individual é apresentada.</p>'
+    + '<div class="assin-rel" style="text-align:right;margin-top:26px;page-break-inside:avoid;"><div style="color:#7A3B2B;font-weight:bold;font-size:14pt;">Caroline Peixoto</div><div style="color:#7a625a;font-size:10pt;">Desenvolvimento Humano e Organizacional</div></div>';
+
+  return abrirDocumentoParaPDF('Relatório de Clima - '+cliente.nome+' - '+ciclo+(areaFiltro ? ' - '+areaFiltro : ''), corpo, CSS_RH_PDF+CSS_CLIMA_PDF, '', cabecalhoLogosPDF(cliente));
+}
+
 function viewPesquisaClimaAdmin(){
   const clientesOpts = db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(cl=>'<option value="'+cl.id+'" '+(state.climaClienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+(cl.pesquisaClima&&cl.pesquisaClima.ativo?' ✓':'')+'</option>').join('');
   const cliente = state.climaClienteId ? getCliente(state.climaClienteId) : null;
@@ -4967,7 +5104,7 @@ function viewPesquisaClimaAdmin(){
     ${protegido.oculto ? avisoClimaOculto(protegido) : resultado.totalRespostas===0 ? '<div class="card empty-state"><h3>Nenhuma resposta ainda</h3><p>Envie o link para os colaboradores desta empresa responderem.</p></div>' : `
     <div class="topbar no-print" style="margin-bottom:10px;">
       <div></div>
-      <span class="btn btn-secondary btn-sm" data-action="imprimir-relatorio">🖨️ Imprimir / Exportar relatório</span>
+      <span class="btn btn-primary btn-sm" data-action="clima-pdf-relatorio" data-id="${cliente.id}">📄 ${state.climaAreaFiltro ? 'Relatório desta área (PDF)' : 'Relatório em PDF'}</span>
     </div>
     <div class="kpi-grid">
       <div class="kpi c-green"><div class="label">Satisfação geral</div><div class="value" style="font-size:28px;">${resultado.satisfacaoGeral}%</div><div class="sub">Média das 27 perguntas em escala 1-5</div></div>
@@ -6461,6 +6598,19 @@ function garantirVisitasBPO(){
   if(!Array.isArray(db.relatoriosBPO)) db.relatoriosBPO = [];
 }
 function fmtHorasBPO(min){ min = Math.max(0, Math.round(Number(min)||0)); return Math.floor(min/60)+'h'+String(min%60).padStart(2,'0'); }
+function horasContratadasMinBPO(cliente){ const h = Number(String((cliente && cliente.horasContratadasBPO) || '').replace(',', '.')); return h>0 ? Math.round(h*60) : 0; }
+function fmtContratadoBPO(min){ min = Math.round(Number(min)||0); return min%60===0 ? (min/60)+'h' : fmtHorasBPO(min); }
+// Quanto das horas contratadas já foi usado: ok (até 79%), atencao (80% ou mais), estourou (100% ou mais).
+function usoHorasBPO(cliente, totalMin){
+  const c = horasContratadasMinBPO(cliente);
+  if(!c) return {contratado:0, pct:0, restante:0, nivel:''};
+  return {contratado:c, pct:Math.round(totalMin*100/c), restante:c-totalMin, nivel: totalMin>=c ? 'estourou' : (totalMin>=c*0.8 ? 'atencao' : 'ok')};
+}
+function avisoHorasRotuloBPO(cl){
+  if(cl.avisarHorasBPO===false) return '';
+  const u = usoHorasBPO(cl, calcularBaseRelatorioBPO(cl.id, state.vbMes).totalMin);
+  return (u.nivel==='atencao' || u.nivel==='estourou') ? ' ⚠ '+u.pct+'%' : '';
+}
 function duracaoParaCampoBPO(min){ min = Math.max(0, Math.round(Number(min)||0)); return Math.floor(min/60)+':'+String(min%60).padStart(2,'0'); }
 // Aceita 1:30, 1h30, 1h, 45min, 1,5 (horas) ou 2 (horas). Devolve minutos ou null.
 function parseDuracaoBPO(txt){
@@ -6523,6 +6673,13 @@ function viewVisitasBPO(){
   const cliente = getCliente(clienteId);
   const meses = mesesBPO(clienteId); if(!meses.includes(state.vbMes)) meses.unshift(state.vbMes);
   const base = calcularBaseRelatorioBPO(clienteId, state.vbMes);
+  const uso = usoHorasBPO(cliente, base.totalMin);
+  const bannerHoras = (cliente.avisarHorasBPO!==false && (uso.nivel==='atencao' || uso.nivel==='estourou'))
+    ? '<div class="card" style="margin-bottom:16px;border-left:4px solid '+(uso.nivel==='estourou' ? '#B3261E' : '#C9A24E')+';padding:12px 16px;"><strong>'+(uso.nivel==='estourou' ? '⚠ Horas contratadas atingidas' : '⚠ Atenção às horas contratadas')+'</strong><div class="hint" style="margin-top:4px;">'
+      +(uso.nivel==='estourou'
+          ? fmtHorasBPO(base.totalMin)+' de '+fmtContratadoBPO(uso.contratado)+' em '+nomeMes(state.vbMes)+(base.totalMin>uso.contratado ? ' — excedente de '+fmtHorasBPO(base.totalMin-uso.contratado)+'.' : '.')
+          : uso.pct+'% das horas contratadas já foram usadas ('+fmtHorasBPO(base.totalMin)+' de '+fmtContratadoBPO(uso.contratado)+'). Restam '+fmtHorasBPO(uso.restante)+'.')
+      +'</div></div>' : '';
   const visitas = db.visitasBPO.filter(v=>v.clienteId===clienteId && (v.data||'').slice(0,7)===state.vbMes).sort((a,b)=>b.data.localeCompare(a.data));
   const relMes = db.relatoriosBPO.find(r=>r.clienteId===clienteId && r.mesRef===state.vbMes);
 
@@ -6533,7 +6690,7 @@ function viewVisitasBPO(){
   }).join('');
 
   const relatorios = db.relatoriosBPO.filter(r=>r.clienteId===clienteId).sort((a,b)=>b.mesRef.localeCompare(a.mesRef));
-  const linhasRel = relatorios.map(r=>'<tr><td><strong>'+nomeMes(r.mesRef)+'</strong></td><td>'+fmtHorasBPO(r.totalMin)+'</td><td>'+(r.publicado ? '<span class="badge badge-green">Publicado no portal</span>' : '<span class="badge badge-amber">Rascunho</span>')+'</td><td class="no-print" style="white-space:nowrap;"><span class="btn btn-ghost btn-sm" data-action="abrir-relatorio-bpo" data-id="'+r.id+'">Abrir / editar</span> <span class="btn btn-ghost btn-sm" data-action="pdf-relatorio-bpo" data-id="'+r.id+'">📄 PDF</span></td></tr>').join('');
+  const linhasRel = relatorios.map(r=>'<tr><td><strong>'+nomeMes(r.mesRef)+'</strong></td><td>'+fmtHorasBPO(r.totalMin)+(r.contratadoMin ? ' <span class="hint">de '+fmtContratadoBPO(r.contratadoMin)+'</span>' : '')+'</td><td>'+(r.publicado ? '<span class="badge badge-green">Publicado no portal</span>' : '<span class="badge badge-amber">Rascunho</span>')+'</td><td class="no-print" style="white-space:nowrap;"><span class="btn btn-ghost btn-sm" data-action="abrir-relatorio-bpo" data-id="'+r.id+'">Abrir / editar</span> <span class="btn btn-ghost btn-sm" data-action="pdf-relatorio-bpo" data-id="'+r.id+'">📄 PDF</span></td></tr>').join('');
 
   return `
     <div class="topbar">
@@ -6544,11 +6701,12 @@ function viewVisitasBPO(){
       </div>
     </div>
     <div class="filters-row">
-      <select data-role="vb-cliente">${clientesBPO.map(cl=>'<option value="'+cl.id+'" '+(clienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+'</option>').join('')}</select>
+      <select data-role="vb-cliente">${clientesBPO.map(cl=>'<option value="'+cl.id+'" '+(clienteId===cl.id?'selected':'')+'>'+esc(cl.nome)+avisoHorasRotuloBPO(cl)+'</option>').join('')}</select>
       <select data-role="vb-mes">${meses.map(m=>'<option value="'+m+'" '+(state.vbMes===m?'selected':'')+'>'+formatMesRef(m)+'</option>').join('')}</select>
     </div>
+    ${bannerHoras}
     <div class="kpi-grid">
-      <div class="kpi"><div class="label">Horas no mês</div><div class="value" style="font-size:22px;">${fmtHorasBPO(base.totalMin)}</div><div class="sub">${esc(cliente.nome)}</div></div>
+      <div class="kpi"><div class="label">Horas no mês</div><div class="value" style="font-size:22px;">${fmtHorasBPO(base.totalMin)}</div><div class="sub">${uso.contratado ? 'de '+fmtContratadoBPO(uso.contratado)+' contratadas ('+uso.pct+'%)' : esc(cliente.nome)}</div></div>
       <div class="kpi"><div class="label">Dias com visita</div><div class="value">${base.dias}</div></div>
       <div class="kpi"><div class="label">Atividades registradas</div><div class="value">${base.atividades}</div></div>
       <div class="kpi"><div class="label">Frentes de trabalho</div><div class="value">${base.frentes.length}</div></div>
@@ -6627,7 +6785,7 @@ function criarRelatorioBPO(clienteId, mesRef){
   const base = calcularBaseRelatorioBPO(clienteId, mesRef);
   return {
     id:uid('rel'), clienteId, mesRef, publicado:false, resumo:'', leitura:'', direcionamento:'', numeros:[],
-    totalMin:base.totalMin, dias:base.dias, atividades:base.atividades,
+    totalMin:base.totalMin, dias:base.dias, atividades:base.atividades, contratadoMin:horasContratadasMinBPO(getCliente(clienteId)),
     frentes: base.frentes.map(f=>({nome:f.nome, minutos:f.minutos, pct:f.pct, destaque:'', entregas:f.itens.map(i=>i.texto)}))
   };
 }
@@ -6641,6 +6799,7 @@ function coletarRelatorioBPO(rel, form){
   });
   rel.numeros = [0,1,2].map(n=>({valor:val('[data-rel-nvalor="'+n+'"]'), rotulo:val('[data-rel-nrotulo="'+n+'"]')})).filter(x=>x.valor && x.rotulo);
   rel.publicado = !!form.querySelector('[name="publicado"]').checked;
+  const hc = parseFloat(val('[name="horasContratadas"]').replace(',', '.')); rel.contratadoMin = hc>0 ? Math.round(hc*60) : 0;
   rel.atualizadoEm = new Date().toISOString();
 }
 
@@ -6687,6 +6846,7 @@ function modalRelatorioBPO(rel){
     <h2>Relatório de atividades — ${nomeMes(rel.mesRef)}</h2>
     <p class="hint" style="margin-bottom:10px;">${esc(cliente.nome)} · ${fmtHorasBPO(rel.totalMin)} trabalhadas · ${rel.dias} dia(s) com visita · ${rel.atividades} atividade(s). O relatório mostra apenas horas, sem valores.</p>
     <form id="form-relatorio-bpo">
+      <div class="field" style="max-width:280px;margin-bottom:12px;"><label>Horas contratadas no mês (opcional)</label><input name="horasContratadas" type="number" step="0.5" min="0" value="${rel.contratadoMin ? rel.contratadoMin/60 : ''}" placeholder="Ex.: 20"><div class="hint">Aparece no relatório como "16h39 de 20h".</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         <span class="btn btn-secondary btn-sm" id="btn-ia-rel">✨ Redigir com IA</span>
         <span class="btn btn-ghost btn-sm" id="btn-recalcular-rel">↻ Recalcular a partir das visitas</span>
@@ -6738,7 +6898,7 @@ function modalRelatorioBPO(rel){
     const rotulo = btnIA.textContent; btnIA.textContent = '✨ Redigindo…'; btnIA.style.pointerEvents = 'none';
     try{
       const r = await chamarAppsScriptPost('redigirRelatorioBPOIA', {
-        mesRotulo: nomeMes(rel.mesRef), mesProximoRotulo: nomeMes(mesProximoRefBPO(rel.mesRef)), totalHoras: fmtHorasBPO(base.totalMin),
+        mesRotulo: nomeMes(rel.mesRef), mesProximoRotulo: nomeMes(mesProximoRefBPO(rel.mesRef)), totalHoras: fmtHorasBPO(base.totalMin), horasContratadas: (rel.contratadoMin ? fmtContratadoBPO(rel.contratadoMin)+' ('+Math.round(base.totalMin*100/rel.contratadoMin)+'% utilizadas)' : ''),
         frentes: base.frentes.map(f=>({nome:f.nome, horas:fmtHorasBPO(f.minutos), pct:f.pct, atividades:f.itens.map(i=>mascararTextoBPO(i.texto, mapa))}))
       }, 90000);
       const des = t => desmascararTextoBPO(t, mapa);
@@ -6761,6 +6921,10 @@ function modalRelatorioBPO(rel){
 }
 
 const CSS_REL_BPO = `
+.barra{ background:#E8D4C4; height:9px; border-radius:5px; margin:2px 0 6px; }
+.barra i{ display:block; height:9px; border-radius:5px; background:#A5533D; }
+.barra i.exc{ background:#9F4052; }
+.legenda{ font-size:9pt; color:#7a625a; margin:2px 0 14px; text-align:left; }
 .cab{ border-bottom:none; margin-bottom:16px; }
 .cab .para{ margin-right:auto; margin-left:14px; align-self:flex-start; color:#A8905F; font-size:8.5pt; font-weight:bold; letter-spacing:.08em; }
 .rel-sup{ color:#B5593C; font-size:9.5pt; font-weight:bold; letter-spacing:.06em; text-transform:uppercase; }
@@ -6797,14 +6961,15 @@ function gerarPdfRelatorioBPO(rel, cliente){
   const mesTxt = nomeMes(rel.mesRef);
   const proximo = soMesBPO(mesProximoRefBPO(rel.mesRef));
   const frentes = rel.frentes || [];
-  const kpis = [['c1', fmtHorasBPO(rel.totalMin), 'Horas trabalhadas'], ['c2', String(rel.dias), 'Dias com entrega'], ['c1', String(rel.atividades), 'Atividades registradas'], ['c2', String(frentes.length), 'Frentes de trabalho']];
-  const tabelaKpi = linhas => '<table class="kpi"><tr>'+linhas.map(k=>'<td class="n '+k[0]+'">'+esc(k[1])+'</td>').join('')+'</tr><tr>'+linhas.map(k=>'<td class="l">'+esc(k[2])+'</td>').join('')+'</tr></table>';
+  const kpis = [['c1', esc(fmtHorasBPO(rel.totalMin))+(rel.contratadoMin ? ' <span style="font-size:10pt;">de '+esc(fmtContratadoBPO(rel.contratadoMin))+'</span>' : ''), 'Horas trabalhadas', true], ['c2', String(rel.dias), 'Dias com entrega'], ['c1', String(rel.atividades), 'Atividades registradas'], ['c2', String(frentes.length), 'Frentes de trabalho']];
+  const tabelaKpi = linhas => '<table class="kpi"><tr>'+linhas.map(k=>'<td class="n '+k[0]+'">'+(k[3] ? k[1] : esc(k[1]))+'</td>').join('')+'</tr><tr>'+linhas.map(k=>'<td class="l">'+esc(k[2])+'</td>').join('')+'</tr></table>';
 
   let h = '<div class="folha">'+cab;
   h += '<div class="rel-sup">Relatório de atividades</div><div class="rel-titulo">Relatório Mensal de Atividades</div><div class="rel-mes">'+esc(mesTxt)+'</div>';
   h += '<table class="info"><tr><td class="k">PRESTADORA</td><td class="v">Caroline Peixoto Desenvolvimento Humano e Organizacional</td></tr><tr><td class="k">CLIENTE</td><td>'+esc(cliente.nome)+'</td></tr></table>';
   h += '<p class="nota">Documento de referência das entregas realizadas pela prestadora no mês, para acompanhamento do cliente.</p>';
   h += tabelaKpi(kpis);
+  if(rel.contratadoMin){ const pct = Math.round(rel.totalMin*100/rel.contratadoMin); h += '<div class="barra"><i class="'+(pct>100 ? 'exc' : '')+'" style="width:'+Math.min(100,pct)+'%;"></i></div><p class="legenda">'+pct+'% das horas contratadas ('+esc(fmtContratadoBPO(rel.contratadoMin))+') utilizadas no mês.</p>'; }
   if(rel.resumo) h += '<h2 class="sec">Resumo executivo</h2><p>'+esc(rel.resumo)+'</p>';
   h += '<h3 class="sub">Distribuição do esforço por frente estratégica</h3>';
   h += '<table class="dados"><thead><tr><th>Frente de trabalho</th><th>%</th><th>Horas</th><th>Destaque do mês</th></tr></thead><tbody>'+frentes.map(f=>'<tr><td>'+esc(f.nome)+'</td><td>'+f.pct+'%</td><td>'+fmtHorasBPO(f.minutos)+'</td><td>'+esc(f.destaque||'')+'</td></tr>').join('')+'</tbody></table>';
@@ -6822,7 +6987,7 @@ function gerarPdfRelatorioBPO(rel, cliente){
   if(rel.leitura) h += '<h2 class="sec">Leitura estratégica do mês</h2><p>'+esc(rel.leitura)+'</p>';
   if(rel.direcionamento) h += '<div class="caixa"><div class="tt">Direcionamento para '+esc(proximo)+'</div>'+esc(rel.direcionamento)+'</div>';
   h += '<h3 class="sub">Composição das horas</h3><table class="dados"><thead><tr><th>Frente</th><th>Horas</th><th>Participação</th></tr></thead><tbody>'+frentes.map(f=>'<tr><td>'+esc(f.nome)+'</td><td>'+fmtHorasBPO(f.minutos)+'</td><td>'+f.pct+'%</td></tr>').join('')+'</tbody></table>';
-  h += '<h3 class="sub">Fechamento do período</h3><table class="info"><tr><td class="k" style="width:60%;">HORAS REGISTRADAS NO PERÍODO</td><td class="v">'+fmtHorasBPO(rel.totalMin)+'</td></tr><tr><td class="k" style="width:60%;">DIAS COM ENTREGA</td><td class="v">'+rel.dias+'</td></tr></table>';
+  h += '<h3 class="sub">Fechamento do período</h3><table class="info"><tr><td class="k" style="width:60%;">HORAS REGISTRADAS NO PERÍODO</td><td class="v">'+fmtHorasBPO(rel.totalMin)+'</td></tr>'+(rel.contratadoMin ? '<tr><td class="k" style="width:60%;">HORAS CONTRATADAS NO MÊS</td><td class="v">'+fmtContratadoBPO(rel.contratadoMin)+'</td></tr><tr><td class="k" style="width:60%;">'+(rel.totalMin>rel.contratadoMin ? 'EXCEDENTE' : 'SALDO DO MÊS')+'</td><td class="v">'+fmtHorasBPO(Math.abs(rel.contratadoMin-rel.totalMin))+'</td></tr>' : '')+'<tr><td class="k" style="width:60%;">DIAS COM ENTREGA</td><td class="v">'+rel.dias+'</td></tr></table>';
   h += '<div class="assin-rel"><b>Caroline Peixoto</b><div>Prestadora de serviços | Desenvolvimento Humano e Organizacional</div></div></div>';
 
   return abrirDocumentoParaPDF('Relatório Mensal de Atividades - '+cliente.nome+' - '+mesTxt, h, CSS_REL_BPO, 'Caroline Peixoto DHO • Cliente: '+cliente.nome);
@@ -6833,7 +6998,7 @@ function viewPortalRelatorios(){
   const cliente = db.clientes[0];
   const lista = (db.relatoriosBPO||[]).filter(r=>r.clienteId===cliente.id).slice().sort((a,b)=>b.mesRef.localeCompare(a.mesRef));
   if(lista.length===0) return '<div class="card empty-state"><h3>Nenhum relatório disponível ainda</h3><p class="hint">Os relatórios mensais de atividades aparecem aqui assim que forem publicados.</p></div>';
-  const linhas = lista.map(r=>'<tr><td><strong>'+nomeMes(r.mesRef)+'</strong></td><td>'+fmtHorasBPO(r.totalMin)+'</td><td>'+r.dias+'</td><td>'+r.atividades+'</td><td><span class="btn btn-ghost btn-sm" data-action="portal-pdf-relatorio" data-id="'+r.id+'">📄 Ver / salvar PDF</span></td></tr>').join('');
+  const linhas = lista.map(r=>'<tr><td><strong>'+nomeMes(r.mesRef)+'</strong></td><td>'+fmtHorasBPO(r.totalMin)+(r.contratadoMin ? ' <span class="hint">de '+fmtContratadoBPO(r.contratadoMin)+'</span>' : '')+'</td><td>'+r.dias+'</td><td>'+r.atividades+'</td><td><span class="btn btn-ghost btn-sm" data-action="portal-pdf-relatorio" data-id="'+r.id+'">📄 Ver / salvar PDF</span></td></tr>').join('');
   return '<div class="card table-wrap"><table><thead><tr><th>Mês</th><th>Horas</th><th>Dias com entrega</th><th>Atividades</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div>';
 }
 
@@ -10506,6 +10671,8 @@ function modalCliente(cliente){
           <div class="hint">Clientes de BPO ganham acesso ao módulo de Colaboradores (turnover, cargos, etc). Clientes de R&S continuam só com vagas e candidatos.</div>
         </div>
         <div class="field"><label>Valor da mensalidade BPO (R$)</label><input type="number" step="0.01" min="0" name="valorMensalidadeBPO" value="${esc(cliente.valorMensalidadeBPO)}" placeholder="Ex.: 2500.00"></div>
+        <div class="field"><label>Horas contratadas por mês (BPO)</label><input type="number" step="0.5" min="0" name="horasContratadasBPO" value="${esc(cliente.horasContratadasBPO)}" placeholder="Ex.: 20"><div class="hint">Aparece no relatório mensal como "16h39 de 20h" (sem valores). Deixe em branco para não mostrar.</div></div>
+        <div class="field"><label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" name="avisarHorasBPO" ${cliente.avisarHorasBPO===false?'':'checked'}> Avisar quando as horas chegarem a 80% e a 100%</label><div class="hint">O aviso aparece na aba "Visitas e relatórios BPO".</div></div>
         <div class="field"><label>Data de descontinuação do BPO (opcional)</label><input type="date" name="dataDescontinuacaoBPO" value="${cliente.dataDescontinuacaoBPO||''}"><div class="hint">Preencha se este cliente já foi BPO e o contrato foi encerrado/rebaixado para R&S avulso.</div></div>
         <div class="field full"><label>Observações</label><textarea name="observacoes">${esc(cliente.observacoes)}</textarea></div>
       </div>
@@ -10586,7 +10753,7 @@ function modalCliente(cliente){
       beneficios[b.chave] = { ativo: !!(chk&&chk.checked), valor: valorInput?valorInput.value.trim():'' };
     });
     const produtosContratados = Array.from(document.querySelectorAll('.chk-produto-contratado:checked')).map(chk=>chk.value);
-    const dados = {nome:f.get('nome').trim(), nomeContato:f.get('nomeContato').trim(), telefoneContato:f.get('telefoneContato').trim(), emailContato:f.get('emailContato').trim(), observacoes:f.get('observacoes').trim(), tipoServico:f.get('tipoServico')||'rs', valorMensalidadeBPO:f.get('valorMensalidadeBPO')||'', dataDescontinuacaoBPO:f.get('dataDescontinuacaoBPO')||'', produtosContratados: produtosContratados, beneficios: beneficios, beneficiosExtras: lerBeneficiosDasLinhas(document.getElementById('benef-extras-cliente')), temLogo: cliente.temLogo||false, logoNome: cliente.logoNome||'', logoUrlPublica: cliente.logoUrlPublica||''};
+    const dados = {nome:f.get('nome').trim(), nomeContato:f.get('nomeContato').trim(), telefoneContato:f.get('telefoneContato').trim(), emailContato:f.get('emailContato').trim(), observacoes:f.get('observacoes').trim(), tipoServico:f.get('tipoServico')||'rs', valorMensalidadeBPO:f.get('valorMensalidadeBPO')||'', dataDescontinuacaoBPO:f.get('dataDescontinuacaoBPO')||'', produtosContratados: produtosContratados, beneficios: beneficios, beneficiosExtras: lerBeneficiosDasLinhas(document.getElementById('benef-extras-cliente')), horasContratadasBPO: (parseFloat(String(f.get('horasContratadasBPO')||'').replace(',', '.')) > 0 ? parseFloat(String(f.get('horasContratadasBPO')).replace(',', '.')) : ''), avisarHorasBPO: f.has('horasContratadasBPO') ? !!f.get('avisarHorasBPO') : (cliente.avisarHorasBPO!==false), temLogo: cliente.temLogo||false, logoNome: cliente.logoNome||'', logoUrlPublica: cliente.logoUrlPublica||''};
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = 'Salvando…'; }
@@ -12469,6 +12636,7 @@ function onGlobalClick(e){
   if(action === 'nova-vaga'){ modalVaga(null, el.dataset.clienteId); return; }
   if(action === 'remover-linha-benef'){ const l = el.closest('[data-linha-benef]'); if(l) l.remove(); return; }
   if(tratarAcaoPlano(action, el)) return;
+  if(action === 'clima-pdf-relatorio'){ gerarPdfRelatorioClima(id, state.climaAreaFiltro); return; }
   if(action === 'clima-nova-pesquisa'){ iniciarNovaPesquisaClima(id); return; }
   if(action === 'pdf-registro'){ const c = getColaborador(id); const r = c && (c.registros||[]).find(x=>x.id===el.dataset.regId); if(r) gerarPdfRegistro(c, r); return; }
   if(action === 'pdf-avaliacao-experiencia'){ const c = getColaborador(id); const a = c && (c.avaliacoesExperiencia||[]).find(x=>x.id===el.dataset.avId); if(a) gerarPdfAvaliacaoExperiencia(c, a); return; }
