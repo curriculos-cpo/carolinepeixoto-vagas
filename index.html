@@ -1375,6 +1375,7 @@ function renderShell(){
         </label>
         <span class="btn btn-secondary btn-sm" data-action="recuperar-dados-antigos" style="width:100%;margin-top:6px;">Tentar recuperar dados antigos</span>
         <span class="btn btn-secondary btn-sm" data-action="ver-tamanho-db" style="width:100%;margin-top:6px;">📊 Ver tamanho do banco de dados</span>
+        <span class="btn btn-secondary btn-sm" data-action="ver-uso-ia" style="width:100%;margin-top:6px;">🤖 Uso da IA no mês</span>
         <span class="btn btn-secondary btn-sm" data-action="recuperar-perdidos" style="width:100%;margin-top:6px;">🛟 Recuperar dados perdidos</span>
         <span class="btn btn-secondary btn-sm" data-action="configurar-mensagens" style="width:100%;margin-top:6px;">💬 Mensagens automáticas</span>
         <span class="btn btn-ghost btn-sm" data-action="logout-admin" style="width:100%;margin-top:10px;">🔒 Sair do painel</span>
@@ -3412,6 +3413,52 @@ function linhaBeneficioExtraHtml(b){
 function lerBeneficiosDasLinhas(raiz){
   if(!raiz) return [];
   return Array.from(raiz.querySelectorAll('[data-linha-benef]')).map(l=>({nome:l.querySelector('.benef-nome').value.trim(), valor:l.querySelector('.benef-valor').value.trim()})).filter(b=>b.nome);
+}
+
+/* ============================= USO DA IA ============================= */
+const NOMES_ACAO_IA = {
+  analisarCandidatosIA:'Análise de currículos', gerarParecerCandidato:'Parecer de candidato', sugerirAcoesPDI:'Sugestões de PDI',
+  redigirRelatorioBPOIA:'Relatório mensal BPO', sugerirPlanoAcaoClimaIA:'Plano de ação — clima', sugerirPlanoAcaoDesempenhoIA:'Plano de ação — desempenho', outras:'Outras'
+};
+function fmtUSDia(v){ return 'US$ '+(v>=0.1 ? v.toFixed(2) : v.toFixed(3)).replace('.', ','); }
+function fmtTokensIA(n){ n = Number(n)||0; return n>=1e6 ? (n/1e6).toFixed(2).replace('.', ',')+' mi' : (n>=1000 ? Math.round(n/1000)+' mil' : String(n)); }
+function custoUSDia(tin, tout, p){ return (tin/1e6)*p.entrada + (tout/1e6)*p.saida; }
+
+function modalUsoIA(resp){
+  const p = resp.precos, m = resp.meses[0], fat = resp.faturamentoDesde;
+  const custoPago = custoUSDia(m.pago.tin, m.pago.tout, p), custoEquiv = custoUSDia(m.tin, m.tout, p);
+  const plano = !fat ? 'Plano gratuito (faturamento ainda não informado)' : (todayISO()>=fat ? 'Plano pago desde '+formatDate(fat) : 'Plano gratuito até '+formatDate(fat));
+  const acoes = Object.keys(m.acoes).sort((a,b)=>m.acoes[b]-m.acoes[a]);
+  const historico = resp.meses.filter(x=>x.n>0);
+  openModal(`
+    <button class="modal-close" data-action="fechar-modal">&times;</button>
+    <h2>🤖 Uso da IA</h2>
+    <p class="hint" style="margin-bottom:10px;">${esc(nomeMes(resp.mesAtual))} · modelo ${esc(resp.modelo)}</p>
+    <div class="kpi-grid" style="margin:10px 0;">
+      <div class="kpi"><div class="label">Ações de IA no mês</div><div class="value">${m.n}</div><div class="sub">${esc(plano)}</div></div>
+      <div class="kpi"><div class="label">Tokens no mês</div><div class="value" style="font-size:20px;">${fmtTokensIA(m.tin)} / ${fmtTokensIA(m.tout)}</div><div class="sub">entrada / saída</div></div>
+      <div class="kpi ${custoPago>0 ? 'c-amber' : 'c-green'}"><div class="label">Custo estimado (plano pago)</div><div class="value" style="font-size:22px;">${fmtUSDia(custoPago)}</div><div class="sub">${m.pago.n} ação(ões) no plano pago${m.n>m.pago.n ? ' · equivalente se tudo fosse pago: '+fmtUSDia(custoEquiv) : ''}</div></div>
+    </div>
+    ${m.n===0 ? '<p class="hint">Nenhuma ação de IA usada neste mês ainda.</p>' : `
+    <div class="section-title">Neste mês, por tipo de ação</div>
+    <table style="width:100%;font-size:13px;"><tbody>${acoes.map(a=>'<tr><td>'+esc(NOMES_ACAO_IA[a]||a)+'</td><td style="text-align:right;">'+m.acoes[a]+'</td></tr>').join('')}</tbody></table>`}
+    ${historico.length>1 ? `<div class="section-title" style="margin-top:14px;">Últimos meses</div>
+    <table style="width:100%;font-size:13px;"><thead><tr><th style="text-align:left;">Mês</th><th style="text-align:right;">Ações</th><th style="text-align:right;">Custo estimado</th></tr></thead><tbody>${historico.map(x=>'<tr><td>'+esc(nomeMes(x.mes))+'</td><td style="text-align:right;">'+x.n+'</td><td style="text-align:right;">'+fmtUSDia(custoUSDia(x.pago.tin, x.pago.tout, p))+'</td></tr>').join('')}</tbody></table>` : ''}
+    <div class="section-title" style="margin-top:14px;">Faturamento</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="field" style="margin:0;"><label>Faturamento ativado em</label><input type="date" id="uso-ia-fat" value="${esc(fat)}"></div>
+      <span class="btn btn-secondary btn-sm" id="btn-salvar-fat">Salvar data</span>
+    </div>
+    <p class="hint" style="margin-top:8px;">Antes dessa data, o uso é do plano gratuito (custo zero). A partir dela, as ações entram na estimativa de custo.</p>
+    <p class="hint" style="margin-top:8px;">Cada resposta da IA conta como 1 ação (analisar os currículos de 8 candidatos conta 8). O custo é uma <strong>estimativa</strong> com o preço de ${fmtUSDia(p.entrada)} por milhão de tokens de entrada e ${fmtUSDia(p.saida)} por milhão de saída; o valor oficial está no painel de uso do Google AI Studio. Os preços do modelo podem mudar a partir de 1º de janeiro de 2027.</p>
+    <div class="modal-footer"><span></span><div class="right"><span class="btn btn-secondary" data-action="fechar-modal">Fechar</span></div></div>`);
+  document.getElementById('btn-salvar-fat').addEventListener('click', async ()=>{
+    try{
+      await chamarAppsScriptPost('salvarConfigUsoIA', {faturamentoDesde: document.getElementById('uso-ia-fat').value});
+      showToast('Data do faturamento salva.');
+      modalUsoIA(await chamarAppsScriptGet('action=usoIA'));
+    }catch(err){ showToast((err && err.message) || 'Não foi possível salvar agora.', true); }
+  });
 }
 
 function viewResumoBeneficios(cliente){
@@ -13096,6 +13143,11 @@ function onGlobalClick(e){
     return;
   }
   if(action === 'recuperar-perdidos'){ modalRecuperarPerdidos(); return; }
+  if(action === 'ver-uso-ia'){
+    showToast('Consultando o uso da IA…');
+    chamarAppsScriptGet('action=usoIA').then(modalUsoIA).catch(err=>{ showToast((err && err.message) || 'Não foi possível consultar agora.', true); });
+    return;
+  }
   if(action === 'ver-tamanho-db'){
     showToast('Consultando tamanho do arquivo…');
     chamarAppsScriptGet('action=diagnosticoTamanhoDB').then(resp=>{
